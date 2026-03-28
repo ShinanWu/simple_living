@@ -1,0 +1,29 @@
+.DS_Store
+
+# Editor
+.cursor/
+.vscode/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+coverage/
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
+# Bazel
+bazel-*/
+
+# Logs
+*.log
+
+# Env files
+.env
+.env.*

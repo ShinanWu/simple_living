@@ -1,0 +1,68 @@
+syntax = "proto2";
+
+package simple_living.gateway.user;
+
+option go_package = "github.com/simple_living/services/gateway/proto/gwuserpb;gwuserpb";
+
+// protoc -I . -I ../../user-domain/proto gateway_user_edge.proto
+import "user_domain_models.proto";
+import "gateway_user_http_messages.proto";
+
+// --- Edge service: logical mapping from public HTTP handlers to user-domain shapes ---
+// Implementations validate JSON, inject identity from headers, then call UserDomainService.
+
+service GatewayUserEdgeV2 {
+  rpc PostGuestSession(simple_living.user_domain.EnsureGuestSessionRequest)
+      returns (simple_living.user_domain.EnsureGuestSessionResponse);
+
+  rpc PostAuthTokenIssue(simple_living.user_domain.IssueTokenPairRequest)
+      returns (simple_living.user_domain.IssueTokenPairResponse);
+
+  rpc PostAuthTokenRefresh(RefreshTokenHttpRequest)
+      returns (simple_living.user_domain.IssueTokenPairResponse);
+
+  rpc DeleteAuthSession(simple_living.user_domain.RevokeSessionRequest)
+      returns (simple_living.user_domain.RevokeSessionResponse);
+
+  rpc GetMeProfile(simple_living.user_domain.GetProfileRequest)
+      returns (simple_living.user_domain.GetProfileResponse);
+
+  rpc PatchMeProfile(simple_living.user_domain.UpdateProfileRequest)
+      returns (simple_living.user_domain.UpdateProfileResponse);
+
+  rpc GetMePreferences(simple_living.user_domain.GetPreferencesRequest)
+      returns (simple_living.user_domain.GetPreferencesResponse);
+
+  rpc PutMePreferences(simple_living.user_domain.UpdatePreferencesRequest)
+      returns (simple_living.user_domain.UpdatePreferencesResponse);
+
+  rpc GetMeFavorites(ListFavoritesHttpRequest)
+      returns (simple_living.user_domain.ListFavoritesResponse);
+
+  rpc PostMeFavorite(AddFavoriteHttpRequest)
+      returns (simple_living.user_domain.AddFavoriteResponse);
+
+  rpc DeleteMeFavorite(RemoveFavoriteHttpRequest)
+      returns (simple_living.user_domain.RemoveFavoriteResponse);
+
+  rpc GetMeHistory(ListHistoryHttpRequest)
+      returns (simple_living.user_domain.ListHistoryResponse);
+
+  rpc PostMeHistoryEvent(RecordHistoryEventHttpRequest)
+      returns (simple_living.user_domain.RecordHistoryEventResponse);
+
+  rpc DeleteMeHistory(ClearHistoryHttpRequest)
+      returns (simple_living.user_domain.ClearHistoryResponse);
+
+  rpc PostMeFeedback(SubmitFeedbackHttpRequest)
+      returns (simple_living.user_domain.SubmitFeedbackResponse);
+
+  rpc GetMeConsent(simple_living.user_domain.GetConsentRequest)
+      returns (simple_living.user_domain.GetConsentResponse);
+
+  rpc PutMeConsent(simple_living.user_domain.UpdateConsentRequest)
+      returns (simple_living.user_domain.UpdateConsentResponse);
+
+  rpc GetMeSummary(simple_living.user_domain.GetMeSummaryRequest)
+      returns (simple_living.user_domain.GetMeSummaryResponse);
+}

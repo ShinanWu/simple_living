@@ -1,0 +1,456 @@
+syntax = "proto2";
+
+package simple_living.user_domain;
+
+option go_package = "github.com/simple_living/services/user-domain/proto/userpb;userpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+// --- Enums ---
+
+enum AccountStatus {
+  ACCOUNT_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_STATUS_ACTIVE = 1;
+  ACCOUNT_STATUS_SUSPENDED = 2;
+  ACCOUNT_STATUS_DELETED_PENDING = 3;
+}
+
+enum ClientPlatform {
+  CLIENT_PLATFORM_UNSPECIFIED = 0;
+  CLIENT_PLATFORM_WEB = 1;
+  CLIENT_PLATFORM_IOS = 2;
+  CLIENT_PLATFORM_ANDROID = 3;
+  CLIENT_PLATFORM_WECHAT_MINIPROGRAM = 4;
+  CLIENT_PLATFORM_DOUYIN_MINIPROGRAM = 5;
+}
+
+enum AuthTier {
+  AUTH_TIER_UNSPECIFIED = 0;
+  AUTH_TIER_STANDARD = 1;
+  AUTH_TIER_RISK_CHALLENGE = 2;
+}
+
+enum FeedbackTargetType {
+  FEEDBACK_TARGET_TYPE_UNSPECIFIED = 0;
+  FEEDBACK_TARGET_TYPE_GUIDE_CARD = 1;
+  FEEDBACK_TARGET_TYPE_RECOMMENDATION_RESULT = 2;
+  FEEDBACK_TARGET_TYPE_APP = 3;
+  FEEDBACK_TARGET_TYPE_OTHER = 4;
+}
+
+enum HistorySourceSurface {
+  HISTORY_SOURCE_SURFACE_UNSPECIFIED = 0;
+  HISTORY_SOURCE_SURFACE_FEED = 1;
+  HISTORY_SOURCE_SURFACE_SEARCH = 2;
+  HISTORY_SOURCE_SURFACE_DETAIL = 3;
+}
+
+enum FavoriteContentType {
+  FAVORITE_CONTENT_TYPE_UNSPECIFIED = 0;
+  FAVORITE_CONTENT_TYPE_GUIDE_CARD = 1;
+}
+
+enum ContentRefType {
+  CONTENT_REF_TYPE_UNSPECIFIED = 0;
+  CONTENT_REF_TYPE_GUIDE_CARD = 1;
+}
+
+enum RevokeSessionScope {
+  REVOKE_SESSION_SCOPE_UNSPECIFIED = 0;
+  REVOKE_SESSION_SCOPE_SINGLE_SESSION = 1;
+  REVOKE_SESSION_SCOPE_ALL_USER_SESSIONS = 2;
+}
+
+enum ClearHistoryScope {
+  CLEAR_HISTORY_SCOPE_UNSPECIFIED = 0;
+  CLEAR_HISTORY_SCOPE_ALL = 1;
+  CLEAR_HISTORY_SCOPE_BEFORE_TIME = 2;
+}
+
+// --- Shared messages ---
+
+message RpcRequestContext {
+  optional ClientPlatform client_platform = 1;
+  optional string app_version = 2;
+  optional string device_id = 3;
+}
+
+message ContentRef {
+  optional ContentRefType type = 1;
+  optional string guide_card_id = 2;
+}
+
+message NotificationPrefs {
+  optional bool email_enabled = 1;
+  optional bool push_enabled = 2;
+  optional bool sms_enabled = 3;
+  optional bool in_app_enabled = 4;
+}
+
+message UserProfile {
+  optional string user_id = 1;
+  optional bool is_guest = 2;
+  optional string display_name = 3;
+  optional string avatar_url = 4;
+  optional string locale = 5;
+  optional string bio = 6;
+  optional NotificationPrefs notification_prefs = 7;
+}
+
+message ThemePreferences {
+  repeated string theme_interests = 1;
+  map<string, string> content_filters = 2;
+  optional string default_sort = 3;
+}
+
+message UserPreferences {
+  optional int64 preferences_version = 1;
+  optional ThemePreferences structured = 2;
+}
+
+message PaginationCursor {
+  optional string cursor = 1;
+  optional int32 limit = 2;
+}
+
+message PaginationCursorResult {
+  optional string next_cursor = 1;
+  optional bool has_more = 2;
+  optional int32 limit = 3;
+}
+
+message ConsentState {
+  optional bool personalization_allowed = 1;
+  optional bool analytics_allowed = 2;
+  optional bool marketing_allowed = 3;
+  optional string consent_version = 4;
+  optional google.protobuf.Timestamp updated_at = 5;
+  optional string jurisdiction = 6;
+}
+
+message SignalBundleRef {
+  optional string signal_bundle_ref = 1;
+  optional google.protobuf.Timestamp expires_at = 2;
+  optional string bundle_version = 3;
+  repeated string scopes = 4;
+}
+
+message HealthComponentStatus {
+  optional string name = 1;
+  optional bool ok = 2;
+  optional string detail = 3;
+}
+
+// --- Auth / session ---
+
+message IntrospectAccessTokenRequest {
+  optional string access_token = 1;
+  optional RpcRequestContext request_context = 2;
+}
+
+message IntrospectAccessTokenResponse {
+  optional bool valid = 1;
+  optional string user_id = 2;
+  optional string session_id = 3;
+  optional google.protobuf.Timestamp token_expires_at = 4;
+  repeated string scopes = 5;
+  optional AuthTier auth_tier = 6;
+}
+
+message IntrospectRefreshTokenRequest {
+  optional string refresh_token = 1;
+  optional RpcRequestContext request_context = 2;
+}
+
+message IntrospectRefreshTokenResponse {
+  optional bool valid = 1;
+  optional string user_id = 2;
+  optional string session_id = 3;
+  optional bool rotation_required = 4;
+}
+
+message AccountProofPhoneOtp {
+  optional string phone_e164 = 1;
+  optional string otp_code = 2;
+  optional string verification_id = 3;
+}
+
+message AccountProofOAuth {
+  optional string provider = 1;
+  optional string provider_subject = 2;
+  optional string authorization_code = 3;
+}
+
+message IssueTokenPairRequest {
+  oneof identity {
+    string user_id = 1;
+    AccountProofPhoneOtp phone_otp = 2;
+    AccountProofOAuth oauth = 3;
+  }
+  optional string device_fingerprint = 4;
+  optional ClientPlatform client_platform = 5;
+  optional string app_version = 6;
+  optional string device_id = 7;
+  optional RpcRequestContext request_context = 8;
+}
+
+message IssueTokenPairResponse {
+  optional string access_token = 1;
+  optional string refresh_token = 2;
+  optional int32 expires_in_seconds = 3;
+  optional string session_id = 4;
+  optional google.protobuf.Timestamp access_expires_at = 5;
+}
+
+message RevokeSessionRequest {
+  optional string session_id = 1;
+  optional string user_id = 2;
+  optional RevokeSessionScope scope = 3;
+}
+
+message RevokeSessionResponse {
+  optional bool revoked = 1;
+}
+
+message EnsureGuestSessionRequest {
+  optional string device_id = 1;
+  optional ClientPlatform client_platform = 2;
+  optional string app_version = 3;
+}
+
+message EnsureGuestSessionResponse {
+  optional string session_id = 1;
+  optional bool created = 2;
+}
+
+// --- Profile / preferences ---
+
+message GetProfileRequest {
+  oneof subject {
+    string user_id = 1;
+    string session_id = 2;
+  }
+}
+
+message GetProfileResponse {
+  optional UserProfile profile = 1;
+}
+
+message UpdateProfileRequest {
+  optional string user_id = 1;
+  optional string display_name = 2;
+  optional string avatar_url = 3;
+  optional string locale = 4;
+  optional string bio = 5;
+  optional NotificationPrefs notification_prefs = 6;
+}
+
+message UpdateProfileResponse {
+  optional UserProfile profile = 1;
+}
+
+message GetPreferencesRequest {
+  optional string user_id = 1;
+}
+
+message GetPreferencesResponse {
+  optional UserPreferences preferences = 1;
+}
+
+message UpdatePreferencesRequest {
+  optional string user_id = 1;
+  optional UserPreferences preferences = 2;
+}
+
+message UpdatePreferencesResponse {
+  optional UserPreferences preferences = 1;
+}
+
+// --- Favorites ---
+
+message FavoriteItem {
+  optional string favorite_id = 1;
+  optional string guide_card_id = 2;
+  optional google.protobuf.Timestamp favorited_at = 3;
+}
+
+message ListFavoritesRequest {
+  optional string user_id = 1;
+  optional PaginationCursor page = 2;
+  optional FavoriteContentType content_type = 3;
+}
+
+message ListFavoritesResponse {
+  repeated FavoriteItem items = 1;
+  optional PaginationCursorResult pagination = 2;
+}
+
+message AddFavoriteRequest {
+  optional string user_id = 1;
+  optional string guide_card_id = 2;
+}
+
+message AddFavoriteResponse {
+  optional string favorite_id = 1;
+  optional bool already_favorited = 2;
+}
+
+message RemoveFavoriteRequest {
+  optional string user_id = 1;
+  optional string favorite_id = 2;
+  optional string guide_card_id = 3;
+}
+
+message RemoveFavoriteResponse {
+  optional bool removed = 1;
+}
+
+// --- History ---
+
+message HistoryItem {
+  optional ContentRef content_ref = 1;
+  optional google.protobuf.Timestamp last_seen_at = 2;
+  optional google.protobuf.Timestamp first_seen_at = 3;
+  optional int32 impression_count = 4;
+  optional HistorySourceSurface source_surface = 5;
+}
+
+message ListHistoryRequest {
+  oneof owner {
+    string user_id = 1;
+    string session_id = 2;
+  }
+  optional PaginationCursor page = 3;
+}
+
+message ListHistoryResponse {
+  repeated HistoryItem items = 1;
+  optional PaginationCursorResult pagination = 2;
+}
+
+message RecordHistoryEventRequest {
+  oneof owner {
+    string user_id = 1;
+    string session_id = 2;
+  }
+  optional ContentRef content_ref = 3;
+  optional google.protobuf.Timestamp occurred_at = 4;
+  optional HistorySourceSurface source_surface = 5;
+  optional string client_event_id = 6;
+}
+
+message RecordHistoryEventResponse {
+  optional bool recorded = 1;
+  optional bool deduplicated = 2;
+}
+
+message ClearHistoryRequest {
+  oneof owner {
+    string user_id = 1;
+    string session_id = 2;
+  }
+  optional ClearHistoryScope scope = 3;
+  optional google.protobuf.Timestamp before_time = 4;
+}
+
+message ClearHistoryResponse {
+  optional int32 removed_count = 1;
+}
+
+// --- Feedback ---
+
+message SubmitFeedbackRequest {
+  oneof actor {
+    string user_id = 1;
+    string session_id = 2;
+  }
+  optional FeedbackTargetType target_type = 3;
+  optional string target_id = 4;
+  optional google.protobuf.DoubleValue rating = 5;
+  repeated string reason_codes = 6;
+  optional string free_text = 7;
+  optional string client_request_id = 8;
+}
+
+message SubmitFeedbackResponse {
+  optional string feedback_id = 1;
+}
+
+// --- Consent ---
+
+message GetConsentRequest {
+  optional string user_id = 1;
+}
+
+message GetConsentResponse {
+  optional ConsentState consent = 1;
+}
+
+message UpdateConsentRequest {
+  optional string user_id = 1;
+  optional ConsentState consent = 2;
+}
+
+message UpdateConsentResponse {
+  optional ConsentState consent = 1;
+}
+
+// --- Signal bundle ---
+
+message GetSignalBundleRefRequest {
+  oneof subject {
+    string user_id = 1;
+    string session_id = 2;
+  }
+  optional string scene = 3;
+}
+
+message GetSignalBundleRefResponse {
+  optional SignalBundleRef ref = 1;
+}
+
+message ResolveSignalBundleRequest {
+  optional string signal_bundle_ref = 1;
+  optional string caller_service = 2;
+}
+
+message ResolveSignalBundlePayload {
+  optional string opaque_payload_json = 1;
+  optional string integrity_hash = 2;
+}
+
+message ResolveSignalBundleResponse {
+  optional bool resolved = 1;
+  optional google.protobuf.Timestamp expires_at = 2;
+  optional ResolveSignalBundlePayload payload = 3;
+}
+
+// --- BFF summary ---
+
+message MeCounts {
+  optional int64 favorites_count = 1;
+  optional int64 history_count = 2;
+}
+
+message GetMeSummaryRequest {
+  oneof subject {
+    string user_id = 1;
+    string session_id = 2;
+  }
+}
+
+message GetMeSummaryResponse {
+  optional UserProfile profile = 1;
+  optional MeCounts counts = 2;
+  optional ConsentState consent = 3;
+}
+
+// --- Health ---
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  optional string status = 1;
+  repeated HealthComponentStatus components = 2;
+}

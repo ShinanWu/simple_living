@@ -1,0 +1,156 @@
+syntax = "proto2";
+
+package simple_living.recommendation_domain;
+
+option java_multiple_files = true;
+option java_package = "com.simpleliving.recommendation.domain";
+option go_package = "github.com/simple_living/services/recommendation-domain/proto;recommendationpb";
+
+// Stable scene keys aligned with docs/contracts/recommendation.md (wire as enum name mapping or string in gateway).
+enum RecommendationScene {
+  RECOMMENDATION_SCENE_UNSPECIFIED = 0;
+  HOME_FEED = 1;
+  HOME_POPULAR = 2;
+  THEME_FEED = 3;
+  GUIDE_DETAIL_RELATED = 4;
+  SEARCH = 5;
+  COLD_START = 6;
+}
+
+// Application error codes returned in RPC status details or domain envelope; align with api.md.
+enum RecommendationErrorCode {
+  RECOMMENDATION_ERROR_UNSPECIFIED = 0;
+  INVALID_ARGUMENT = 10002;
+  AUTH_REQUIRED = 20001;
+  SCENE_NOT_SUPPORTED = 40001;
+  SERVICE_UNAVAILABLE = 40002;
+}
+
+enum ConfidenceBand {
+  CONFIDENCE_BAND_UNSPECIFIED = 0;
+  CONFIDENCE_HIGH = 1;
+  CONFIDENCE_MEDIUM = 2;
+  CONFIDENCE_LOW = 3;
+}
+
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_OK = 1;
+  HEALTH_DEGRADED = 2;
+}
+
+enum IndexDependencyStatus {
+  INDEX_DEPENDENCY_STATUS_UNSPECIFIED = 0;
+  INDEX_UP = 1;
+  INDEX_DOWN = 2;
+  INDEX_UNKNOWN = 3;
+}
+
+// Cursor pagination request; shared contract: cursor, limit (max 100).
+message CursorLimits {
+  optional string cursor = 1;  // empty on first page
+  optional int32 limit = 2;    // default and max per gateway contract
+}
+
+// Cursor pagination response; shared contract: next_cursor, has_more, limit.
+message CursorPagination {
+  optional string next_cursor = 1;  // null/absent when no next page
+  optional bool has_more = 2;
+  optional int32 limit = 3;
+}
+
+// Optional bounded-surface offset pagination (e.g. short related strip).
+message OffsetLimits {
+  optional int32 page = 1;        // 1-based
+  optional int32 page_size = 2;   // max per contract
+}
+
+message OffsetPagination {
+  optional int32 page = 1;
+  optional int32 page_size = 2;
+  optional int32 total = 3;
+  optional bool has_more = 4;
+}
+
+message ConsentFlags {
+  optional bool personalization_allowed = 1;
+  optional bool ad_personalization_allowed = 2;
+}
+
+// Who / where / environment for ranking and compliance.
+message RecommendationRequestContext {
+  optional string user_id = 1;
+  optional string session_id = 2;
+  optional string locale = 3;
+  optional string channel = 4;
+  optional string app_version = 5;
+  optional string device_tier = 6;
+  optional ConsentFlags consent = 7;
+  optional string signal_bundle_ref = 8;
+  // Scene-specific non-sensitive hints (also echoed when safe).
+  optional string theme = 9;
+  optional string anchor_guide_card_id = 10;
+}
+
+// Non-sensitive echo for dedupe and analytics; subset of request context.
+message RequestContextEcho {
+  optional string theme = 1;
+  optional string cursor = 2;
+  optional string query = 3;
+  optional string anchor_guide_card_id = 4;
+}
+
+// Versioned strategy handle returned with results and required for Explain.
+message RecommendationStrategy {
+  optional string id = 1;
+  optional string version = 2;
+  optional string experiment_key = 3;
+  optional string pipeline = 4;
+  optional string updated_at = 5;  // ISO 8601 UTC string
+}
+
+// Optional recall / filter dimensions.
+message RecommendationFilters {
+  repeated string themes = 1;
+  repeated string tags = 2;
+  repeated string languages = 3;
+  repeated string content_types = 4;
+}
+
+message ContentRef {
+  optional string kind = 1;  // e.g. topic, article
+  optional string ref_id = 2;
+}
+
+// Per-item explanation; align with compliance policy.
+message ItemExplanation {
+  optional string summary = 1;
+  repeated string reason_codes = 2;
+  repeated string entities = 3;
+  optional ConfidenceBand confidence_band = 4;
+  optional string policy_version = 5;
+}
+
+message RecommendationItem {
+  optional string guide_card_id = 1;
+  optional ContentRef content_ref = 2;
+  optional double score = 3;
+  optional int32 rank = 4;  // 1-based
+  repeated string recall_sources = 5;
+  optional string placement = 6;
+  optional string trace_ref = 7;
+  optional ItemExplanation explanation = 8;
+  repeated string reason_tags = 9;
+  optional ExperimentInfo experiment = 10;
+}
+
+message ExperimentInfo {
+  optional string key = 1;
+  optional string variant = 2;
+}
+
+// Internal debug-only payload when debug = true.
+message RecommendationDiagnostics {
+  optional string trace_id = 1;
+  repeated string recall_lane_stats = 2;
+}

@@ -1,0 +1,135 @@
+syntax = "proto2";
+
+package simple_living.gateway.pages;
+
+option go_package = "github.com/simple_living/services/gateway/proto/gwpagespb;gwpagespb";
+
+import "google/protobuf/timestamp.proto";
+
+// Gateway page aggregation edge messages. These are gateway-owned edge contracts
+// that map public JSON routes to internal RPC orchestration.
+
+message HomeFeedRequest {
+  optional string cursor = 1;
+  optional int32 limit = 2;
+  optional string theme = 3;
+}
+
+message GuideCardSummary {
+  optional string guide_card_id = 1;
+  optional string title = 2;
+  optional string subtitle = 3;
+  optional string summary = 4;
+  optional string cover_url = 5;
+  optional string theme = 6;
+}
+
+message GuideCardDetail {
+  optional string guide_card_id = 1;
+  optional string title = 2;
+  optional string subtitle = 3;
+  optional string summary = 4;
+  optional string cover_url = 5;
+  optional string theme = 6;
+  repeated string tags = 7;
+  optional bool is_commercial = 8;
+  optional string partner_id = 9;
+  optional string disclosure_text_key = 10;
+  optional google.protobuf.Timestamp published_at = 11;
+  optional google.protobuf.Timestamp updated_at = 12;
+}
+
+message HomeFeedItem {
+  optional string recommendation_id = 1;
+  optional string scene = 2;
+  optional int32 rank = 3;
+  optional string guide_card_id = 4;
+  optional GuideCardSummary guide_card = 5;
+  repeated string reason_tags = 6;
+}
+
+message PaginationMeta {
+  optional string next_cursor = 1;
+  optional bool has_more = 2;
+  optional int32 limit = 3;
+}
+
+message HomeFeedResponse {
+  repeated HomeFeedItem items = 1;
+  optional PaginationMeta pagination = 2;
+}
+
+message GuideDetailRequest {
+  optional string guide_card_id = 1;
+  optional bool include_related = 2;
+}
+
+message GuideDisclosure {
+  optional bool is_commercial = 1;
+  optional string partner_id = 2;
+  optional string disclosure_text_key = 3;
+}
+
+message GuideDetailResponse {
+  optional GuideCardDetail guide_card = 1;
+  optional GuideDisclosure disclosures = 2;
+  repeated HomeFeedItem related = 3;
+}
+
+message RedirectPrepareRequest {
+  optional string guide_card_id = 1;
+  optional string recommendation_id = 2;
+  optional string scene = 3;
+  optional int32 item_rank = 4;
+  optional string preferred_channel_code = 5;
+}
+
+message AttributionEcho {
+  optional string click_id = 1;
+  optional string channel_code = 2;
+  optional string recommendation_id = 3;
+  optional string scene = 4;
+  optional int32 item_rank = 5;
+}
+
+message RedirectPrepareResponse {
+  optional string landing_url = 1;
+  optional string click_id = 2;
+  optional google.protobuf.Timestamp expires_at = 3;
+  optional AttributionEcho attribution = 4;
+}
+
+message MeSummaryRequest {}
+
+message ProfileBlock {
+  optional string user_id = 1;
+  optional bool is_guest = 2;
+  optional string display_name = 3;
+  optional string avatar_url = 4;
+  optional string locale = 5;
+}
+
+message CountsBlock {
+  optional int64 favorites_count = 1;
+  optional int64 history_count = 2;
+}
+
+message ConsentBlock {
+  optional bool personalization_allowed = 1;
+  optional bool analytics_allowed = 2;
+  optional bool marketing_allowed = 3;
+  optional string consent_version = 4;
+}
+
+message MeSummaryResponse {
+  optional ProfileBlock profile = 1;
+  optional CountsBlock counts = 2;
+  optional ConsentBlock consent = 3;
+}
+
+service GatewayPagesEdgeV2 {
+  rpc GetHomeFeed(HomeFeedRequest) returns (HomeFeedResponse);
+  rpc GetGuideDetail(GuideDetailRequest) returns (GuideDetailResponse);
+  rpc PrepareRedirect(RedirectPrepareRequest) returns (RedirectPrepareResponse);
+  rpc GetMeSummary(MeSummaryRequest) returns (MeSummaryResponse);
+}
