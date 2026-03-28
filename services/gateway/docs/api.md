@@ -24,6 +24,20 @@
 | `X-Client-Version` | 推荐 | 应用版本号，如 `1.4.2` |
 | `X-Device-Id` | 推荐 | 稳定设备标识；访客会话与风控辅助 |
 
+### 2.1 主体载体（登录 / 访客）
+
+- **已登录主体**：使用 `Authorization: Bearer <access_token>`；网关调用 `IntrospectAccessToken` 后注入 `user_id`、`session_id`。
+- **访客主体**：不使用独立访客 Bearer；通过 `POST /api/v2/guest/session` 申请 `session_id`，后续访问“Bearer 或访客会话”路由时，使用请求头 `X-Guest-Session-Id: <session_id>` 传递。
+- **优先级**：若同时携带登录 Bearer 与 `X-Guest-Session-Id`，以 Bearer 解析出的登录主体为准，忽略访客会话头。
+- **未携带主体**：对标记为“Bearer 或访客会话”的路由返回 `20001`。
+
+### 2.2 `request_context` 与请求头合并规则
+
+- 仅带头、不带体内 `request_context`：直接由头生成 `request_context`
+- 同时带头与体内 `request_context`：**体内显式字段优先，缺失字段再由头补齐**
+- 仅带体内 `request_context`：按体内字段透传
+- 路由未列出 `request_context` 时，默认 **不接受** 该字段
+
 ## 3. 响应信封（顶层）
 
 所有 JSON 响应体必须符合以下 **顶层** 结构（与全局 common-response 语义一致）：
@@ -138,9 +152,11 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `client_platform` | string | 否 | 可与 `X-Client-Platform` 合并策略：体优先或头优先须在实现中固定 |
+| `client_platform` | string | 否 | 体内显式字段优先；缺失时由 `X-Client-Platform` 补齐 |
 | `app_version` | string | 否 | 对齐 `X-Client-Version` |
 | `device_id` | string | 否 | 对齐 `X-Device-Id` |
+
+**固定规则**：本项目统一采用“**体内显式字段优先，缺失字段由请求头补齐**”。
 
 ### 5.11 `account_proof`（登录发令牌，oneof 形态）
 
@@ -212,7 +228,22 @@
 | `90002` | 依赖超时 | 504 |
 | `90003` | 依赖错误 | 502 |
 
-**gRPC → JSON**：将 `NOT_FOUND`/`INVALID_ARGUMENT`/… 映射到上表；业务码放入信封 `code`（非仅 `message`）。
+**gRPC → JSON**：默认映射如下，业务码始终放入信封 `code`（非仅 `message`）：
+
+| gRPC `Code` | 默认 JSON `code` | 默认 HTTP | 说明 |
+|-------------|------------------|-----------|------|
+| `OK` | `0` | 200 | 成功 |
+| `INVALID_ARGUMENT` | `10002` | 400 | 参数校验失败；缺字段可细化为 `10001` |
+| `FAILED_PRECONDITION` | `10002` | 400 | 状态不满足；若有更细业务码，以业务码为准 |
+| `UNAUTHENTICATED` | `20001` / `20002` / `20003` | 401 | 依据 access/refresh/主体缺失细分 |
+| `PERMISSION_DENIED` | `20004` / `20005` | 403 | 权限不足或设备/环境拒绝 |
+| `NOT_FOUND` | `30001` | 404 | 资源不存在 |
+| `RESOURCE_EXHAUSTED` | `10005` | 429 | 频率或配额限制 |
+| `DEADLINE_EXCEEDED` | `90002` | 504 | 依赖超时 |
+| `UNAVAILABLE` | `90002` | 504 | 依赖暂时不可用 |
+| `INTERNAL` | `90001` | 500 | 内部错误 |
+| `UNKNOWN` | `90001` | 500 | 未分类错误 |
+| 其他未列举 | `90003` | 502 | 依赖返回不符合预期的错误 |
 
 ## 9. 分路由说明与 `data` 形状
 
@@ -251,6 +282,15 @@
 | `access_expires_at` | string | ISO 8601 UTC；源自 proto `access_expires_at` |
 
 **映射**：`IssueTokenPair`；须在网关完成登录证明校验（OTP/OAuth 等）后再调 RPC。
+
+`account_proof` 到内部 `IssueTokenPairRequest` 的映射固定为：
+
+- `account_proof.user_id` → `IssueTokenPairRequest.user_id`
+- `account_proof.phone_otp` → `IssueTokenPairRequest.phone_otp`
+- `account_proof.oauth` → `IssueTokenPairRequest.oauth`
+- `device_fingerprint` → `IssueTokenPairRequest.device_fingerprint`
+- `client_platform` / `app_version` / `device_id` / `request_context` 合并后写入对应字段
+- OTP / OAuth 的外部校验在网关完成；`user-domain` 不重复承担第三方证明交换职责
 
 ### 9.3 `POST /api/v2/auth/token/refresh`
 
@@ -310,6 +350,7 @@
 | 请求体字段 | 类型 | 必填 |
 |------------|------|------|
 | `guide_card_id` | string | 是 |
+| `request_context` | object | 否 | §5.10；体内显式字段优先于头 |
 
 `data`: `{ "favorite_id": string, "already_favorited": boolean }`。
 
@@ -409,6 +450,13 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 
 以下页面路由由 `gateway` 作为 BFF 聚合实现，对外统一返回标准信封；下游仍调用各域内部 `proto` / RPC。
 
+| 方法 | 路径 | 鉴权 | 说明 |
+|------|------|------|------|
+| GET | `/api/v2/pages/home_feed` | 无（可选 Bearer 或访客会话） | 未带主体时返回非个性化结果；带主体时可用于个性化与频控 |
+| GET | `/api/v2/pages/guide_detail` | 无（可选 Bearer 或访客会话） | 主体仅用于个性化相关推荐、埋点与风控补充 |
+| POST | `/api/v2/pages/redirect_prepare` | Bearer 或访客会话 | 必须具备主体，便于点击归因与幂等 |
+| GET | `/api/v2/pages/me_summary` | Bearer 或访客会话 | 与 `/api/v2/me/summary` 一致 |
+
 ### 13.1 聚合对象定义
 
 #### `home_feed_item`
@@ -428,7 +476,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 |------|------|------|------|
 | `guide_card` | object | 是 | 导购卡片完整展示结构 |
 | `disclosures` | object | 否 | 商业披露摘要；默认从卡片和治理结果聚合 |
-| `related` | array | 否 | 相关推荐列表，元素使用 `home_feed_item` 的子集 |
+| `related` | array | 否 | 相关推荐列表，元素仅包含 `recommendation_id`、`scene`、`rank`、`guide_card_id`、`reason_tags` |
 
 #### `redirect_prepare_payload`
 
@@ -442,6 +490,8 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 ### 13.2 `GET /api/v2/pages/home_feed`
 
 **用途**：首页推荐流聚合接口。
+
+**鉴权**：无（可选 Bearer 或访客会话）。
 
 | Query 参数 | 类型 | 必填 | 说明 |
 |------------|------|------|------|
@@ -460,9 +510,31 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 - `ContentService/BatchGetGuideCards`
 - 可选治理可见性快照过滤
 
+**字段级映射（实现锚点）**
+
+| JSON / 查询字段 | 下游来源 | 说明 |
+|-----------------|----------|------|
+| `theme` | `QueryRecommendationsRequest.filters.themes` | 使用主题 **slug**，非 `theme_id` |
+| `cursor`, `limit` | `QueryRecommendationsRequest.cursor_limits` | 直接映射 |
+| `items[].recommendation_id` | `QueryRecommendationsResponse.recommendation_id` | 同一页条目共享同一推荐结果 ID |
+| `items[].scene` | `QueryRecommendationsResponse.scene` | |
+| `items[].rank` | `QueryRecommendationsResponse.items[].rank` | |
+| `items[].guide_card_id` | `QueryRecommendationsResponse.items[].guide_card_id` | |
+| `items[].reason_tags` | `QueryRecommendationsResponse.items[].reason_tags` | |
+| `items[].guide_card` | `ContentService/BatchGetGuideCards.cards[]` | 以 `guide_card_id` 批量 hydration；按 `rank` 重排 |
+| `pagination` | `QueryRecommendationsResponse.cursor_pagination` | `next_cursor`、`has_more`、`limit` 一一对应 |
+
+**治理过滤规则**
+
+- 若启用治理过滤，网关以 `guide_card_id` / 逻辑内容 ID 读取可见性快照
+- 非 `PUBLISHED` 内容从结果集中剔除
+- 默认 **fail-closed**：治理依赖异常时，不返回应受限内容
+
 ### 13.3 `GET /api/v2/pages/guide_detail`
 
 **用途**：导购详情页聚合接口。
+
+**鉴权**：无（可选 Bearer 或访客会话）。
 
 | Query 参数 | 类型 | 必填 | 说明 |
 |------------|------|------|------|
@@ -481,9 +553,27 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 - `GovernanceCooperationService/BatchGetCooperationLabels`
 - 可选 `RecommendationService/QueryRecommendations`
 
+**字段级映射（实现锚点）**
+
+| JSON / 查询字段 | 下游来源 | 说明 |
+|-----------------|----------|------|
+| `guide_card_id` | `BatchGetGuideCardsRequest.card_ids[]` | 单卡片查询 |
+| `data.guide` | `BatchGetGuideCardsResponse.cards[0]` | 转为公开 `guide_card` 契约 |
+| `data.disclosures` | `BatchGetCooperationLabelsResponse.labels_by_subject` | key 为 `COOPERATION_SUBJECT_TYPE_CARD:<guide_card_id>` |
+| `data.related` | `QueryRecommendationsResponse.items[]` | 仅当 `include_related=true` 时调用 |
+
+补充规则：
+
+- `include_related=false` 时不得调用推荐 RPC
+- `guide_card_id` 不存在时返回 `30001`
+- `data.guide` 的字段语义以 `docs/contracts/guide-card.md` 为准，网关负责从内部 `GuideCard` 裁剪
+- `data.related` 仅返回 `recommendation_id`、`scene`、`rank`、`guide_card_id`、`reason_tags`；不内联 `guide_card`
+
 ### 13.4 `POST /api/v2/pages/redirect_prepare`
 
 **用途**：用户点击“去购买”前，准备跳转链路。
+
+**鉴权**：Bearer 或访客会话。
 
 | 请求体字段 | 类型 | 必填 | 说明 |
 |------------|------|------|------|
@@ -504,9 +594,25 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 
 - `TrackingLinkService/AssembleTrackingLink`
 
+**字段级映射（实现锚点）**
+
+| JSON 字段 | 下游来源 | 说明 |
+|-----------|----------|------|
+| `guide_card_id` | `AssembleTrackingLinkRequest.content_ref.guide_card_id` | 必填 |
+| `recommendation_id` | `AssembleTrackingLinkRequest.content_ref.recommendation_id` | 可选 |
+| `scene` | `AssembleTrackingLinkRequest.content_ref.scene` | 可选 |
+| `item_rank` | `AssembleTrackingLinkRequest.content_ref.item_rank` | 可选 |
+| `preferred_channel_code` | 用于组装 `affiliate_context_ref` 或路由策略 | v1 若上游传入则必须透传到组链策略；未传时由服务端默认策略选择渠道 |
+| `data.landing_url` | `AssembleTrackingLinkResponse.landing_url` | |
+| `data.click_id` | `AssembleTrackingLinkResponse.attribution_echo.click_id` 或顶层 `click_id` | 以可用值为准 |
+| `data.expires_at` | `AssembleTrackingLinkResponse.expires_at` | `Timestamp` → ISO 8601 UTC |
+| `data.attribution` | `AssembleTrackingLinkResponse.attribution_echo` | 仅回显非敏感字段 |
+
 ### 13.5 `GET /api/v2/pages/me_summary`
 
 **用途**：页面级“我的”摘要，与 `/api/v2/me/summary` 共享核心数据块。
+
+**鉴权**：Bearer 或访客会话。
 
 | `data` | 类型 | 说明 |
 |------|------|------|
@@ -525,3 +631,479 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 - `services/gateway/proto/gateway_pages_edge.proto`
 
 该文件描述 `gateway` 自身的页面聚合入口消息，用于将公开 JSON 路由与内部 RPC 编排映射到一组可版本化的 edge message。
+
+## 附录 A. 典型 HTTP 请求 / 响应示例
+
+以下示例使用真实对外 JSON 形状，便于前端、测试与其他 Agent 直接联调。响应信封遵循 `docs/contracts/common-response.md`；时间字段使用 ISO 8601 UTC 字符串。
+
+### A.1 `POST /api/v2/me/favorites`
+
+#### HTTP Request
+
+```http
+POST /api/v2/me/favorites HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+X-Client-Platform: ios
+X-Client-Version: 1.4.2
+X-Device-Id: device_9f1b5e18
+
+{
+  "guide_card_id": "guide_card_1001",
+  "request_context": {
+    "client_platform": "ios",
+    "app_version": "1.4.2",
+    "device_id": "device_9f1b5e18"
+  }
+}
+```
+
+#### HTTP Response
+
+```json
+{
+  "success": true,
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "favorite_id": "fav_01HSYQPDYX4B7C8WQ6ZK",
+    "already_favorited": false
+  },
+  "meta": {
+    "request_id": "req_01HSZ62M7C1E3N8S4D5K",
+    "trace_id": "trace_01HSZ62M9A7Q4V0T2B6M",
+    "server_time_ms": 1774699800000
+  }
+}
+```
+
+### A.2 `GET /api/v2/me/summary`
+
+#### HTTP Request
+
+```http
+GET /api/v2/me/summary HTTP/1.1
+Authorization: Bearer <access_token>
+X-Client-Platform: ios
+X-Client-Version: 1.4.2
+X-Device-Id: device_9f1b5e18
+```
+
+#### HTTP Response
+
+```json
+{
+  "success": true,
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "profile": {
+      "user_id": "user_01HSYQK5PZ4K4J9R2M8D",
+      "is_guest": false,
+      "display_name": "Shinan",
+      "avatar_url": "https://cdn.example.com/avatar/u_01.png",
+      "locale": "zh-CN"
+    },
+    "counts": {
+      "favorites_count": 12,
+      "history_count": 37
+    },
+    "consent": {
+      "personalization_allowed": true,
+      "analytics_allowed": true,
+      "marketing_allowed": false,
+      "consent_version": "2026-03-privacy-v3",
+      "updated_at": "2026-03-20T08:30:00Z",
+      "jurisdiction": "CN"
+    }
+  },
+  "meta": {
+    "request_id": "req_01HSZ66T47Q9A4M1X8B2",
+    "trace_id": "trace_01HSZ66W6P5G8S0Y9R1N",
+    "server_time_ms": 1774699860000
+  }
+}
+```
+
+### A.3 `GET /api/v2/pages/home_feed`
+
+#### HTTP Request
+
+```http
+GET /api/v2/pages/home_feed?cursor=&limit=2 HTTP/1.1
+Authorization: Bearer <access_token>
+X-Client-Platform: ios
+X-Client-Version: 1.4.2
+```
+
+#### HTTP Response
+
+```json
+{
+  "success": true,
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "items": [
+      {
+        "recommendation_id": "rec_01HSZ15H0N8HG9P5P2E0",
+        "scene": "home_feed",
+        "rank": 1,
+        "guide_card_id": "guide_card_1001",
+        "reason_tags": [
+          "适合通勤",
+          "近期热门"
+        ]
+      },
+      {
+        "recommendation_id": "rec_01HSZ15H0N8HG9P5P2E0",
+        "scene": "home_feed",
+        "rank": 2,
+        "guide_card_id": "guide_card_1018",
+        "reason_tags": [
+          "主题相近"
+        ]
+      }
+    ],
+    "pagination": {
+      "next_cursor": "cursor_home_feed_2",
+      "has_more": true,
+      "limit": 2
+    }
+  },
+  "meta": {
+    "request_id": "req_01HSZ6A29A7C3V4M8W0F",
+    "trace_id": "trace_01HSZ6A4M1E5N9R6Q2B7",
+    "server_time_ms": 1774699920000
+  }
+}
+```
+
+### A.4 `POST /api/v2/guest/session`
+
+#### HTTP Request
+
+```http
+POST /api/v2/guest/session HTTP/1.1
+Content-Type: application/json
+
+{"device_id":"device_9f1b5e18","client_platform":"ios"}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"session_id":"sess_01HSYQBY1S7W4T1M7Q2B","created":true},"meta":{"request_id":"req_1","server_time_ms":1774699800000}}
+```
+
+### A.5 `POST /api/v2/auth/token/issue`
+
+#### HTTP Request
+
+```http
+POST /api/v2/auth/token/issue HTTP/1.1
+Content-Type: application/json
+
+{"account_proof":{"user_id":"user_01HSYQK5PZ4K4J9R2M8D"}}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"access_token":"at_xxx","refresh_token":"rt_xxx","expires_in":3600,"session_id":"sess_01HSYQBY1S7W4T1M7Q2B","access_expires_at":"2026-03-28T13:00:00Z"},"meta":{"request_id":"req_2","server_time_ms":1774699800000}}
+```
+
+### A.6 `POST /api/v2/auth/token/refresh`
+
+#### HTTP Request
+
+```http
+POST /api/v2/auth/token/refresh HTTP/1.1
+Content-Type: application/json
+
+{"refresh_token":"rt_xxx"}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"access_token":"at_yyy","refresh_token":"rt_yyy","expires_in":3600,"session_id":"sess_01HSYQBY1S7W4T1M7Q2B","access_expires_at":"2026-03-28T14:00:00Z"},"meta":{"request_id":"req_3","server_time_ms":1774699800000}}
+```
+
+### A.7 `DELETE /api/v2/auth/session`
+
+#### HTTP Request
+
+```http
+DELETE /api/v2/auth/session HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"revoke_scope":"single_session"}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"revoked":true},"meta":{"request_id":"req_4","server_time_ms":1774699800000}}
+```
+
+### A.8 `GET /api/v2/me/profile`
+
+#### HTTP Request
+
+```http
+GET /api/v2/me/profile HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"profile":{"user_id":"user_01HSYQK5PZ4K4J9R2M8D","is_guest":false}},"meta":{"request_id":"req_5","server_time_ms":1774699800000}}
+```
+
+### A.9 `PATCH /api/v2/me/profile`
+
+#### HTTP Request
+
+```http
+PATCH /api/v2/me/profile HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"display_name":"A"}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"profile":{"user_id":"user_01HSYQK5PZ4K4J9R2M8D","is_guest":false,"display_name":"A"}},"meta":{"request_id":"req_6","server_time_ms":1774699800000}}
+```
+
+### A.10 `GET /api/v2/me/preferences`
+
+#### HTTP Request
+
+```http
+GET /api/v2/me/preferences HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"preferences":{}},"meta":{"request_id":"req_7","server_time_ms":1774699800000}}
+```
+
+### A.11 `PUT /api/v2/me/preferences`
+
+#### HTTP Request
+
+```http
+PUT /api/v2/me/preferences HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"preferences":{"preferences_version":1}}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"preferences":{"preferences_version":1}},"meta":{"request_id":"req_8","server_time_ms":1774699800000}}
+```
+
+### A.12 `GET /api/v2/me/favorites`
+
+#### HTTP Request
+
+```http
+GET /api/v2/me/favorites?limit=1 HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"items":[{"favorite_id":"fav_01HSYQPDYX4B7C8WQ6ZK","guide_card_id":"guide_card_1001","favorited_at":"2026-03-28T12:00:00Z"}],"pagination":{"next_cursor":null,"has_more":false,"limit":1}},"meta":{"request_id":"req_9","server_time_ms":1774699800000}}
+```
+
+### A.13 `DELETE /api/v2/me/favorites/{favorite_id}`
+
+#### HTTP Request
+
+```http
+DELETE /api/v2/me/favorites/fav_01HSYQPDYX4B7C8WQ6ZK HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"removed":true},"meta":{"request_id":"req_10","server_time_ms":1774699800000}}
+```
+
+### A.14 `GET /api/v2/me/history`
+
+#### HTTP Request
+
+```http
+GET /api/v2/me/history?limit=1 HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"items":[{"content_ref":{"type":"guide_card","guide_card_id":"guide_card_1001"},"last_seen_at":"2026-03-28T12:00:00Z"}],"pagination":{"next_cursor":null,"has_more":false,"limit":1}},"meta":{"request_id":"req_11","server_time_ms":1774699800000}}
+```
+
+### A.15 `POST /api/v2/me/history/events`
+
+#### HTTP Request
+
+```http
+POST /api/v2/me/history/events HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"content_ref":{"type":"guide_card","guide_card_id":"guide_card_1001"}}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"recorded":true,"deduplicated":false},"meta":{"request_id":"req_12","server_time_ms":1774699800000}}
+```
+
+### A.16 `DELETE /api/v2/me/history`
+
+#### HTTP Request
+
+```http
+DELETE /api/v2/me/history HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"scope":"all"}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"removed_count":0},"meta":{"request_id":"req_13","server_time_ms":1774699800000}}
+```
+
+### A.17 `POST /api/v2/me/feedback`
+
+#### HTTP Request
+
+```http
+POST /api/v2/me/feedback HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"target_type":"app","target_id":"app_v1"}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"feedback_id":"feedback_01HSZA7D2V5M8Q1N6R3K"},"meta":{"request_id":"req_14","server_time_ms":1774699800000}}
+```
+
+### A.18 `GET /api/v2/me/consent`
+
+#### HTTP Request
+
+```http
+GET /api/v2/me/consent HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"consent":{"personalization_allowed":true,"consent_version":"2026-03-v1","updated_at":"2026-03-28T12:00:00Z"}},"meta":{"request_id":"req_15","server_time_ms":1774699800000}}
+```
+
+### A.19 `PUT /api/v2/me/consent`
+
+#### HTTP Request
+
+```http
+PUT /api/v2/me/consent HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"consent":{"personalization_allowed":true,"consent_version":"2026-03-v1","updated_at":"2026-03-28T12:00:00Z"}}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"consent":{"personalization_allowed":true,"consent_version":"2026-03-v1","updated_at":"2026-03-28T12:00:00Z"}},"meta":{"request_id":"req_16","server_time_ms":1774699800000}}
+```
+
+### A.20 `GET /api/v2/health`
+
+#### HTTP Request
+
+```http
+GET /api/v2/health HTTP/1.1
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"status":"ok","components":[{"name":"gateway","ok":true,"detail":""}]},"meta":{"request_id":"req_17","server_time_ms":1774699800000}}
+```
+
+### A.21 `GET /api/v2/pages/guide_detail`
+
+#### HTTP Request
+
+```http
+GET /api/v2/pages/guide_detail?guide_card_id=guide_card_1001 HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"guide":{"guide_card_id":"guide_card_1001","schema_version":1,"title":"T","theme":"clothing","published_at":"2026-03-28T08:00:00Z","updated_at":"2026-03-28T09:00:00Z","commercial_disclosure":{"is_commercial":false}}},"meta":{"request_id":"req_18","server_time_ms":1774699800000}}
+```
+
+### A.22 `POST /api/v2/pages/redirect_prepare`
+
+#### HTTP Request
+
+```http
+POST /api/v2/pages/redirect_prepare HTTP/1.1
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"guide_card_id":"guide_card_1001"}
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"landing_url":"https://track.example.com/r/abc"},"meta":{"request_id":"req_19","server_time_ms":1774699800000}}
+```
+
+### A.23 `GET /api/v2/pages/me_summary`
+
+#### HTTP Request
+
+```http
+GET /api/v2/pages/me_summary HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+#### HTTP Response
+
+```json
+{"success":true,"code":0,"message":"ok","data":{"profile":{"user_id":"user_01HSYQK5PZ4K4J9R2M8D","is_guest":false},"counts":{"favorites_count":0,"history_count":0},"consent":{"personalization_allowed":true,"consent_version":"2026-03-v1","updated_at":"2026-03-28T12:00:00Z"}},"meta":{"request_id":"req_20","server_time_ms":1774699800000}}
+```

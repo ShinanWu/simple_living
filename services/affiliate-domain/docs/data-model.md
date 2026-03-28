@@ -51,12 +51,12 @@ Validated **intent** to build a partner-compliant URL. May be persisted for audi
 | `partner_id` | Target partner. |
 | `campaign_ref` | Opaque reference to product/campaign object owned elsewhere. |
 | `product_refs` | Zero or more mapped offer or SKU ids per partner contract. |
-| `sub_ids` | Normalized slots (e.g. `sub1`…`subn`) filled per capability. |
+| `sub_ids` | Normalized slots (v1 cross-domain contract uses `sub_id_1`, `sub_id_2`, `sub_id_3`) filled per capability. |
 | `context` | Allowed metadata: geo, placement type, compliance mode—no PII beyond what policy allows. |
 
 ### 1.5 AffiliateLinkSpec
 
-Output of link generation: **specification** for building the final URL (see [api.md](./api.md) §2.2).
+Output of link generation: **specification** for building the final URL (see [api.md](./api.md) `AffiliateLinkSpec`).
 
 | Attribute | Description |
 |-----------|-------------|
@@ -85,14 +85,15 @@ Canonical row for **downstream** settlement and analytics.
 
 | Attribute | Description |
 |-----------|-------------|
-| `event_id` | Idempotent key (see [api.md](./api.md) §2.3). |
+| `event_id` | Idempotent key (see [api.md](./api.md) `CommissionNormalizedEvent`). |
 | `partner_id` | FK. |
 | `partner_order_id` | Partner-native id when present. |
 | `status` | `pending` \| `confirmed` \| `reversed` \| `invalid`. |
 | `amount`, `currency` | Normalized. |
 | `occurred_at` | Partner-asserted or mapped. |
 | `correlation` | Bag for sub-ids / click id / campaign ref—opaque to affiliate click logic. |
-| `rule_set_id` | Which commission rules were applied for validation. |
+
+`rule_set_id` may exist as internal enrichment in storage, but it is **not** part of the v1 public `CommissionNormalizedEvent` API / proto contract and must not be emitted as if it were a wire field.
 
 ## 2. Normalized capability flags (illustrative)
 

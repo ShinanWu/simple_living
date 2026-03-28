@@ -89,6 +89,7 @@ services/<service>/
 - `gateway/api.md` 维护对外 HTTP/JSON 契约
 - 业务域 `api.md` 维护内部 `proto` / RPC 契约
 - `api.md` 必须做到自包含，阅读时不依赖先翻其他文档才能理解消息结构
+- 示例格式、共享样例 ID、时间戳写法等统一约定见 `docs/examples/README.md`
 
 ### `pages.md`
 

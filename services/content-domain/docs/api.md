@@ -178,6 +178,12 @@
 | `name` | string | 是 | |
 | `theme_ids` | repeated string | 否 | 与主题关联 |
 
+补充约定：
+
+- `tag_id` 是跨域稳定标签键；推荐域 `RecommendationFilters.tags` 直接使用该值
+- v1 不单独提供在线 `ListTags` RPC；标签字典由内容域运营配置维护，并通过已评审文档 / 配置发布给调用方
+- 若标签字典需要开放在线查询，应新增内容域只读 RPC，而不是在其它服务复制标签语义
+
 ---
 
 ## 4. 主题
@@ -189,12 +195,18 @@
 | `theme_id` | string | 是 | |
 | `parent_id` | string | 否 | |
 | `life_theme` | `LifeTheme` | 是 | 衣食住行大类 |
-| `slug` | string | 是 | URL / 埋点键 |
+| `slug` | string | 是 | URL / 埋点键；同时是推荐域 `RecommendationFilters.themes` 使用的稳定主题键 |
 | `display_name` | string | 是 | |
 | `description` | string | 否 | |
 | `icon_url` | string | 否 | |
 | `sort_order` | int32 | 是 | 同级排序 |
 | `status` | `ThemeStatus` | 是 | |
+
+补充约定：
+
+- `theme_id` 是内容域内部主键与写路径引用
+- `slug` 是跨域稳定语义键，供推荐域、页面过滤、埋点等读路径使用
+- 当推荐/网关侧只拿到 `slug` 时，应先通过主题字典解析为 `theme_id`，再调用仅接受 `theme_id` 的内容域 RPC
 
 ### 4.2 `BannerRef`（运营位占位）
 
@@ -706,3 +718,427 @@
 本文件与 `services/content-domain/proto/content_domain.proto` 对齐；字段名 **snake_case**，枚举名以 `proto` 为准。
 
 新增 `ContentReadFacade` service 块，详见 §12。
+
+## 附录 A. 典型请求 / 响应示例
+
+以下示例使用 **proto-text** 形式展示 `proto` 消息，便于直接对应内部 RPC 报文结构；实际 wire 传输仍以 `proto2 + gRPC` 为准。枚举展示为符号名，`timestamp` 使用消息形态示意。
+
+### A.1 `ListGuideCards`
+
+#### Request (`textproto`)
+
+```textproto
+theme_id: "theme_clothing"
+tag_ids: "capsule_wardrobe"
+tag_ids: "spring"
+sort: GUIDE_CARD_LIST_SORT_NEWEST
+cursor: ""
+limit: 20
+```
+
+#### Response (`textproto`)
+
+```textproto
+cards {
+  card_id: "guide_card_1001"
+  type: GUIDE_CARD_TYPE_PHYSICAL_GOOD
+  title: "春季通勤胶囊衣橱清单"
+  subtitle: "7 件基础款覆盖一周穿搭"
+  cover_media {
+    media_id: "media_7001"
+    url: "https://cdn.example.com/cards/1001-cover.jpg"
+    type: MEDIA_TYPE_IMAGE
+    width: 1200
+    height: 900
+  }
+  theme_ids: "theme_clothing"
+  price_hint: "预计总预算 699-1299 元"
+  content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+  commercial_disclosure_required: true
+}
+pagination {
+  next_cursor: "cursor_guide_card_1001"
+  has_more: true
+  limit: 20
+}
+```
+
+### A.2 `PublishRevision`
+
+#### Request (`textproto`)
+
+```textproto
+client_request_id: "req_publish_01HSZ0A6KY4KQ2S7R8N0"
+resource_kind: CONTENT_RESOURCE_KIND_GUIDE_CARD
+resource_id: "guide_card_1001"
+revision: 12
+```
+
+#### Response (`textproto`)
+
+```textproto
+content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+published_revision: 12
+```
+
+### A.3 `BatchGetContentMetaSummary`
+
+#### Request (`textproto`)
+
+```textproto
+resource_ids: "guide_card_1001"
+resource_ids: "editorial_2008"
+resource_ids: "topic_3012"
+```
+
+#### Response (`textproto`)
+
+```textproto
+summaries {
+  resource_id: "guide_card_1001"
+  resource_kind: CONTENT_RESOURCE_KIND_GUIDE_CARD
+  title: "春季通勤胶囊衣橱清单"
+  theme_ids: "theme_clothing"
+  content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+  revision: 12
+  commercial_disclosure_required: true
+  updated_at {
+    seconds: 1774693800
+  }
+}
+summaries {
+  resource_id: "topic_3012"
+  resource_kind: CONTENT_RESOURCE_KIND_TOPIC
+  title: "一周极简衣食住行专题"
+  theme_ids: "theme_clothing"
+  theme_ids: "theme_food"
+  content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+  revision: 4
+  commercial_disclosure_required: false
+  updated_at {
+    seconds: 1774693860
+  }
+}
+missing_ids: "editorial_2008"
+```
+
+### A.4 `ListThemes`
+
+#### Request (`textproto`)
+
+```textproto
+include_inactive: false
+```
+
+#### Response (`textproto`)
+
+```textproto
+themes {
+  theme_id: "theme_clothing"
+  life_theme: LIFE_THEME_CLOTHING
+  slug: "clothing"
+  display_name: "衣"
+  sort_order: 1
+  status: THEME_STATUS_ACTIVE
+}
+```
+
+### A.5 `GetThemeDetail`
+
+#### Request (`textproto`)
+
+```textproto
+theme_id: "theme_clothing"
+```
+
+#### Response (`textproto`)
+
+```textproto
+theme {
+  theme_id: "theme_clothing"
+  life_theme: LIFE_THEME_CLOTHING
+  slug: "clothing"
+  display_name: "衣"
+  sort_order: 1
+  status: THEME_STATUS_ACTIVE
+}
+```
+
+### A.6 `BatchGetGuideCards`
+
+#### Request (`textproto`)
+
+```textproto
+card_ids: "guide_card_1001"
+field_mask {
+  paths: "card_id"
+  paths: "title"
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+cards {
+  card_id: "guide_card_1001"
+  type: GUIDE_CARD_TYPE_PHYSICAL_GOOD
+  title: "示例标题"
+  cover_media {
+    url: "https://cdn.example.com/x.jpg"
+    type: MEDIA_TYPE_IMAGE
+  }
+  commercial_disclosure_required: false
+  content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+  published_revision: 1
+}
+missing_ids: "guide_card_missing"
+```
+
+### A.7 `GetEditorialContent`
+
+#### Request (`textproto`)
+
+```textproto
+content_id: "editorial_2008"
+```
+
+#### Response (`textproto`)
+
+```textproto
+content {
+  content_id: "editorial_2008"
+  title: "示例攻略"
+  blocks {
+    block_id: "blk_1"
+    type: EDITORIAL_BLOCK_TYPE_PARAGRAPH
+  }
+  content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+}
+embedded_card_ids: "guide_card_1001"
+```
+
+### A.8 `ListEditorialContents`
+
+#### Request (`textproto`)
+
+```textproto
+cursor: ""
+limit: 20
+```
+
+#### Response (`textproto`)
+
+```textproto
+items {
+  content_id: "editorial_2008"
+  title: "示例攻略"
+}
+pagination {
+  has_more: false
+  limit: 20
+}
+```
+
+### A.9 `GetTopic`
+
+#### Request (`textproto`)
+
+```textproto
+topic_id: "topic_3012"
+```
+
+#### Response (`textproto`)
+
+```textproto
+topic {
+  topic_id: "topic_3012"
+  title: "示例专题"
+  content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+  modules {
+    module_id: "mod_1"
+    type: TOPIC_MODULE_TYPE_CARD_GRID
+    sort_order: 1
+    items {
+      item_id: "it_1"
+      card_id: "guide_card_1001"
+      sort_order: 1
+    }
+  }
+}
+```
+
+### A.10 `ListTopics`
+
+#### Request (`textproto`)
+
+```textproto
+theme_id: "theme_clothing"
+```
+
+#### Response (`textproto`)
+
+```textproto
+topics {
+  topic_id: "topic_3012"
+  title: "示例专题"
+  content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+}
+```
+
+### A.11 `GetRankingList`
+
+#### Request (`textproto`)
+
+```textproto
+ranking_id: "ranking_501"
+```
+
+#### Response (`textproto`)
+
+```textproto
+ranking {
+  ranking_id: "ranking_501"
+  title: "示例榜单"
+  rule_summary: "按销量排序"
+  update_cadence: RANKING_UPDATE_CADENCE_DAILY
+  entries {
+    entry_id: "ent_1"
+    rank: 1
+    card_id: "guide_card_1001"
+  }
+  content_status: CONTENT_LIFECYCLE_STATUS_PUBLISHED
+}
+```
+
+### A.12 `ListRankingLists`
+
+#### Request (`textproto`)
+
+```textproto
+theme_id: "theme_clothing"
+```
+
+#### Response (`textproto`)
+
+```textproto
+rankings {
+  ranking_id: "ranking_501"
+  title: "示例榜单"
+}
+```
+
+### A.13 `UpsertGuideCard`
+
+#### Request (`textproto`)
+
+```textproto
+client_request_id: "req_upsert_card_01"
+guide_card {
+  title: "新卡片"
+  type: GUIDE_CARD_TYPE_PHYSICAL_GOOD
+  cover_media {
+    url: "https://cdn.example.com/c.jpg"
+    type: MEDIA_TYPE_IMAGE
+  }
+  commercial_disclosure_required: true
+  content_status: CONTENT_LIFECYCLE_STATUS_DRAFT
+  published_revision: 0
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+card_id: "guide_card_new"
+revision: 1
+```
+
+### A.14 `UpsertEditorialContent`
+
+#### Request (`textproto`)
+
+```textproto
+client_request_id: "req_upsert_ed_01"
+content {
+  title: "新攻略"
+  blocks {
+    block_id: "blk_1"
+    type: EDITORIAL_BLOCK_TYPE_PARAGRAPH
+  }
+  content_status: CONTENT_LIFECYCLE_STATUS_DRAFT
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+content_id: "editorial_new"
+revision: 1
+```
+
+### A.15 `UpsertTopic`
+
+#### Request (`textproto`)
+
+```textproto
+client_request_id: "req_upsert_topic_01"
+topic {
+  title: "新专题"
+  content_status: CONTENT_LIFECYCLE_STATUS_DRAFT
+  modules {
+    module_id: "mod_1"
+    type: TOPIC_MODULE_TYPE_CARD_GRID
+    sort_order: 1
+    items {
+      item_id: "it_1"
+      card_id: "guide_card_1001"
+      sort_order: 1
+    }
+  }
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+topic_id: "topic_new"
+revision: 1
+```
+
+### A.16 `UpsertRankingList`
+
+#### Request (`textproto`)
+
+```textproto
+client_request_id: "req_upsert_rank_01"
+ranking {
+  title: "新榜单"
+  rule_summary: "规则说明"
+  update_cadence: RANKING_UPDATE_CADENCE_WEEKLY
+  content_status: CONTENT_LIFECYCLE_STATUS_DRAFT
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+ranking_id: "ranking_new"
+revision: 1
+```
+
+### A.17 `SubmitForReview`
+
+#### Request (`textproto`)
+
+```textproto
+client_request_id: "req_review_01"
+resource_kind: CONTENT_RESOURCE_KIND_GUIDE_CARD
+resource_id: "guide_card_1001"
+revision: 3
+```
+
+#### Response (`textproto`)
+
+```textproto
+content_status: CONTENT_LIFECYCLE_STATUS_IN_REVIEW
+```

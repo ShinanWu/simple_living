@@ -53,7 +53,7 @@
 | `device_tier` | string | 否 | 粗粒度性能档位提示 |
 | `consent` | `ConsentFlags` | 是 | 来自 `user-domain` 的同意标记 |
 | `signal_bundle_ref` | string | 否 | 预解析信号束句柄（**推荐**）；无则依赖网关/调用方约定 |
-| `theme` | string | 视场景 | `theme_feed` 等需要主题维度时必填 |
+| `theme` | string | 视场景 | `theme_feed` 等需要主题维度时必填；使用主题 **slug**，与 `content-domain.ThemeSummary.slug` 对齐 |
 | `anchor_guide_card_id` | string | 视场景 | `guide_detail_related` 等需要锚点卡片时必填 |
 
 #### `ConsentFlags`
@@ -71,12 +71,24 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `themes` | repeated string | 主题键列表 |
-| `tags` | repeated string | 标签列表 |
+| `themes` | repeated string | **主题 slug** 列表；与 `content-domain.ThemeSummary.slug` 对齐，如 `clothing` |
+| `tags` | repeated string | 标签 ID 列表；与 `content-domain` 的 `tag_ids` 使用同一 ID 空间 |
 | `languages` | repeated string | 语言过滤 |
-| `content_types` | repeated string | 内容类型过滤 |
+| `content_types` | repeated string | 内容类型过滤；v1 推荐读路径若返回导购卡片，使用 `guide_card` 作为公开值 |
 
 空 repeated 表示「不额外限制该维度」。
+
+补充约定：
+
+- 推荐域内部可基于主题 **slug** 检索索引；若需与 `content-domain.ListGuideCards.theme_id` 交互，由网关或推荐侧通过主题字典将 `slug` 解析为 `theme_id`
+- 主题字典默认由 `content-domain.ListThemes` / `GetThemeDetail` 提供
+- 未定义的 `themes` / `tags` / `content_types` 值应拒绝并返回 `INVALID_ARGUMENT`
+
+v1 标签来源约定：
+
+- 合法 `tag_id` 由 `content-domain` 维护的标签字典 / 运营配置提供
+- 推荐域消费的 `filters.tags` 与内容实体上的 `tag_ids` 使用同一 ID 空间
+- 若后续需要在线查询标签字典，应新增 `content-domain` 只读标签 RPC，而不是在推荐域重复维护副本
 
 ---
 
@@ -141,8 +153,8 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `guide_card_id` | string | 是 | 稳定导购卡片 ID，与共享契约一致 |
-| `content_ref` | `ContentRef` | 否 | 非卡片类内容指针 |
+| `guide_card_id` | string | 是 | v1 用户可见读链路的**主标识**；网关 hydration 与跳转均依赖该字段 |
+| `content_ref` | `ContentRef` | 否 | 补充引用；用于表达专题/图文/榜单上下文，**不替代** `guide_card_id` 作为主展示对象 |
 | `score` | double | 否 | 最终分；可省略或仅调试 |
 | `rank` | int32 | 是 | **1-based** 排序位置 |
 | `recall_sources` | repeated string | 否 | 粗粒度召回来源：`cf`、`content_similar`、`editorial`、`popular` 等 |
@@ -156,8 +168,14 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `kind` | string | 引用类型，如 `topic`、`article` |
-| `ref_id` | string | 对应实体 ID |
+| `kind` | string | 固定为 `topic`、`editorial_content`、`ranking_list` 之一 |
+| `ref_id` | string | 对应内容域实体 ID；分别映射 `topic_id`、`content_id`、`ranking_id` |
+
+v1 约束：
+
+- 面向终端的推荐结果默认是 **guide_card-first**；即每个 `RecommendationItem` 必须可被 `guide_card_id` hydration
+- `content_ref` 仅作为补充上下文，帮助解释条目来源或关联非卡片实体
+- 若后续需要“纯图文/纯专题”推荐结果，应新增场景约束并同步更新 `docs/contracts/recommendation.md` 与 gateway 映射
 
 #### `ExperimentInfo`
 
@@ -376,3 +394,194 @@
 | `GetPopularRecommendations` | `GetPopularRecommendationsRequest` | `GetPopularRecommendationsResponse` |
 | `ExplainRecommendations` | `ExplainRecommendationsRequest` | `ExplainRecommendationsResponse` |
 | `HealthCheck` | `HealthCheckRequest` | `HealthCheckResponse` |
+
+## 附录 A. 典型请求 / 响应示例
+
+以下示例使用 **proto-text** 形式展示 `proto` 消息，便于直接对应内部 RPC 报文结构；实际 wire 传输仍以 `proto2 + gRPC` 为准。枚举展示为符号名，时间字段保持本域约定的字符串形态。
+
+### A.1 `QueryRecommendations`
+
+#### Request (`textproto`)
+
+```textproto
+scene: HOME_FEED
+context {
+  user_id: "user_01HSYQK5PZ4K4J9R2M8D"
+  locale: "zh-CN"
+  channel: "ios"
+  app_version: "1.4.2"
+  device_tier: "mid"
+  consent {
+    personalization_allowed: true
+    ad_personalization_allowed: false
+  }
+  signal_bundle_ref: "sigref_01HSZ12V0N6A8Q0X1N2M"
+}
+cursor_limits {
+  cursor: ""
+  limit: 20
+}
+filters {
+  themes: "clothing"
+  tags: "capsule_wardrobe"
+}
+debug: false
+```
+
+#### Response (`textproto`)
+
+```textproto
+recommendation_id: "rec_01HSZ15H0N8HG9P5P2E0"
+scene: HOME_FEED
+generated_at: "2026-03-28T11:00:00Z"
+strategy {
+  id: "home_feed_v3"
+  version: "3.2.1"
+  experiment_key: "hf_ranker_b"
+  pipeline: "recall-filter-rank-rerank"
+  updated_at: "2026-03-27T22:00:00Z"
+}
+items {
+  guide_card_id: "guide_card_1001"
+  score: 0.982
+  rank: 1
+  recall_sources: "content_similar"
+  recall_sources: "editorial"
+  placement: "feed_main"
+  trace_ref: "trace_item_01"
+  reason_tags: "适合通勤"
+  reason_tags: "近期热门"
+  explanation {
+    summary: "结合你的极简穿搭偏好推荐"
+    reason_codes: "theme_match"
+    reason_codes: "behavior_similarity"
+    entities: "clothing"
+    confidence_band: CONFIDENCE_HIGH
+    policy_version: "reasoning-v2"
+  }
+}
+cursor_pagination {
+  next_cursor: "cursor_rec_01HSZ15H0N8HG9P5P2E0"
+  has_more: true
+  limit: 20
+}
+request_context_echo {
+  theme: "clothing"
+  cursor: ""
+}
+```
+
+### A.2 `GetPopularRecommendations`
+
+#### Request (`textproto`)
+
+```textproto
+scene: HOME_POPULAR
+context {
+  locale: "zh-CN"
+  channel: "ios"
+  app_version: "1.4.2"
+  consent {
+    personalization_allowed: true
+    ad_personalization_allowed: false
+  }
+}
+window: "7d"
+cursor_limits {
+  cursor: ""
+  limit: 10
+}
+filters {
+  themes: "clothing"
+}
+debug: false
+```
+
+#### Response (`textproto`)
+
+```textproto
+recommendation_id: "rec_01HSZ1P0W4D7M6Q8N2V3"
+scene: HOME_POPULAR
+generated_at: "2026-03-28T11:05:00Z"
+strategy {
+  id: "home_popular_v2"
+  version: "2.4.0"
+  pipeline: "popular-trending-rerank"
+  updated_at: "2026-03-28T09:00:00Z"
+}
+items {
+  guide_card_id: "guide_card_2001"
+  rank: 1
+  reason_tags: "近 7 天热度上升"
+}
+cursor_pagination {
+  next_cursor: "cursor_popular_01HSZ1P0W4D7M6Q8N2V3"
+  has_more: true
+  limit: 10
+}
+```
+
+### A.3 `ExplainRecommendations`
+
+#### Request (`textproto`)
+
+```textproto
+scene: GUIDE_DETAIL_RELATED
+context {
+  session_id: "sess_01HSYQBY1S7W4T1M7Q2B"
+  locale: "zh-CN"
+  channel: "ios"
+  consent {
+    personalization_allowed: true
+    ad_personalization_allowed: false
+  }
+  anchor_guide_card_id: "guide_card_1001"
+}
+items {
+  guide_card_id: "guide_card_1005"
+  rank: 1
+}
+items {
+  guide_card_id: "guide_card_1018"
+  rank: 2
+}
+strategy {
+  id: "detail_related_v2"
+  version: "2.0.4"
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+explanations {
+  summary: "与当前卡片主题相近，适合继续浏览"
+  reason_codes: "anchor_similarity"
+  reason_codes: "theme_overlap"
+  entities: "capsule_wardrobe"
+  confidence_band: CONFIDENCE_MEDIUM
+  policy_version: "reasoning-v2"
+}
+explanations {
+  summary: "同类人群经常一起查看"
+  reason_codes: "co_view"
+  entities: "clothing"
+  confidence_band: CONFIDENCE_LOW
+  policy_version: "reasoning-v2"
+}
+```
+
+### A.4 `HealthCheck`
+
+#### Request (`textproto`)
+
+```textproto
+# empty
+```
+
+#### Response (`textproto`)
+
+```textproto
+status: HEALTH_OK
+index_status: INDEX_UP
+```

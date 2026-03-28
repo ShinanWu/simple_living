@@ -172,6 +172,11 @@ Transport: map to `google.rpc.Status` with `details` carrying `ErrorInfo` / cust
 | `placement` | `string` | no | Surface key for policy (e.g. `feed`) |
 | `compliance_context` | `ComplianceContext` | no | Geo, disclosure mode flags |
 
+**Cross-domain mapping rule (v1):**
+
+- `campaign_ref` is copied 1:1 into tracking-side `AttributionPayload.campaign_slot`; v1 does not introduce an additional translation table.
+- `sub_ids` use normalized slot names `sub_id_1`, `sub_id_2`, `sub_id_3`; these keys map directly to tracking-side `AttributionPayload.sub_id_1..3`. Keys beyond the first three may remain inside affiliate internals but are **not guaranteed** to enter the tracking v1 attribution snapshot.
+
 ### 3.8 `ComplianceContext`
 
 | Field | Type | Description |
@@ -219,6 +224,8 @@ Transport: map to `google.rpc.Status` with `details` carrying `ErrorInfo` / cust
 | `template_value` | `string` | When `TEMPLATE` |
 | `token_handle` | `string` | When `REF_TOKEN` |
 
+`template_value` represents a **placeholder expression to be filled by the caller**. In v1 the allowed placeholder set is `{channel_code}`, `{campaign_slot}`, `{sub_id_1}`, `{sub_id_2}`, `{sub_id_3}`. Placeholder resolution is owned by **tracking-domain** and must happen before signature calculation.
+
 ### 3.13 `SignatureSpec`
 
 | Field | Type | Description |
@@ -233,6 +240,10 @@ Transport: map to `google.rpc.Status` with `details` carrying `ErrorInfo` / cust
 |-------|------|-------------|
 | `handle_id` | `string` | Reference resolved by affiliate adapters |
 | `refresh_before` | `google.protobuf.Timestamp` | Hint for proactive refresh |
+
+`TokenHandle` / `REF_TOKEN` belong to **affiliate-domain adapter-private capability**. v1 exposes **no** additional public RPC for "handle -> token value" resolution. If redirect-time refresh of a short-lived token is needed, the implementation may either call `ValidateLinkGenerationInput` again using the same `LinkGenerationInput` to obtain a fresh `AffiliateLinkSpec`, or refresh inside affiliate private adapters; neither path creates a new cross-domain public contract.
+
+At the cross-service contract level, tracking must not depend on any undocumented extra interface beyond `ValidateLinkGenerationInput`. If a successful validation result still cannot be materialized into a final outbound URL because `REF_TOKEN` remains unresolved after the allowed revalidation path, that is treated as an affiliate spec/runtime failure rather than a missing caller responsibility.
 
 ### 3.15 `CreateCommissionRuleSetVersionRequest`
 
@@ -284,7 +295,7 @@ Transport: map to `google.rpc.Status` with `details` carrying `ErrorInfo` / cust
 | Field | Type | Description |
 |-------|------|-------------|
 | `accepted` | `bool` | |
-| `normalized_event` | `CommissionNormalizedEvent` | Emitted or staged when accepted |
+| `normalized_event` | `CommissionNormalizedEvent` | Emitted or staged when accepted; duplicate replay MAY leave this field unset |
 
 ### 3.21 `RegisterReportBatchRequest`
 
@@ -307,7 +318,7 @@ Transport: map to `google.rpc.Status` with `details` carrying `ErrorInfo` / cust
 
 ## 4. Outbound async contract: `CommissionNormalizedEvent`
 
-Published to the event bus / stream consumed by **tracking-domain** (correlation), finance analytics, and ops. Not a unary RPC.
+Published to the event bus / stream consumed by **tracking-domain** (correlation), finance analytics, and ops. Not a unary RPC. The payload shape on the wire is the provider-owned `CommissionNormalizedEvent` message itself; topic / queue names, DLQ policy, and deployment-specific transport bindings are operational configuration rather than public contract.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -328,6 +339,8 @@ Published to the event bus / stream consumed by **tracking-domain** (correlation
 | `external_order_id` | `string` | If present |
 
 **Rule:** Affiliate-domain **stores and forwards** correlation hints; it does **not** own click lifecycle or redirect truth.
+
+For downstream tracking ingest in v1, `sub_ids["sub_id_1"]..["sub_id_3"]` are the only promoted slots.
 
 ---
 
@@ -351,7 +364,7 @@ All RPC failures SHOULD populate:
 
 | Situation | Behavior |
 |-----------|----------|
-| Duplicate webhook with same `partner_event_id` | Second call returns success with `duplicate` semantics; single normalized downstream publish |
+| Duplicate webhook with same `partner_event_id` | Second call returns success (`accepted = true`); `normalized_event` MAY be omitted and MUST NOT trigger a second downstream publish |
 | Partial report file | No `confirmed` commission status until business completeness rules pass |
 | Invalid webhook signature | `UNAUTHENTICATED`; no side effects |
 
@@ -361,9 +374,22 @@ All RPC failures SHOULD populate:
 
 ### 7.1 With **tracking-domain**
 
+- `tracking-domain.AssembleTrackingLinkRequest.affiliate_context_ref` is issued by an affiliate-owned provisioning / publish pipeline and attached upstream as an opaque pass-through value; gateway and content producers must not construct or mutate it. At runtime it must be expandable into one canonical `LinkGenerationInput` with exactly these semantic fields: `partner_id`, `campaign_ref`, `product_refs`, `sub_ids`, `placement`, `compliance_context`.
+- Tracking is not required to understand the byte-level encoding of `affiliate_context_ref`; the encoding stays affiliate-owned. The interoperable contract is the expanded semantic `LinkGenerationInput`, obtained through the affiliate-owned resolver/helper path paired with provisioning.
+- In the monorepo v1 implementation model, that resolver/helper is an affiliate-owned implementation module (library / package), not a separate public RPC. Tracking integrations must reuse the co-versioned helper instead of inventing another network contract.
 - **tracking-domain** calls `ValidateLinkGenerationInput` (or consumes cached **equivalent** spec) when assembling a user-facing link; it embeds **non-secret** attribution in signed tokens per tracking docs.
 - **tracking-domain** owns `landing_url` construction for the client; affiliate-domain supplies **`AffiliateLinkSpec`** (partner URL, query bindings, signing/token handles).
-- On redirect resolution, tracking may call affiliate adapters **only** for token refresh / signature application—still **no** affiliate ownership of HTTP redirect response to the browser beyond supplying resolved target URL string if that split is chosen in implementation.
+- If `affiliate_context_ref` expands with an embedded `placement`, it must match `tracking-domain.AssembleTrackingLinkRequest.placement`; mismatch should be treated as invalid context rather than silently overridden.
+- v1 has no extra public RPC for redirect-time token refresh or signature recalculation; if refresh is needed, tracking must reuse the same `affiliate_context_ref -> LinkGenerationInput -> ValidateLinkGenerationInput` path, or rely on affiliate private adapter capability, and must not assume an undocumented new RPC exists.
+- `LinkGenerationInput.campaign_ref` maps to tracking `AttributionPayload.campaign_slot`, and `sub_ids["sub_id_1".."sub_id_3"]` map to tracking `AttributionPayload.sub_id_1..3`.
+- `CommissionNormalizedEvent` maps to tracking as follows in v1: `event_id -> IngestConversion.external_event_id`, `partner_id -> attribution.channel_code` (unless an explicit alias mapping is documented upstream), `occurred_at -> occurred_at`, `correlation_hints.click_id -> click_id`, `amount_minor/currency -> commission.value_minor/currency`, `source = CONVERSION_SOURCE_AFFILIATE_DOMAIN`, `conversion_type = CONVERSION_TYPE_ORDER_PAID`. `amount` may be empty when gross order amount is unavailable.
+- `CommissionEventStatus.PENDING` / `CONFIRMED` may enter tracking conversion views. `REVERSED` / `INVALID` do not map to new positive facts in v1 `IngestConversion`; they must flow into later reversal / adjustment handling owned by affiliate or ops workflows.
+- For `PENDING` vs `CONFIRMED`, tracking v1 carries the distinction through `CommissionMinor.estimate` (`true` for `PENDING`, `false` for `CONFIRMED`).
+- The handoff is asynchronous in v1: affiliate publishes `CommissionNormalizedEvent`, and a tracking-owned consumer/relay is responsible for invoking `IngestConversion`. There is no requirement for synchronous affiliate -> tracking gRPC on the webhook path.
+- For `campaign_slot`, affiliate does not emit an extra event field in v1. Tracking recovers it from its persisted link/click attribution snapshot via `click_id`; if no `click_id` can be resolved, `campaign_slot` remains empty rather than being reconstructed heuristically.
+- For `sub_id_1..3`, tracking should prefer the persisted click/link attribution snapshot when `click_id` resolves successfully; `correlation_hints.sub_ids` are fallback or consistency-check inputs. On conflict, the persisted tracking snapshot wins and the incoming event should be flagged for audit rather than rejected.
+- For `REVERSED` / `INVALID`, the tracking consumer must not emit a new positive `IngestConversion` fact; it should route the event into the adjustment / reversal workflow owned outside this v1 RPC contract, while retaining audit traceability to the original affiliate `event_id`.
+- Reversal / adjustment handling is explicitly out of scope for the v1 positive-conversion path documented here; teams implementing the main affiliate -> tracking relay must not invent an extra synchronous RPC for it inside this task.
 
 ### 7.2 With **gateway**
 
@@ -391,4 +417,200 @@ flowchart LR
   tracking -->|ValidateLinkGenerationInput| LINK
   LINK -->|AffiliateLinkSpec| tracking
   INTAKE -->|CommissionNormalizedEvent| tracking
+```
+
+## Appendix A. Request / response examples
+
+The examples below use **proto-text** to mirror internal message structure more directly. Actual wire transport remains `proto2 + gRPC`; enum values are shown by symbolic name and `Timestamp` values are illustrated in message form.
+
+### A.1 `ValidateLinkGenerationInput`
+
+#### Request (`textproto`)
+
+```textproto
+input {
+  input_id: "input_01HSZ29Y3R2M6F8Q1T4N"
+  partner_id: "pdd"
+  campaign_ref: "campaign_spring_2026"
+  product_refs: "893245001"
+  sub_ids {
+    key: "sub_id_1"
+    value: "guide_card_1001"
+  }
+  sub_ids {
+    key: "sub_id_2"
+    value: "rec_01HSZ15H0N8HG9P5P2E0"
+  }
+  placement: "feed"
+  compliance_context {
+    region_code: "CN"
+    disclosure_mode: "affiliate_required"
+  }
+}
+idempotency_key: "linkgen_01HSZ2BC3T0R8S1M5J9Q"
+```
+
+#### Response (`textproto`)
+
+```textproto
+spec {
+  spec_id: "affspec_01HSZ2D1CGQ7WY1FWK2T"
+  partner_id: "pdd"
+  expires_at {
+    seconds: 1774699800
+  }
+  target_base: "https://mobile.yangkeduo.com/goods.html"
+  query_params {
+    name: "goods_id"
+    kind: LINK_PARAM_BINDING_KIND_LITERAL
+    literal_value: "893245001"
+  }
+  query_params {
+    name: "pid"
+    kind: LINK_PARAM_BINDING_KIND_TEMPLATE
+    template_value: "{channel_code}"
+  }
+  query_params {
+    name: "custom_parameters"
+    kind: LINK_PARAM_BINDING_KIND_REF_TOKEN
+    token_handle: "token_handle_subid_01"
+  }
+  signature_spec {
+    algorithm: "HMAC_SHA256"
+    signed_param_names: "goods_id"
+    signed_param_names: "pid"
+    signed_param_names: "custom_parameters"
+    key_version: "v3"
+  }
+  token_handles {
+    handle_id: "token_handle_subid_01"
+    refresh_before {
+      seconds: 1774698900
+    }
+  }
+}
+```
+
+### A.2 `IngestPartnerWebhook`
+
+#### Request (`textproto`)
+
+```textproto
+partner_id: "pdd"
+partner_event_id: "order_99887766_status_paid"
+headers_fingerprint: "sha256:6a5f2cc0d9..."
+raw_body: "<bytes>"
+received_at {
+  seconds: 1774699275
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+accepted: true
+normalized_event {
+  event_id: "cnevt_01HSZ2KFC8AJR0W3N8VA"
+  partner_id: "pdd"
+  occurred_at {
+    seconds: 1774699248
+  }
+  amount_minor: 1280
+  currency: "CNY"
+  status: COMMISSION_EVENT_STATUS_CONFIRMED
+  correlation_hints {
+    click_id: "click_01HSZ1WJ2M4Q8X7ZB0H9"
+    sub_ids {
+      key: "sub_id_1"
+      value: "guide_card_1001"
+    }
+    sub_ids {
+      key: "sub_id_2"
+      value: "rec_01HSZ15H0N8HG9P5P2E0"
+    }
+    external_order_id: "order_99887766"
+  }
+}
+```
+
+### A.3 `GetPartnerCapabilitySnapshot`
+
+#### Request (`textproto`)
+
+```textproto
+partner_id: "pdd"
+environment: "prod"
+```
+
+#### Response (`textproto`)
+
+```textproto
+snapshot {
+  partner_id: "pdd"
+  capability_set_id: "capset_01HSZB2M5Q7N4T8V1K3P"
+  lifecycle_status: PARTNER_LIFECYCLE_STATUS_ACTIVE
+  flags: CAPABILITY_FLAG_DEEP_LINK
+}
+```
+
+### A.4 `CreateCommissionRuleSetVersion`
+
+#### Request (`textproto`)
+
+```textproto
+partner_id: "pdd"
+effective_from {
+  seconds: 1774698000
+}
+source_reference: "ops_ticket_9241"
+rule_payload: "<bytes>"
+idempotency_key: "rule_01HSZB6V2M4P8Q1N7R3K"
+```
+
+#### Response (`textproto`)
+
+```textproto
+rule_set_id: "rule_set_01HSZB8A6P5Q9N2M4T1V"
+version: 3
+```
+
+### A.5 `GetCommissionRuleSet`
+
+#### Request (`textproto`)
+
+```textproto
+partner_id: "pdd"
+as_of {
+  seconds: 1774699800
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+rule_set_id: "rule_set_01HSZB8A6P5Q9N2M4T1V"
+version: 3
+effective_from {
+  seconds: 1774698000
+}
+rule_payload: "<bytes>"
+```
+
+### A.6 `RegisterReportBatch`
+
+#### Request (`textproto`)
+
+```textproto
+partner_id: "pdd"
+channel: REPORTING_CHANNEL_API
+batch_checksum: "sha256:ab12cd34"
+payload_ref: "s3://affiliate-reports/pdd/2026-03-28.csv"
+row_count_estimate: 128
+```
+
+#### Response (`textproto`)
+
+```textproto
+batch_id: "report_batch_01HSZBCM7Q4P1N8M6V2K"
+duplicate: false
 ```

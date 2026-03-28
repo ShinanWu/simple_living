@@ -27,7 +27,7 @@ This document is the **delivery-ready** contract for `tracking-domain` internal 
 
 | RPC | Request | Response | Idempotency |
 |-----|---------|----------|-------------|
-| `ResolveRedirect` | `ResolveRedirectRequest` | `ResolveRedirectResponse` | Click: at most one primary fact per policy key (see §6) |
+| `ResolveRedirect` | `ResolveRedirectRequest` | `ResolveRedirectResponse` | Click: at most one primary fact per policy key (see §4.1 and §10) |
 
 ### 1.3 `TrackingClickService`
 
@@ -136,7 +136,7 @@ This document is the **delivery-ready** contract for `tracking-domain` internal 
 |-------|------|----------|-------------|
 | `content_ref` | `ContentRef` | yes | Stable content identity |
 | `placement` | `string` | yes | e.g. `feed`, `detail`, `search` |
-| `affiliate_context_ref` | `string` | yes | Opaque handle from **affiliate-domain** (not raw secrets) |
+| `affiliate_context_ref` | `string` | yes | Opaque handle issued by an affiliate-owned provisioning / publish pipeline; it must be expandable into affiliate `LinkGenerationInput` (`partner_id`, `campaign_ref`, `product_refs`, `sub_ids`, `placement`, `compliance_context`) and never contains raw partner secrets |
 | `device_context` | `DeviceContext` | no | Client capabilities |
 | `idempotency_key` | `string` | recommended | Per user gesture |
 | `user_id` | `string` | no | If authenticated |
@@ -187,12 +187,14 @@ This document is the **delivery-ready** contract for `tracking-domain` internal 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `short_token` | `string` | yes | From URL |
-| `signed_blob` | `bytes` | no | If using signed token instead of KV lookup |
+| `short_token` | `string` | yes | From URL; always the public routing key for v1 redirect requests |
+| `signed_blob` | `bytes` | no | Tracking-owned signed envelope used to avoid or reduce KV lookups after token routing; it may carry `link_ref`, `affiliate_context_ref`, `spec_id`, expiry and non-secret attribution snapshot, but must not embed raw partner credentials or token values. Claim-level shape follows `./data-model.md` §3 (`link_ref`, `exp`, `sig`, `ver`); exact byte encoding and key management remain provider-owned |
 | `request_format` | `RedirectRequestFormat` | no | `REDIRECT` vs `JSON` |
 | `client_ip_hash` | `string` | no | Privacy-preserving digest |
 | `user_agent` | `string` | no | Truncated |
 | `device_dedup_key` | `string` | no | Idempotent click policy |
+
+When `device_dedup_key` is omitted, v1 does not create a global `(short_token, "")` dedup key. The request may still create a click fact, subject only to other anti-abuse or rate-control policies.
 
 ### 4.2 `RedirectRequestFormat`
 
@@ -233,6 +235,8 @@ This document is the **delivery-ready** contract for `tracking-domain` internal 
 | `opened_at` | `google.protobuf.Timestamp` | yes | Client-observed open time |
 | `idempotency_key` | `string` | yes | |
 
+`AckClick` is the client-observed open acknowledgment path and is mainly used when the app opens `landing_url` but the eventual partner redirect is handled elsewhere (for example native deep-link handoff or webview lifecycle callback). It must not create a second logical click if `ResolveRedirect` has already recorded the primary click fact for the same resolved link.
+
 ### 5.2 `AckClickResponse`
 
 | Field | Type | Description |
@@ -245,7 +249,7 @@ This document is the **delivery-ready** contract for `tracking-domain` internal 
 
 ### 6.1 `AttributionPayload`
 
-Aligned with [data-model.md](./data-model.md); **no secrets**.
+Aligned with [data-model.md](./data-model.md); **no secrets**. This section is the authoritative RPC-level mapping for v1 tracking callers.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -254,14 +258,16 @@ Aligned with [data-model.md](./data-model.md); **no secrets**.
 | `content_id` | `string` | |
 | `guide_card_id` | `string` | |
 | `placement` | `string` | |
-| `channel_code` | `string` | e.g. `pdd`, `douyin` |
+| `channel_code` | `string` | Stable outbound channel code, e.g. `pdd`, `douyin`; in v1 it defaults to affiliate `partner_id` unless an explicit alias mapping is documented upstream |
 | `recommendation_id` | `string` | |
 | `scene` | `string` | |
 | `item_rank` | `int32` | |
-| `campaign_slot` | `string` | |
-| `sub_id_1` | `string` | Partner slots |
-| `sub_id_2` | `string` | |
-| `sub_id_3` | `string` | |
+| `campaign_slot` | `string` | Mirrors affiliate `LinkGenerationInput.campaign_ref` |
+| `sub_id_1` | `string` | Mirrors affiliate `sub_ids["sub_id_1"]` |
+| `sub_id_2` | `string` | Mirrors affiliate `sub_ids["sub_id_2"]` |
+| `sub_id_3` | `string` | Mirrors affiliate `sub_ids["sub_id_3"]` |
+
+v1 only promotes `sub_id_1..3` into tracking attribution snapshots. Additional affiliate sub slots may exist upstream but are not guaranteed to survive into this contract.
 
 ---
 
@@ -272,16 +278,31 @@ Aligned with [data-model.md](./data-model.md); **no secrets**.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `source` | `ConversionSource` | yes | |
-| `external_event_id` | `string` | yes | Source idempotency |
+| `external_event_id` | `string` | yes | Source idempotency; for `CONVERSION_SOURCE_AFFILIATE_DOMAIN`, use `CommissionNormalizedEvent.event_id` |
 | `occurred_at` | `google.protobuf.Timestamp` | yes | Partner time |
-| `click_id` | `string` | no* | |
-| `attribution` | `AttributionPayload` | no* | For inference |
-| `conversion_type` | `ConversionType` | yes | |
+| `click_id` | `string` | no* | For affiliate events, prefer `CommissionNormalizedEvent.correlation_hints.click_id` when present |
+| `attribution` | `AttributionPayload` | no* | For inference; affiliate-originated events map `campaign_ref` / `sub_ids` into this snapshot |
+| `conversion_type` | `ConversionType` | yes | v1 affiliate normalized events use `CONVERSION_TYPE_ORDER_PAID` |
 | `amount` | `MoneyMinor` | no | |
-| `commission` | `CommissionMinor` | no | |
+| `commission` | `CommissionMinor` | no | For affiliate normalized events, populate from `amount_minor` + `currency`; use `estimate = true` for `PENDING`, `false` for `CONFIRMED` |
 | `raw_payload_ref` | `string` | no | Storage pointer |
 
-\* Policy: require `click_id` **or** sufficient `attribution` to resolve or deliberately store unmatched.
+\* Policy: require `click_id` **or** sufficient `attribution` to resolve or deliberately store unmatched. For generic v1 sources, "sufficient attribution" means at least `channel_code`, one of `content_id` / `guide_card_id`, and at least one of `campaign_slot` / `sub_id_1` / `sub_id_2` / `sub_id_3`. For `CONVERSION_SOURCE_AFFILIATE_DOMAIN`, if `click_id` is absent the event may still be accepted as `UNMATCHED` with sparse affiliate attribution (`channel_code` plus any available `campaign_slot` / `sub_id_*`); content anchors are recommended but not mandatory.
+
+**Affiliate-domain mapping (v1):**
+
+- `source = CONVERSION_SOURCE_AFFILIATE_DOMAIN`
+- `external_event_id = CommissionNormalizedEvent.event_id`
+- `attribution.channel_code = CommissionNormalizedEvent.partner_id` unless an explicit upstream alias mapping is documented
+- `occurred_at = CommissionNormalizedEvent.occurred_at`
+- `click_id = CommissionNormalizedEvent.correlation_hints.click_id` if present
+- `attribution.campaign_slot` is recovered from the persisted link/click attribution snapshot referenced by `click_id`; if `click_id` is absent or unmatched, leave `campaign_slot` empty
+- `attribution.sub_id_1..3` should prefer the persisted link/click attribution snapshot when `click_id` resolves; `CommissionNormalizedEvent.correlation_hints.sub_ids["sub_id_1".."sub_id_3"]` act as fallback and audit inputs
+- `commission.currency/value_minor/estimate = currency / amount_minor / (status == COMMISSION_EVENT_STATUS_PENDING)`
+- `amount` may be empty when affiliate-side data contains commission only and not gross order amount
+- if `click_id` is absent, the consumer may still call `IngestConversion`; tracking should persist the row as `CONVERSION_INGEST_STATUS_UNMATCHED` unless other attribution rules later resolve it
+- `CommissionEventStatus.REVERSED` / `INVALID` must not be ingested as new positive conversion facts through this v1 RPC path; they belong to reversal / adjustment handling outside `IngestConversion`
+- conflicts between persisted click attribution and incoming affiliate correlation hints must not cause hard ingest failure on the v1 path; tracking should trust its persisted snapshot, retain the incoming hints for audit, and continue ingest unless another validation rule fails
 
 ### 7.2 `MoneyMinor`
 
@@ -326,8 +347,8 @@ Aligned with [data-model.md](./data-model.md); **no secrets**.
 | Field | Type | Description |
 |-------|------|-------------|
 | `bucket_start` | `google.protobuf.Timestamp` | |
-| `estimated_minor` | `int64` | |
-| `reported_minor` | `int64` | |
+| `estimated_minor` | `int64` | Sum of rows where `commission.estimate = true` |
+| `reported_minor` | `int64` | Sum of rows where `commission.estimate = false` |
 | `currency` | `string` | |
 | `order_count` | `int32` | |
 
@@ -406,8 +427,19 @@ Failures SHOULD use `google.rpc.Status` plus optional `TrackingErrorDetail`:
 
 ### 11.1 **affiliate-domain**
 
-- Assembly path calls `ValidateLinkGenerationInput` (or equivalent cached spec) to obtain `AffiliateLinkSpec`, then builds **`landing_url`** and signed token payload **in tracking** using that spec.
+- Assembly path accepts `affiliate_context_ref` as an upstream opaque pass-through value issued by affiliate-owned provisioning, resolves it into one canonical affiliate `LinkGenerationInput`, then calls `ValidateLinkGenerationInput` (or an equivalent cached spec) to obtain `AffiliateLinkSpec`, and finally builds **`landing_url`** and signed token payload **in tracking** using that spec.
+- `placement` follows request-first semantics: `AssembleTrackingLinkRequest.placement` is the source of truth for tracking attribution. If the expanded `affiliate_context_ref` also carries `placement`, the two values must match; otherwise return `TRACKING_ERROR_CODE_AFFILIATE_CONTEXT_INVALID`.
 - Tracking **never** embeds partner API secrets in client-visible URLs; token acquisition stays in affiliate adapters.
+- After `AssembleTrackingLink`, tracking must persist enough state for redirect-time materialization: at minimum `link_ref`, `short_token`, `affiliate_context_ref`, the effective spec reference (`spec_id` or an equivalent materialized spec snapshot), `expires_at`, and the non-secret attribution snapshot.
+- `ResolveRedirect` first uses persisted tracking state to materialize `partner_url`; only when the stored spec/token material is expired, insufficient, or policy-marked refreshable should it re-enter the affiliate resolution path.
+- v1 does **not** assume any extra public affiliate RPC for redirect-time refresh. If the previously validated spec expires or needs refreshed token material, tracking must either re-run the same `affiliate_context_ref -> LinkGenerationInput -> ValidateLinkGenerationInput` path or rely on affiliate private adapter capability explicitly owned inside affiliate-domain.
+- Successful redirect-time URL assembly must not depend on an undocumented handle-to-string API. If a validated `AffiliateLinkSpec` still contains `REF_TOKEN` bindings that cannot be materialized after the allowed revalidation path, tracking must fail with `TRACKING_ERROR_CODE_AFFILIATE_SPEC_FAILED` rather than guessing another integration path.
+- Mapping convention is fixed across domains: affiliate `campaign_ref -> campaign_slot`, affiliate `sub_ids["sub_id_1".."sub_id_3"] -> AttributionPayload.sub_id_1..3`.
+- `signed_blob` is a tracking envelope, not a serialized `AffiliateLinkSpec`; it carries only what tracking needs to rehydrate link state and re-enter the affiliate resolution path.
+- Tracking is not expected to parse the byte-level encoding of `affiliate_context_ref` itself. It stores and forwards the opaque value and must use the affiliate-owned resolver/helper co-versioned with provisioning when expansion into `LinkGenerationInput` is required. In monorepo v1 this helper is treated as an affiliate-owned implementation module, not a separate public RPC.
+- `CommissionNormalizedEvent` is consumed by a tracking-owned async worker / relay, which invokes `IngestConversion`. Retry is keyed by affiliate `event_id`, while RPC idempotency remains `(source, external_event_id)`. Because affiliate duplicate webhook handling suppresses second publish, the consumer should treat repeated delivery as transport replay, not as a new business fact. The transport payload is the provider-owned `CommissionNormalizedEvent` message; topic / queue names and DLQ policy are deployment configuration, not part of this API contract.
+- `ResolveRedirect` owns the primary redirect-time click creation path. `AckClick` is a supplemental acknowledgment path and must reuse existing click state when one already exists for the same resolved link / idempotency scope.
+- Reversal / adjustment handling is explicitly outside the v1 positive-conversion RPC surface documented here; implementers of the main affiliate->tracking path do not need to invent an extra RPC in this task.
 
 ### 11.2 **gateway**
 
@@ -439,5 +471,191 @@ flowchart LR
   GW --> ASM
   GW --> REDIR
   ASM --> SPEC
-  REDIR --> SPEC
+  REDIR -.revalidate only when needed.-> SPEC
+```
+
+## Appendix A. Request / response examples
+
+The examples below use **proto-text** to mirror internal message structure more directly. Actual wire transport remains `proto2 + gRPC`; enum values are shown by symbolic name and `Timestamp` values are illustrated in message form.
+
+### A.1 `AssembleTrackingLink`
+
+#### Request (`textproto`)
+
+```textproto
+content_ref {
+  content_id: "guide_card_1001"
+  guide_card_id: "guide_card_1001"
+  recommendation_id: "rec_01HSZ15H0N8HG9P5P2E0"
+  scene: "home_feed"
+  item_rank: 1
+}
+placement: "feed"
+affiliate_context_ref: "affctx_01HSZ3M4YF4V1G7N9P2D"
+device_context {
+  client_platform: "ios"
+  app_version: "1.4.2"
+  webview_user_agent: "SimpleLiving/1.4.2"
+}
+idempotency_key: "click_prepare_01HSZ3P2E3Q7P9V5R1K2"
+user_id: "user_01HSYQK5PZ4K4J9R2M8D"
+device_id: "device_9f1b5e18"
+```
+
+#### Response (`textproto`)
+
+```textproto
+landing_url: "https://api.simpleliving.app/t/st_2f93ab"
+expires_at {
+  seconds: 1774700400
+}
+redirect_hint {
+  app_scheme: "simpleliving://redirect/st_2f93ab"
+  universal_link: "https://m.simpleliving.app/t/st_2f93ab"
+  mini_program_path: "/pages/redirect?token=st_2f93ab"
+}
+attribution_echo {
+  link_ref: "link_01HSZ3R7AD6M0N6F5J8A"
+  content_id: "guide_card_1001"
+  guide_card_id: "guide_card_1001"
+  placement: "feed"
+  channel_code: "pdd"
+  recommendation_id: "rec_01HSZ15H0N8HG9P5P2E0"
+  scene: "home_feed"
+  item_rank: 1
+  campaign_slot: "campaign_spring_2026"
+}
+link_ref: "link_01HSZ3R7AD6M0N6F5J8A"
+short_token: "st_2f93ab"
+```
+
+### A.2 `ResolveRedirect`
+
+#### Request (`textproto`)
+
+```textproto
+short_token: "st_2f93ab"
+request_format: REDIRECT_REQUEST_FORMAT_JSON
+client_ip_hash: "sha256:1ae0f4..."
+user_agent: "Mozilla/5.0"
+device_dedup_key: "ios:device_9f1b5e18"
+```
+
+#### Response (`textproto`)
+
+```textproto
+disposition: REDIRECT_DISPOSITION_JSON_BODY
+click_id: "click_01HSZ3Y8W7W5S5Y6R3B1"
+redirect_state: "ok"
+json_body {
+  landing_url: "https://api.simpleliving.app/t/st_2f93ab"
+  partner_url: "https://mobile.yangkeduo.com/goods.html?goods_id=893245001"
+  click_id: "click_01HSZ3Y8W7W5S5Y6R3B1"
+}
+```
+
+### A.3 `ListCommissionItems`
+
+#### Request (`textproto`)
+
+```textproto
+pagination {
+  cursor: ""
+  limit: 20
+}
+user_id: "user_01HSYQK5PZ4K4J9R2M8D"
+```
+
+#### Response (`textproto`)
+
+```textproto
+items {
+  conversion_id: "conv_01HSZ44D5J4P1M8H6X9V"
+  click_id: "click_01HSZ3Y8W7W5S5Y6R3B1"
+  occurred_at {
+    seconds: 1774700280
+  }
+  commission_minor: 1280
+  currency: "CNY"
+  conversion_type: CONVERSION_TYPE_ORDER_PAID
+}
+pagination {
+  next_cursor: "cursor_comm_01HSZ44D5J4P1M8H6X9V"
+  has_more: true
+}
+```
+
+### A.4 `AckClick`
+
+#### Request (`textproto`)
+
+```textproto
+link_ref: "link_01HSZ3R7AD6M0N6F5J8A"
+opened_at {
+  seconds: 1774700220
+}
+idempotency_key: "ack_01HSZC2M6P4Q8N1V5K3T"
+```
+
+#### Response (`textproto`)
+
+```textproto
+click_id: "click_01HSZ3Y8W7W5S5Y6R3B1"
+```
+
+### A.5 `IngestConversion`
+
+#### Request (`textproto`)
+
+```textproto
+source: CONVERSION_SOURCE_AFFILIATE_DOMAIN
+external_event_id: "cnevt_01HSZ2KFC8AJR0W3N8VA"
+occurred_at {
+  seconds: 1774700280
+}
+click_id: "click_01HSZ3Y8W7W5S5Y6R3B1"
+conversion_type: CONVERSION_TYPE_ORDER_PAID
+commission {
+  currency: "CNY"
+  value_minor: 1280
+  estimate: false
+}
+```
+
+#### Response (`textproto`)
+
+```textproto
+conversion_id: "conv_01HSZ44D5J4P1M8H6X9V"
+matched_click_id: "click_01HSZ3Y8W7W5S5Y6R3B1"
+status: CONVERSION_INGEST_STATUS_ACCEPTED
+match_confidence: MATCH_CONFIDENCE_EXACT
+```
+
+### A.6 `GetCommissionSummary`
+
+#### Request (`textproto`)
+
+```textproto
+from_time {
+  seconds: 1774617600
+}
+to_time {
+  seconds: 1774704000
+}
+granularity: COMMISSION_SUMMARY_GRANULARITY_DAY
+user_id: "user_01HSYQK5PZ4K4J9R2M8D"
+```
+
+#### Response (`textproto`)
+
+```textproto
+buckets {
+  bucket_start {
+    seconds: 1774617600
+  }
+  estimated_minor: 1280
+  reported_minor: 1280
+  currency: "CNY"
+  order_count: 1
+}
 ```

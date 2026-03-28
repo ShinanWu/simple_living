@@ -67,7 +67,7 @@ States describe **user-visible or edge-visible** outcomes for `GET /t/{token}` (
 ## 3. Jump execution semantics
 
 1. **Order of operations:** validate token → **persist click** (or no-op if duplicate) → resolve partner URL → respond.
-2. **Idempotency:** duplicate GETs from prefetch must not create multiple billable clicks; use `Idempotent-Key` header or cookie dedup where supported.
+2. **Idempotency:** duplicate GETs from prefetch must not create multiple billable clicks; edge/http implementations may derive `ResolveRedirectRequest.device_dedup_key` from `Idempotent-Key`, stable device hints, or equivalent cookie/session material where supported.
 3. **Caching:** `Cache-Control: no-store` on jump responses.
 4. **302 chains:** At most one hop through tracking; partner may append its own trackers (outside our control).
 
@@ -81,7 +81,7 @@ States describe **user-visible or edge-visible** outcomes for `GET /t/{token}` (
 | 2 | `sub_id_*` equality to `attribution_snapshot` | `exact` or `inferred` |
 | 3 | Fuzzy time + user + SKU (if ever used) | `inferred` — **off by default** |
 
-Matching rules are versioned (`matching_policy_version` on `Conversion`).
+Matching rules are versioned by implementation policy, but `matching_policy_version` is not part of the v1 public API / data-model contract unless added explicitly later.
 
 ---
 

@@ -14,7 +14,7 @@ Represents one **assembled** outbound entry before or after first use.
 | `short_token` | string | Public opaque token embedded in `/t/{short_token}`. |
 | `user_id` | string \| null | If authenticated; nullable for guest flows if allowed. |
 | `device_id` | string \| null | Stable device id from auth/device service. |
-| `content_ref` | object | `{ "content_id", "card_id", ... }` — mirrors assemble request. |
+| `content_ref` | object | `{ "content_id", "guide_card_id", ... }` — mirrors assemble request. |
 | `placement` | string | Normalized placement key. |
 | `affiliate_context_ref` | string | Opaque; maps to affiliate-domain context. |
 | `expires_at` | timestamp | URL expiry. |
@@ -87,7 +87,7 @@ Carried in signed token or stored as `attribution_snapshot` on Click/Conversion.
 | `click_id` | after click | Filled post hoc on conversion match. |
 | `link_ref` | on click row | Ties to assembly. |
 | `content_id` | yes | |
-| `card_id` | no | When applicable. |
+| `guide_card_id` | no | When applicable. |
 | `placement` | yes | |
 | `channel_code` | yes | Logical channel (e.g. `pdd`, `douyin`) from affiliate context resolution. |
 | `campaign_slot` | no | Free-form A/B or ops slot. |
