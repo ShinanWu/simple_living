@@ -63,6 +63,7 @@
 ```text
 services/<service>/docs/
 ├── README.md
+├── development.md    # 本服务实现与交付（Bazel、端口、测试、合并前检查）
 ├── api.md
 ├── pages.md
 ├── data-model.md
@@ -92,3 +93,15 @@ services/<service>/
 - 一个服务内部允许文档、规则、代码紧密耦合
 - 服务之间只能通过公开契约协作
 - 公共能力尽量少而精，避免沉淀过多无边界代码到 `common`
+
+## 6. 实现与交付文档从哪里读
+
+每个服务的 **全周期说明**（本包 Bazel 目标、默认端口、`bazel run`/`test`、必读公共契约、PR Done 清单）在：
+
+```text
+services/<service>/docs/development.md
+```
+
+**跨服务公共约定**（端口全表、Bazel 跨域依赖矩阵、`gateway` HTTPS+JSON 与内部 brpc 分层、测试策略、CI）在 [`docs/engineering-conventions.md`](../docs/engineering-conventions.md)。**公共 JSON 语义**在 [`docs/contracts/`](../docs/contracts/)。
+
+各服务 `docs/README.md` 已索引 `development.md`；无需额外「集中式开发目录」。

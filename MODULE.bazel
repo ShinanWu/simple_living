@@ -1,0 +1,15 @@
+"""Simple Living monorepo: C++ services on Apache brpc (see docs/architecture/README.md)."""
+
+module(
+    name = "simple_living",
+    version = "0.0.0",
+    bazel_compatibility = [">=7.2.0"],
+)
+
+# brpc is not on the default BCR; Secretflow hosts a maintained registry mirror.
+bazel_dep(name = "brpc", version = "1.15.0")
+
+# Direct deps for BUILD files under this repo (Bzlmod does not expose transitive repos).
+bazel_dep(name = "protobuf", version = "32.1", repo_name = "com_google_protobuf")
+bazel_dep(name = "rules_cc", version = "0.0.1")
+bazel_dep(name = "rules_proto", version = "4.0.0")

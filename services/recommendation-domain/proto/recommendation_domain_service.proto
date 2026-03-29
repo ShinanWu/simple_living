@@ -7,6 +7,7 @@ import "recommendation_domain_models.proto";
 option java_multiple_files = true;
 option java_package = "com.simpleliving.recommendation.domain";
 option go_package = "github.com/simple_living/services/recommendation-domain/proto;recommendationpb";
+option cc_generic_services = true;
 
 // Internal gRPC API for recommendation-domain using proto2 syntax.
 service RecommendationService {

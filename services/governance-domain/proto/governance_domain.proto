@@ -4,6 +4,7 @@ package simple_living.governance_domain;
 
 import "google/protobuf/timestamp.proto";
 
+option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/governance-domain/proto;governancepb";
 
 // Internal RPC contract for governance-domain. Aligns with services/governance-domain/docs/api.md.

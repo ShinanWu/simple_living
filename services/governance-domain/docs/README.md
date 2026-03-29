@@ -75,6 +75,7 @@
 
 | 文档 | 用途 |
 |------|------|
+| [development.md](./development.md) | 本服务实现与交付：构建、运行、测试、合并前检查与公共文档索引 |
 | [api.md](./api.md) | 自包含的内部 RPC / proto 契约，含完整消息、枚举、错误与 v1 决策 |
 | [pages.md](./pages.md) | 运营/审核相关页面与入口约定 |
 | [data-model.md](./data-model.md) | 核心实体与关系 |

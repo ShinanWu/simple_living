@@ -60,6 +60,7 @@ It enables parallel work by exposing stable **internal RPC / logical APIs** (`pr
 
 | Document | Contents |
 |----------|----------|
+| [development.md](./development.md) | 本服务实现与交付：构建、运行、测试、合并前检查与公共文档索引 |
 | [api.md](./api.md) | Internal logical RPC: auth introspection, profile, favorites, history, feedback, consent, signal bundle resolution |
 | [data-model.md](./data-model.md) | Entities, enums, and cross-domain references |
 | [pages.md](./pages.md) | Which screens consume user data via gateway |

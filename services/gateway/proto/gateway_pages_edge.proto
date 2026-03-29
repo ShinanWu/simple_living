@@ -2,6 +2,7 @@ syntax = "proto2";
 
 package simple_living.gateway.pages;
 
+option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/gateway/proto/gwpagespb;gwpagespb";
 
 import "google/protobuf/timestamp.proto";

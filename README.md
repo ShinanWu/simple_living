@@ -45,7 +45,8 @@ simple_living/
 │   ├── product-design.md                  # 产品顶层设计
 │   ├── compliance.md                      # 合规基线
 │   ├── document-first-development.md      # 文档先行与并行开发规范
-│   ├── contracts/                         # 跨服务公共契约
+│   ├── engineering-conventions.md        # 跨服务工程约定（Bazel、端口、测试、gateway 分层）
+│   ├── contracts/                         # 跨服务公共契约（JSON 语义等）
 │   │   └── README.md
 │   └── architecture/
 │       └── README.md                      # 技术与业务架构总览
@@ -127,6 +128,7 @@ simple_living/
 - [产品设计文档](./docs/product-design.md)
 - [技术架构总览](./docs/architecture/README.md)
 - [文档先行开发规范](./docs/document-first-development.md)
+- [工程约定（Bazel / 端口 / 测试 / gateway 分层）](./docs/engineering-conventions.md)（与各服务 `services/<service>/docs/development.md` 配合）
 - [合规基线](./docs/compliance.md)
 - [服务契约总览](./docs/contracts/README.md)
 - [业务服务总览](./services/README.md)

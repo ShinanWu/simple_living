@@ -73,6 +73,7 @@ It does **not** store canonical user profiles, author content, or execute commer
 
 | Document | Contents |
 |----------|----------|
+| [development.md](./development.md) | Implementation and delivery: build, run, test, merge checklist, shared doc index |
 | [api.md](./api.md) | Self-contained internal RPC/proto contract, request/response messages, enums, and errors |
 | [data-model.md](./data-model.md) | Context, scene, strategy, results, explanations, ranking features |
 | [pages.md](./pages.md) | How surfaces use recommendations |

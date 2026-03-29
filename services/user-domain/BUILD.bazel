@@ -1,3 +1,7 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//build:brpc_copts.bzl", "BRPC_EXAMPLE_COPTS")
+
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
@@ -8,4 +12,29 @@ filegroup(
 filegroup(
     name = "docs",
     srcs = glob(["docs/**/*.md"]),
+)
+
+proto_library(
+    name = "user_domain_proto",
+    srcs = glob(["proto/*.proto"]),
+    strip_import_prefix = "proto",
+    deps = [
+        "@com_google_protobuf//:timestamp_proto",
+        "@com_google_protobuf//:wrappers_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "user_domain_cc_proto",
+    deps = [":user_domain_proto"],
+)
+
+cc_binary(
+    name = "user_domain_server",
+    srcs = ["src/user_domain_server_main.cpp"],
+    copts = BRPC_EXAMPLE_COPTS,
+    deps = [
+        ":user_domain_cc_proto",
+        "@brpc//:brpc",
+    ],
 )

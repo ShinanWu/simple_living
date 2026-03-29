@@ -41,6 +41,7 @@ Revenue attribution depends on correct partner contracts, link formats, and sett
 
 | File | Contents |
 |------|----------|
+| [development.md](./development.md) | Implementation and delivery: build, run, test, merge checklist, shared doc index |
 | [api.md](./api.md) | Self-contained internal RPC/proto contract, partner integration messages, enums, and errors |
 | [pages.md](./pages.md) | Configuration and admin surfaces (not end-user redirect pages). |
 | [data-model.md](./data-model.md) | Core entities, identifiers, and partner-normalized structures. |

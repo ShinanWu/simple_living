@@ -4,6 +4,7 @@ package simple_living.affiliate_domain;
 
 import "google/protobuf/timestamp.proto";
 
+option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/affiliate-domain/proto;affiliatepb";
 
 // Internal gRPC API for affiliate-domain.

@@ -9,6 +9,17 @@
 
 ---
 
+## [1.0.1] - 2026-03-29
+
+### 新增
+
+- `README.md`：§6「对外协议实现说明」——终端 HTTPS+JSON、`gateway/proto` Edge 为逻辑边界、须含 HTTP 接入层；引用 [`docs/engineering-conventions.md`](../../../docs/engineering-conventions.md)。
+- `development.md`：Gateway 实现与交付（文档阅读顺序、Bazel、联调 flags、测试、合并前检查）。
+
+### 说明
+
+- 跨服务工程约定集中在 [`docs/engineering-conventions.md`](../../../docs/engineering-conventions.md)；各服务在 `services/<service>/docs/development.md` 说明本域实现与交付细节。
+
 ## [1.0.0] - 2026-03-28
 
 ### 新增

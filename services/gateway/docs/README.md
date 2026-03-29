@@ -57,8 +57,18 @@ Gateway **依赖各域已发布的 proto 与接口契约**，不复制、不私�
 
 ## 5. 文档与并行开发
 
+- **实现与交付**：[development.md](./development.md)（文档阅读顺序、Bazel、联调、测试、合并前检查）。
 - 客户端与测试可仅依赖：`api.md`、公共契约与 mock；需要理解聚合编排时再参考 `pages.md`。
 - Gateway 实现者可依赖：本文档、`workflow.md`、`data-model.md`、各域 proto。
 - 域服务团队可假设：对外 JSON 由 gateway 翻译，域接口保持 proto 稳定演进并做好兼容性。
 
 变更记录见 [changelog.md](./changelog.md)。
+
+## 6. 对外协议实现说明（与架构对齐）
+
+- **终端契约**：客户端只使用 **HTTPS + JSON**；路由与 `data` 形状以 [api.md](./api.md) 与 `docs/contracts/` 为准。
+- **内部契约**：`gateway` 使用 **brpc** 调用各业务域；消息类型由各域 `proto` 定义。
+- **仓库内 `proto` 中的 Edge service**：表示与 HTTP 路由对应的 **逻辑处理边界**，便于生成桩代码与类型复用；**不是**客户端直连的 wire API。详见 [`docs/engineering-conventions.md`](../../../docs/engineering-conventions.md) §3。
+- **交付要求**：`gateway` 二进制须包含 **HTTP 接入层**（TLS/路由/JSON 信封/下游 brpc 客户端）；若当前仅有 brpc Service 脚手架，须在实现阶段补齐 HTTP 层并在 [changelog.md](./changelog.md) 记录演进。
+
+实现时的请求阶段划分、metadata 与超时策略见 [workflow.md](./workflow.md)。构建、运行与合并前检查见 [development.md](./development.md)；全仓端口与 Bazel 矩阵见 [`docs/engineering-conventions.md`](../../../docs/engineering-conventions.md)。

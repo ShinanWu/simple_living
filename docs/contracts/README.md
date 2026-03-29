@@ -97,7 +97,14 @@
 - 服务私有契约变更由服务 owner 负责
 - 公共契约变更需要考虑所有消费方的兼容性
 
-## 8. 推荐目录
+## 8. 实现时如何依赖本目录
+
+- JSON 字段名与信封形状由 `gateway` 在实现中强制执行。
+- **单服务交付**（Bazel、端口、`bazel test`、Done）：`services/<service>/docs/development.md`。
+- **跨服务工程约定**（Bazel 矩阵、端口表、测试策略）：[`docs/engineering-conventions.md`](../engineering-conventions.md)。
+- 内部 RPC 仍由各服务 `proto` 定义；公共契约 **不替代** 域内 `proto`。
+
+## 9. 推荐目录
 
 ```text
 docs/contracts/

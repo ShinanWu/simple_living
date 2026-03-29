@@ -2,6 +2,7 @@ syntax = "proto2";
 
 package simple_living.gateway.user;
 
+option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/gateway/proto/gwuserpb;gwuserpb";
 
 // protoc -I . -I ../../user-domain/proto gateway_user_edge.proto

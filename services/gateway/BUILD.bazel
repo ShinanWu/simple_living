@@ -1,3 +1,7 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//build:brpc_copts.bzl", "BRPC_EXAMPLE_COPTS")
+
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
@@ -8,4 +12,45 @@ filegroup(
 filegroup(
     name = "docs",
     srcs = glob(["docs/**/*.md"]),
+)
+
+proto_library(
+    name = "gateway_user_proto",
+    srcs = [
+        "proto/gateway_user_edge.proto",
+        "proto/gateway_user_http_messages.proto",
+    ],
+    strip_import_prefix = "proto",
+    deps = ["//services/user-domain:user_domain_proto"],
+)
+
+cc_proto_library(
+    name = "gateway_user_cc_proto",
+    deps = [
+        ":gateway_user_proto",
+        "//services/user-domain:user_domain_cc_proto",
+    ],
+)
+
+proto_library(
+    name = "gateway_pages_proto",
+    srcs = ["proto/gateway_pages_edge.proto"],
+    strip_import_prefix = "proto",
+    deps = ["@com_google_protobuf//:timestamp_proto"],
+)
+
+cc_proto_library(
+    name = "gateway_pages_cc_proto",
+    deps = [":gateway_pages_proto"],
+)
+
+cc_binary(
+    name = "gateway_edge_server",
+    srcs = ["src/gateway_edge_server_main.cpp"],
+    copts = BRPC_EXAMPLE_COPTS,
+    deps = [
+        ":gateway_pages_cc_proto",
+        ":gateway_user_cc_proto",
+        "@brpc//:brpc",
+    ],
 )

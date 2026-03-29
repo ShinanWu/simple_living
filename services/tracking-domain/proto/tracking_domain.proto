@@ -4,6 +4,7 @@ package simple_living.tracking_domain;
 
 import "google/protobuf/timestamp.proto";
 
+option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/tracking-domain/proto;trackingpb";
 
 // Internal gRPC API for tracking-domain.

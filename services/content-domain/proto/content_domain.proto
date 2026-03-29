@@ -5,6 +5,7 @@ package simple_living.content_domain;
 import "google/protobuf/field_mask.proto";
 import "google/protobuf/timestamp.proto";
 
+option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/content-domain/proto;contentpb";
 
 // Internal RPC contract for content-domain. Aligns with services/content-domain/docs/api.md.

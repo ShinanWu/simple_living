@@ -85,3 +85,7 @@ updated_at {
 
 - 若协议字段或共享样例语义变更，先更新本文件，再批量修正文档示例
 - 若单个服务需要偏离本约定，应在该服务 `api.md` 示例附近写明原因
+
+## 9. 与测试、CI 的关系
+
+契约示例中的共享 ID 与 JSON 形状可直接作为 **契约测试 / golden** 的输入输出参考；测试目录与 Bazel 约定见 [`docs/engineering-conventions.md`](../engineering-conventions.md) §5 与各服务 `services/<service>/docs/development.md`。

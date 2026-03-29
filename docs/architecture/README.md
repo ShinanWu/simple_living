@@ -330,6 +330,7 @@ Ops / CMS
 | `docs/document-first-development.md` | 定义文档先行和并行协作规则 |
 | `docs/contracts/README.md` | 定义全局公共契约边界与共享字段语义 |
 | `docs/compliance.md` | 定义合规与信任基线 |
+| `docs/engineering-conventions.md` | **跨服务工程约定**：Bazel、默认端口、跨域 proto 依赖、`gateway` 协议分层、测试与 CI（与各服务 `docs/development.md` 配合） |
 
 ### 6.2 服务文档
 
@@ -338,6 +339,7 @@ Ops / CMS
 ```text
 services/<service>/docs/
 ├── README.md              # 服务目标、边界、依赖、职责
+├── development.md         # 本包实现与交付：Bazel/端口/联调/测试/合并检查
 ├── api.md                 # 服务契约定义（gateway 为对外 JSON，业务域为内部 proto/RPC）
 ├── pages.md               # 客户端消费方式与页面映射
 ├── data-model.md          # 核心实体、字段、枚举
@@ -363,9 +365,20 @@ services/<service>/docs/
 - 推荐卡片与导购卡片协议
 - 跳转与归因字段协议
 
+### 6.4 开发与交付（文档落点）
+
+- **单服务**：在 **`services/<service>/docs/development.md`** 中集中写明本包 Bazel 目标、默认端口、`bazel run`/`test`、合并前检查清单与须对照的公共文档链接。
+- **跨服务**：端口全表、Bazel 依赖矩阵、`gateway` 对外 HTTPS+JSON 与内部 brpc 分层、测试与 CI 策略见 [`docs/engineering-conventions.md`](../engineering-conventions.md)。
+
+架构层定义 **谁依赖谁、用什么协议大类**；**如何编译、如何起进程、如何测** 以 **`engineering-conventions.md` + 各服务 `development.md`** 为准。
+
 ## 7. 目录结构建议
 
 ```text
+build/
+├── BUILD.bazel
+└── brpc_copts.bzl         # 各服务 cc_binary/cc_test 共享 copts（见 docs/engineering-conventions.md）
+
 services/
 ├── gateway/
 │   ├── src/

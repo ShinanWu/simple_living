@@ -50,6 +50,7 @@
 ```text
 services/<service>/docs/
 ├── README.md
+├── development.md   # 本服务实现与交付（构建、运行、测试、合并前检查）
 ├── api.md
 ├── pages.md
 ├── data-model.md
@@ -74,6 +75,12 @@ services/<service>/
 - 不负责什么
 - 上下游依赖
 - 核心能力列表
+
+### `development.md`
+
+- 本服务的**构建、运行、测试与合并前检查**：Bazel 目标、默认端口、`bazel run`/`test` 示例、测试覆盖期望
+- 列出须对照的 **`docs/contracts/`** 与 [`docs/engineering-conventions.md`](./engineering-conventions.md)（跨服务工程约定）
+- 与 `README.md` 中的文档索引互链
 
 ### `api.md`
 
@@ -162,6 +169,13 @@ services/<service>/
 - 验收标准
 - 异常场景说明
 
+**落地要求**（目录、Bazel、`bazel test` 与最低用例期望）见 [`docs/engineering-conventions.md`](./engineering-conventions.md) §5。新增或修改 RPC/HTTP 契约时，应同步增加或更新对应测试目标，避免 CI 与文档漂移。
+
+### 构建、运行与跨服务依赖
+
+- **单服务**：从 `services/<service>/docs/development.md` 开始，按文内链接阅读本服务 `docs/` 与必要的 `docs/contracts/`。
+- **跨服务工程约定**（Bazel、`brpc_copts`、跨域 proto 依赖、默认端口与 flags、`gateway` 协议分层）：[`docs/engineering-conventions.md`](./engineering-conventions.md) §2–§4。
+
 ## 7. 变更规则
 
 ### 小变更
@@ -193,6 +207,7 @@ services/<service>/
 - 页面已接入
 - 验收标准已满足
 - 关键流程可回归
+- **工程闭环**：`bazel build` 覆盖受影响目标；相关 `bazel test` 通过或已在 `changelog`/PR 中说明暂缓原因与跟踪项（见 [`docs/engineering-conventions.md`](./engineering-conventions.md) §5 与 `services/<service>/docs/development.md`）
 
 ## 10. 适配 AI 并行开发
 
@@ -200,7 +215,10 @@ services/<service>/
 
 - 每个 agent 只负责一个明确服务目录（包括 `gateway` 或某个业务域）或一个明确文档任务
 - agent 之间共享的信息来源必须是文档，而不是口头约定
-- 如果接口文档和代码实现冲突，以已评审文档为准，代码必须回调修正
+- **冲突处理**：
+  - **对外 JSON 与产品/契约文档**：以已评审的 `docs/contracts/`、`services/gateway/docs/api.md` 与页面文档为准，代码与映射层回调修正
+  - **内部 RPC 有线格式（字段号、枚举数值、oneof）**：以提供方 **`*.proto` 为真源**；若 `api.md` 与 `proto` 不一致，修正 `api.md` 并与 proto 同 PR 交付
+- 全周期检查清单与禁止事项：`services/<service>/docs/development.md` + [`docs/engineering-conventions.md`](./engineering-conventions.md) §1
 
 ## 11. 结论
 

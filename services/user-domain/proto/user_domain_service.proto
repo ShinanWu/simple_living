@@ -2,6 +2,7 @@ syntax = "proto2";
 
 package simple_living.user_domain;
 
+option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/user-domain/proto/userpb;userpb";
 
 // protoc -I . user_domain_service.proto user_domain_models.proto

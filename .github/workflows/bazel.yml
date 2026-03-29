@@ -1,0 +1,21 @@
+name: Bazel
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazelisk@v3
+        with:
+          bazelisk-version: "1.25.0"
+
+      - name: Build all service targets
+        run: bazel build //services/...
