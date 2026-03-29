@@ -71,7 +71,7 @@
                                 │
                ┌────────────────┼────────────────┐
                ▼                ▼                ▼
-        MySQL Cluster      Redis Cluster      Kafka Cluster
+      PostgreSQL 集群      Redis Cluster      Kafka Cluster
                                 │
                                 ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -80,6 +80,8 @@
 │ Prometheus / Grafana / ELK / Jaeger / Terraform                            │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
+
+关系型平面：**PostgreSQL** 为权威 OLTP 存储；Schema 与迁移由各域 `docs/data-model.md` 与基础设施约定共同约束。缓存为 **Redis**；异步与事件总线为 **Kafka**（开发环境可用与 Kafka 协议兼容的 broker，见 `infra/dev/README.md`）。
 
 ## 5. 服务间协作原则
 
@@ -438,7 +440,7 @@ third_party/
 | **容器编排** | Kubernetes |
 | **服务治理** | Istio |
 | **缓存** | Redis |
-| **数据库** | MySQL |
+| **数据库** | **PostgreSQL** |
 | **消息队列** | Kafka |
 | **监控** | Prometheus + Grafana |
 | **日志** | ELK Stack |

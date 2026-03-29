@@ -1,235 +1,205 @@
-// Placeholder brpc server: registers UserDomainService; RPC bodies are stubs (see docs/api.md).
+// user-domain brpc server — PostgreSQL (libpq) + Redis/Kafka per docs/architecture.
 #include <gflags/gflags.h>
 #include <brpc/server.h>
 #include <butil/logging.h>
 
+#include "pg_user_store.h"
 #include "user_domain_service.pb.h"
 
 DEFINE_int32(port, 9101, "TCP port for user-domain brpc server");
+DEFINE_string(pg_conninfo,
+              "host=127.0.0.1 port=5432 dbname=simple_living user=simple password=simple",
+              "libpq connection string; must point to PostgreSQL (see infra/dev/docker-compose.yml)");
 
 namespace simple_living {
 namespace user_domain {
 
 class UserDomainServiceImpl : public UserDomainService {
+    PgUserStore* store_;
+
 public:
-    void IntrospectAccessToken(::google::protobuf::RpcController* controller,
-                               const IntrospectAccessTokenRequest* request,
-                               IntrospectAccessTokenResponse* response,
+    explicit UserDomainServiceImpl(PgUserStore* s) : store_(s) {}
+
+    void IssueTokenPair(::google::protobuf::RpcController*,
+                        const IssueTokenPairRequest* req,
+                        IssueTokenPairResponse* resp,
+                        ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        store_->IssueTokenPair(*req, resp);
+    }
+
+    void IntrospectAccessToken(::google::protobuf::RpcController*,
+                               const IntrospectAccessTokenRequest* req,
+                               IntrospectAccessTokenResponse* resp,
                                ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->IntrospectAccessToken(*req, resp);
     }
 
-    void IntrospectRefreshToken(::google::protobuf::RpcController* controller,
-                                const IntrospectRefreshTokenRequest* request,
-                                IntrospectRefreshTokenResponse* response,
+    void IntrospectRefreshToken(::google::protobuf::RpcController*,
+                                const IntrospectRefreshTokenRequest* req,
+                                IntrospectRefreshTokenResponse* resp,
                                 ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->IntrospectRefreshToken(*req, resp);
     }
 
-    void IssueTokenPair(::google::protobuf::RpcController* controller,
-                        const IssueTokenPairRequest* request,
-                        IssueTokenPairResponse* response,
-                        ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
-    }
-
-    void RevokeSession(::google::protobuf::RpcController* controller,
-                       const RevokeSessionRequest* request,
-                       RevokeSessionResponse* response,
+    void RevokeSession(::google::protobuf::RpcController*,
+                       const RevokeSessionRequest* req,
+                       RevokeSessionResponse* resp,
                        ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->RevokeSession(*req, resp);
     }
 
-    void EnsureGuestSession(::google::protobuf::RpcController* controller,
-                            const EnsureGuestSessionRequest* request,
-                            EnsureGuestSessionResponse* response,
+    void EnsureGuestSession(::google::protobuf::RpcController*,
+                            const EnsureGuestSessionRequest* req,
+                            EnsureGuestSessionResponse* resp,
                             ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->EnsureGuestSession(*req, resp);
     }
 
-    void GetProfile(::google::protobuf::RpcController* controller,
-                    const GetProfileRequest* request,
-                    GetProfileResponse* response,
+    void GetProfile(::google::protobuf::RpcController*,
+                    const GetProfileRequest* req,
+                    GetProfileResponse* resp,
                     ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->GetProfile(*req, resp);
     }
 
-    void UpdateProfile(::google::protobuf::RpcController* controller,
-                       const UpdateProfileRequest* request,
-                       UpdateProfileResponse* response,
+    void UpdateProfile(::google::protobuf::RpcController*,
+                       const UpdateProfileRequest* req,
+                       UpdateProfileResponse* resp,
                        ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->UpdateProfile(*req, resp);
     }
 
-    void GetPreferences(::google::protobuf::RpcController* controller,
-                        const GetPreferencesRequest* request,
-                        GetPreferencesResponse* response,
+    void GetPreferences(::google::protobuf::RpcController*,
+                        const GetPreferencesRequest* req,
+                        GetPreferencesResponse* resp,
                         ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->GetPreferences(*req, resp);
     }
 
-    void UpdatePreferences(::google::protobuf::RpcController* controller,
-                           const UpdatePreferencesRequest* request,
-                           UpdatePreferencesResponse* response,
+    void UpdatePreferences(::google::protobuf::RpcController*,
+                           const UpdatePreferencesRequest* req,
+                           UpdatePreferencesResponse* resp,
                            ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->UpdatePreferences(*req, resp);
     }
 
-    void ListFavorites(::google::protobuf::RpcController* controller,
-                       const ListFavoritesRequest* request,
-                       ListFavoritesResponse* response,
+    void ListFavorites(::google::protobuf::RpcController*,
+                       const ListFavoritesRequest* req,
+                       ListFavoritesResponse* resp,
                        ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->ListFavorites(*req, resp);
     }
 
-    void AddFavorite(::google::protobuf::RpcController* controller,
-                     const AddFavoriteRequest* request,
-                     AddFavoriteResponse* response,
+    void AddFavorite(::google::protobuf::RpcController*,
+                     const AddFavoriteRequest* req,
+                     AddFavoriteResponse* resp,
                      ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->AddFavorite(*req, resp);
     }
 
-    void RemoveFavorite(::google::protobuf::RpcController* controller,
-                        const RemoveFavoriteRequest* request,
-                        RemoveFavoriteResponse* response,
+    void RemoveFavorite(::google::protobuf::RpcController*,
+                        const RemoveFavoriteRequest* req,
+                        RemoveFavoriteResponse* resp,
                         ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->RemoveFavorite(*req, resp);
     }
 
-    void ListHistory(::google::protobuf::RpcController* controller,
-                     const ListHistoryRequest* request,
-                     ListHistoryResponse* response,
+    void ListHistory(::google::protobuf::RpcController*,
+                     const ListHistoryRequest* req,
+                     ListHistoryResponse* resp,
                      ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->ListHistory(*req, resp);
     }
 
-    void RecordHistoryEvent(::google::protobuf::RpcController* controller,
-                            const RecordHistoryEventRequest* request,
-                            RecordHistoryEventResponse* response,
+    void RecordHistoryEvent(::google::protobuf::RpcController*,
+                            const RecordHistoryEventRequest* req,
+                            RecordHistoryEventResponse* resp,
                             ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->RecordHistoryEvent(*req, resp);
     }
 
-    void ClearHistory(::google::protobuf::RpcController* controller,
-                      const ClearHistoryRequest* request,
-                      ClearHistoryResponse* response,
+    void ClearHistory(::google::protobuf::RpcController*,
+                      const ClearHistoryRequest* req,
+                      ClearHistoryResponse* resp,
                       ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->ClearHistory(*req, resp);
     }
 
-    void SubmitFeedback(::google::protobuf::RpcController* controller,
-                        const SubmitFeedbackRequest* request,
-                        SubmitFeedbackResponse* response,
+    void SubmitFeedback(::google::protobuf::RpcController*,
+                        const SubmitFeedbackRequest* req,
+                        SubmitFeedbackResponse* resp,
                         ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->SubmitFeedback(*req, resp);
     }
 
-    void GetConsent(::google::protobuf::RpcController* controller,
-                    const GetConsentRequest* request,
-                    GetConsentResponse* response,
+    void GetConsent(::google::protobuf::RpcController*,
+                    const GetConsentRequest* req,
+                    GetConsentResponse* resp,
                     ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->GetConsent(*req, resp);
     }
 
-    void UpdateConsent(::google::protobuf::RpcController* controller,
-                       const UpdateConsentRequest* request,
-                       UpdateConsentResponse* response,
+    void UpdateConsent(::google::protobuf::RpcController*,
+                       const UpdateConsentRequest* req,
+                       UpdateConsentResponse* resp,
                        ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->UpdateConsent(*req, resp);
     }
 
-    void GetSignalBundleRef(::google::protobuf::RpcController* controller,
-                            const GetSignalBundleRefRequest* request,
-                            GetSignalBundleRefResponse* response,
+    void GetSignalBundleRef(::google::protobuf::RpcController*,
+                            const GetSignalBundleRefRequest* req,
+                            GetSignalBundleRefResponse* resp,
                             ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->GetSignalBundleRef(*req, resp);
     }
 
-    void ResolveSignalBundle(::google::protobuf::RpcController* controller,
-                             const ResolveSignalBundleRequest* request,
-                             ResolveSignalBundleResponse* response,
+    void ResolveSignalBundle(::google::protobuf::RpcController*,
+                             const ResolveSignalBundleRequest*,
+                             ResolveSignalBundleResponse* resp,
                              ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        resp->set_resolved(true);
+        resp->mutable_payload()->set_opaque_payload_json("{}");
     }
 
-    void GetMeSummary(::google::protobuf::RpcController* controller,
-                      const GetMeSummaryRequest* request,
-                      GetMeSummaryResponse* response,
+    void GetMeSummary(::google::protobuf::RpcController*,
+                      const GetMeSummaryRequest* req,
+                      GetMeSummaryResponse* resp,
                       ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        (void)response;
+        brpc::ClosureGuard g(done);
+        store_->GetMeSummary(*req, resp);
     }
 
-    void HealthCheck(::google::protobuf::RpcController* controller,
-                     const HealthCheckRequest* request,
-                     HealthCheckResponse* response,
+    void HealthCheck(::google::protobuf::RpcController*,
+                     const HealthCheckRequest*,
+                     HealthCheckResponse* resp,
                      ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard done_guard(done);
-        (void)controller;
-        (void)request;
-        response->set_status("ok");
+        brpc::ClosureGuard g(done);
+        const bool pg_ok = store_->Ping();
+        resp->set_status(pg_ok ? "ok" : "degraded");
+        auto* c = resp->add_components();
+        c->set_name("postgresql");
+        c->set_ok(pg_ok);
+        c->set_detail(pg_ok ? "connected" : "unreachable");
     }
 };
 
@@ -239,7 +209,14 @@ public:
 int main(int argc, char* argv[]) {
     GFLAGS_NAMESPACE::ParseCommandLineFlags(&argc, &argv, true);
 
-    simple_living::user_domain::UserDomainServiceImpl svc;
+    simple_living::user_domain::PgUserStore store;
+    if (!store.ConnectAndInit(FLAGS_pg_conninfo)) {
+        LOG(ERROR) << "PostgreSQL ConnectAndInit failed; check -pg_conninfo and that the server is running "
+                        "(see infra/dev/README.md)";
+        return 1;
+    }
+
+    simple_living::user_domain::UserDomainServiceImpl svc(&store);
     brpc::Server server;
     if (server.AddService(&svc, brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
         LOG(ERROR) << "Fail to add UserDomainService";
@@ -252,6 +229,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    LOG(INFO) << "user-domain server listening on port " << FLAGS_port;
     server.RunUntilAskedToQuit();
     return 0;
 }

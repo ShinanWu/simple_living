@@ -47,12 +47,17 @@ bazel run //services/recommendation-domain:recommendation_domain_server -- -port
 
 若运行时调用下游，配置对应 `-*_domain_addr`（命名见 `docs/engineering-conventions.md` §4）。
 
-## 5. 测试
+## 5. 持久化与缓存（顶层设计）
 
-最低期望：`HealthCheck`（若有）；一条核心推荐查询 RPC 的 stub 成功路径。见 `docs/engineering-conventions.md` §5。
+- **MySQL** 或 **PostgreSQL** + **Redis**（特征、索引、离线任务与 Kafka 协同见 [`data-model.md`](./data-model.md)、[`workflow.md`](./workflow.md)）。细则见 `docs/engineering-conventions.md` §4.1。
 
-## 6. 合并前检查清单
+## 6. 测试
+
+最低期望：`HealthCheck`（若有）；一条核心推荐查询 RPC 在 **库表或联调环境** 下的成功路径。见 `docs/engineering-conventions.md` §5。
+
+## 7. 合并前检查清单
 
 - [ ] `api.md` 与 `proto/` 一致；`changelog.md` 已更新
+- [ ] `data-model.md` 与 **MySQL 或 PostgreSQL** + **Redis**（及 Kafka，若适用）一致
 - [ ] `bazel build` / `bazel test` 本包通过
 - [ ] Bazel 仅通过目标依赖消费 user/content/governance proto；`scene` 等与 `docs/contracts/recommendation.md` 一致

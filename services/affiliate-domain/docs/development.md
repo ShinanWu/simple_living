@@ -45,12 +45,17 @@ bazel test //services/affiliate-domain/...
 bazel run //services/affiliate-domain:affiliate_domain_server -- -port=9104
 ```
 
-## 5. 测试
+## 5. 持久化与缓存（顶层设计）
 
-最低期望：`HealthCheck`（若有）；一条与 partner 能力或链接规格相关的核心读/算 RPC stub。见 `docs/engineering-conventions.md` §5。
+- **MySQL** 或 **PostgreSQL** + **Redis**；partner 配置、规则版本与回传流水等见 [`data-model.md`](./data-model.md)。细则见 `docs/engineering-conventions.md` §4.1。
 
-## 6. 合并前检查清单
+## 6. 测试
+
+最低期望：`HealthCheck`（若有）；一条与 partner 能力或链接规格相关的核心读/算 RPC 成功路径（**库表或联调环境**）。见 `docs/engineering-conventions.md` §5。
+
+## 7. 合并前检查清单
 
 - [ ] `api.md` 与 `proto/` 一致；`changelog.md` 已更新
+- [ ] `data-model.md` 与 **MySQL 或 PostgreSQL** + **Redis** 选型及迁移一致
 - [ ] `bazel build` / `bazel test` 本包通过
 - [ ] 破坏性变更已评估 `tracking-domain`、`gateway` 消费者

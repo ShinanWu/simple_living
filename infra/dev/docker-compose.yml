@@ -1,0 +1,63 @@
+# Development / prod-like stack: PostgreSQL + Redis + Kafka (KRaft).
+# Usage: from repo root `docker compose -f infra/dev/docker-compose.yml up -d`
+# Remote Linux host can run the same file as the canonical runtime dependencies.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: simple
+      POSTGRES_PASSWORD: simple
+      POSTGRES_DB: simple_living
+    ports:
+      - "5432:5432"
+    volumes:
+      - simple_living_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simple -d simple_living"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - simple_living_redis:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Kafka API compatible broker (single-node dev). Clients use bootstrap 127.0.0.1:9092.
+  kafka:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.11
+    command:
+      - redpanda
+      - start
+      - --kafka-addr=0.0.0.0:9092
+      - --advertise-kafka-addr=127.0.0.1:9092
+      - --pandaproxy-addr=0.0.0.0:8082
+      - --schema-registry-addr=0.0.0.0:8081
+      - --smp=1
+      - --memory=1G
+      - --mode=dev-container
+      - --default-log-level=warn
+    ports:
+      - "9092:9092"
+    volumes:
+      - simple_living_kafka:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  simple_living_pg:
+  simple_living_redis:
+  simple_living_kafka:

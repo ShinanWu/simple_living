@@ -44,18 +44,24 @@ bazel test //services/user-domain/...
 bazel run //services/user-domain:user_domain_server -- -port=9101
 ```
 
-无持久化时可使用 **dev stub**（内存存储）；健康检查与降级语义须在 `api.md` 说明。
+## 5. 持久化与缓存（顶层设计）
 
-## 5. 跨服务依赖
+与 [`docs/architecture/README.md`](../../../docs/architecture/README.md) §8、`docs/engineering-conventions.md` §4.1 一致：
+
+- **关系型数据库**：**MySQL**（默认）或 **PostgreSQL**（按环境统一选型）；本域表结构、迁移与索引见 [`data-model.md`](./data-model.md)。
+- **Redis**：会话、热点读、限流等按 `api.md` / `workflow.md` 与实现共同约定。
+
+## 6. 跨服务依赖
 
 本域默认无业务域 proto 依赖。消费方（`gateway`、`recommendation-domain`）在 Bazel 中依赖本域导出目标 `//services/user-domain:user_domain_proto` 等；**禁止** 其他域复制本域 `.proto`。
 
-## 6. 测试
+## 7. 测试
 
-最低期望：`HealthCheck`（若已定义）；`IssueTokenPair` 或 `EnsureGuestSession` 之一 happy path（可内存存储）。详见 `docs/engineering-conventions.md` §5。
+最低期望：`HealthCheck`（若已定义）；`IssueTokenPair` 或 `EnsureGuestSession` 之一 **对接真实库或联调库** 的 happy path。详见 `docs/engineering-conventions.md` §5。
 
-## 7. 合并前检查清单
+## 8. 合并前检查清单
 
 - [ ] `api.md` 与 `proto/` 一致；`changelog.md` 已更新
+- [ ] `data-model.md` 与架构选型（**MySQL 或 PostgreSQL** + **Redis**）及迁移策略一致
 - [ ] `bazel build` / `bazel test` 本包通过
 - [ ] 默认端口 `9101` 与 `docs/engineering-conventions.md` §4 一致（若调整则同步该文与 `services/gateway/docs/development.md`）

@@ -29,6 +29,10 @@
 - **终端**：只使用 **HTTPS + JSON**；`gateway/proto` 中 Edge service 为 **逻辑路由边界**，不是客户端直连的 wire API。完整说明见 [README.md §6](./README.md) 与 `docs/engineering-conventions.md` §3。
 - **下游**：经 **brpc** 调用各业务域；不得把业务规则下沉到错误映射之外的新增逻辑而不更新文档。
 
+## 3.1 状态与基础设施（顶层设计）
+
+`gateway` **不承载业务权威状态**；鉴权、限流、聚合所需的外部能力按 [`docs/architecture/README.md`](../../../docs/architecture/README.md) §8：**Redis**（如限流计数/短期缓存）、**MySQL / PostgreSQL**（若网关侧仅存审计/配置类数据，须在 `data-model.md` 写明）、**Kafka**（异步旁路，若有）。默认实现以**无状态多实例**为准。细则见 `docs/engineering-conventions.md` §4.1。
+
 ## 4. Bazel 与源码位置
 
 | 项 | 值 |
@@ -77,6 +81,7 @@ bazel test //services/gateway/...
 ## 8. 合并前检查清单
 
 - [ ] `docs/`（含 `api.md`）与实现及 `docs/contracts/` 一致；`changelog.md` 已更新
+- [ ] 无状态与外部依赖（**Redis** / 可选库表）与 [`docs/architecture/README.md`](../../../docs/architecture/README.md) §8、`docs/engineering-conventions.md` §4.1 一致
 - [ ] `bazel build //services/gateway/...` 通过
 - [ ] `bazel test //services/gateway/...` 通过（或 PR 说明暂缓与跟踪项）
 - [ ] 交付含 **HTTPS+JSON 接入**（或 changelog 已说明分阶段计划）

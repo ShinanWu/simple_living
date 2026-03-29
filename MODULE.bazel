@@ -9,6 +9,14 @@ module(
 # brpc is not on the default BCR; Secretflow hosts a maintained registry mirror.
 bazel_dep(name = "brpc", version = "1.15.0")
 
+# brpc@1.15.0 depends on openssl@3.3.2, which only exists in Secretflow's registry
+# as 3.3.2.bcr.1. single_version_override must be in the root module to take effect.
+single_version_override(
+    module_name = "openssl",
+    registry = "https://raw.githubusercontent.com/secretflow/bazel-registry/main",
+    version = "3.3.2.bcr.1",
+)
+
 # Direct deps for BUILD files under this repo (Bzlmod does not expose transitive repos).
 bazel_dep(name = "protobuf", version = "32.1", repo_name = "com_google_protobuf")
 bazel_dep(name = "rules_cc", version = "0.0.1")

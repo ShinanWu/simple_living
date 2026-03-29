@@ -46,12 +46,17 @@ bazel run //services/tracking-domain:tracking_domain_server -- \
   -affiliate_domain_addr=brpc://127.0.0.1:9104
 ```
 
-## 5. 测试
+## 5. 持久化与缓存（顶层设计）
 
-最低期望：`HealthCheck`（若有）；`AssembleTrackingLink` 或 `ResolveRedirect` 之一 stub 路径。见 `docs/engineering-conventions.md` §5。
+- **MySQL** 或 **PostgreSQL** + **Redis**（点击、跳转、归因、转化等见 [`data-model.md`](./data-model.md)）；异步与 Kafka 按架构。细则见 `docs/engineering-conventions.md` §4.1。
 
-## 6. 合并前检查清单
+## 6. 测试
+
+最低期望：`HealthCheck`（若有）；`AssembleTrackingLink` 或 `ResolveRedirect` 之一在 **库表或联调环境** 下的成功路径。见 `docs/engineering-conventions.md` §5。
+
+## 7. 合并前检查清单
 
 - [ ] `api.md` 与 `proto/` 一致；`changelog.md` 已更新
+- [ ] `data-model.md` 与 **MySQL 或 PostgreSQL** + **Redis** + **Kafka**（若适用）一致
 - [ ] `bazel build` / `bazel test` 本包通过
 - [ ] 通过 Bazel 依赖 `affiliate-domain` proto；对外可见字段与 `docs/contracts/redirect-attribution.md` 及 `gateway` 一致

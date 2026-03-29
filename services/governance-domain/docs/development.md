@@ -45,12 +45,17 @@ bazel test //services/governance-domain/...
 bazel run //services/governance-domain:governance_domain_server -- -port=9106
 ```
 
-## 5. 测试
+## 5. 持久化与缓存（顶层设计）
 
-最低期望：`HealthCheck`（若有）；一条审核/可见性相关核心 RPC stub。见 `docs/engineering-conventions.md` §5。
+- **MySQL** 或 **PostgreSQL** + **Redis**（审核队列、可见性裁决、策略版本等见 [`data-model.md`](./data-model.md)）。细则见 `docs/engineering-conventions.md` §4.1。
 
-## 6. 合并前检查清单
+## 6. 测试
+
+最低期望：`HealthCheck`（若有）；一条审核/可见性相关核心 RPC 在 **库表或联调环境** 下的成功路径。见 `docs/engineering-conventions.md` §5。
+
+## 7. 合并前检查清单
 
 - [ ] `api.md` 与 `proto/` 一致；`changelog.md` 已更新
+- [ ] `data-model.md` 与 **MySQL 或 PostgreSQL** + **Redis** 选型及迁移一致
 - [ ] `bazel build` / `bazel test` 本包通过
 - [ ] Bazel 依赖仅通过目标引用 content/user proto；变更已评估 `content-domain` / `recommendation-domain` / `gateway`

@@ -109,7 +109,7 @@ CI 见 `.github/workflows/bazel.yml`。
 
 - **终端 → `gateway`**：**HTTPS + JSON**；路径与体字段见 `services/gateway/docs/api.md` 与 **`docs/contracts/`**（`snake_case`）。
 - **`gateway` → 业务域**：**brpc + proto**。
-- **`gateway/proto` 中的 Edge service**：与 HTTP 路由对应的 **逻辑处理边界**（桩与类型复用），**不是**客户端直连的 wire API。
+- **`gateway/proto` 中的 Edge service**：与 HTTP 路由对应的 **逻辑处理边界**（代码生成、类型复用与 handler 分层），**不是**客户端直连的 wire API。
 - **交付**：`gateway` 二进制须含 **HTTP 接入层**（TLS/路由/JSON 信封/下游 brpc）；若仅有 brpc Service 脚手架，须在实现中补齐 HTTP 并在 `services/gateway/docs/changelog.md` 说明。
 
 实现分层示意：
@@ -151,7 +151,15 @@ HTTP 接入层 → brpc Channel → 各业务域 brpc Server
 
 **启动顺序（最小联调）**：先启无依赖或少依赖域（如 user、content、affiliate）→ 再启 recommendation、tracking、governance → 最后 **gateway**。
 
-无 DB/缓存时允许 **dev stub 模式**（内存桩），须在对应 `api.md` 说明健康检查与降级语义。
+### 4.1 持久化与缓存（对齐 [`docs/architecture/README.md`](./architecture/README.md) §8）
+
+| 组件 | 约定 |
+|------|------|
+| **关系型数据库** | **PostgreSQL**（各域 `data-model.md` 定义表结构、索引与迁移策略）。 |
+| **缓存** | **Redis**（会话、热点读、限流等按域文档执行）。 |
+| **消息** | **Kafka**（异步、回传、解耦链路；开发环境见 `infra/dev/docker-compose.yml`）。 |
+
+域服务实现应通过 **连接池 + 仓储层** 访问上述组件；**不得**将进程内数据结构当作跨实例权威状态。本地或**远程 Linux 类生产主机**可先执行 `docker compose -f infra/dev/docker-compose.yml up -d` 启动 PostgreSQL、Redis、与 Kafka 兼容 broker，再运行服务（见 `infra/dev/README.md`）。
 
 ---
 

@@ -26,10 +26,7 @@ proto_library(
 
 cc_proto_library(
     name = "gateway_user_cc_proto",
-    deps = [
-        ":gateway_user_proto",
-        "//services/user-domain:user_domain_cc_proto",
-    ],
+    deps = [":gateway_user_proto"],
 )
 
 proto_library(
@@ -51,6 +48,10 @@ cc_binary(
     deps = [
         ":gateway_pages_cc_proto",
         ":gateway_user_cc_proto",
+        "//services/user-domain:user_domain_cc_proto",
+        "//services/content-domain:content_domain_cc_proto",
+        "//services/recommendation-domain:recommendation_domain_cc_proto",
+        "//services/tracking-domain:tracking_domain_cc_proto",
         "@brpc//:brpc",
     ],
 )

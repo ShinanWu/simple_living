@@ -47,7 +47,7 @@ service UserDomainService {
 }
 ```
 
-**实现名**：`simple_living.user_domain.UserDomainService/<Method>`（语言插件可映射为不同桩名，须在仓库内统一）。
+**实现名**：`simple_living.user_domain.UserDomainService/<Method>`（各语言绑定可映射为不同符号名，须在仓库内统一）。
 
 ## 3. 枚举（wire 数值以 proto 为准）
 
