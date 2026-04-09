@@ -1,0 +1,26 @@
+name: SimpleLiving
+options:
+  bundleIdPrefix: com.simpleliving
+  deploymentTarget:
+    iOS: "18.0"
+packages:
+  SimpleLivingCore:
+    path: Packages/SimpleLivingCore
+targets:
+  SimpleLiving:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/App
+      - path: Sources/Features
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.simpleliving.ios
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        SWIFT_VERSION: "5.0"
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.1.0"
+    dependencies:
+      - package: SimpleLivingCore
+        product: SimpleLivingCore
