@@ -13,7 +13,7 @@
 | 按服务边界修改代码 | 默认只修改 `services/<service>/` 下 `src/`、`proto/`、`BUILD.bazel`、`tests/`、`docs/` |
 | 不 fork 他域 proto | 调用方仅在 Bazel `deps` 中依赖提供方 `proto_library` / `cc_proto_library` |
 | 公共 JSON 语义 | 变更多端或跨域字段含义时，先改 `docs/contracts/`，再改 `services/gateway/docs/` 与相关域 |
-| 客户端入口 | 终端 **只** 对接 `gateway` 的 **HTTPS+JSON**；不得假设客户端直连业务域 brpc |
+| 客户端入口 | 终端经前置 `Nginx` 接入后统一对接 `gateway` 的 **HTTPS+JSON**；不得假设客户端直连业务域 brpc |
 
 ### 1.1 契约真源
 
@@ -107,8 +107,10 @@ CI 见 `.github/workflows/bazel.yml`。
 
 ## 3. Gateway：对外 HTTPS+JSON 与内部 brpc
 
+- **终端 → `Nginx`**：公网入口，承载 TLS 终止、基础限流、反向代理等通用网络能力。
 - **终端 → `gateway`**：**HTTPS + JSON**；路径与体字段见 `services/gateway/docs/api.md` 与 **`docs/contracts/`**（`snake_case`）。
 - **`gateway` → 业务域**：**brpc + proto**。
+- **边界约束**：`Nginx` 不承载业务字段语义、页面聚合或 JSON ↔ proto 映射；这些能力全部由 `gateway` 负责。
 - **`gateway/proto` 中的 Edge service**：与 HTTP 路由对应的 **逻辑处理边界**（代码生成、类型复用与 handler 分层），**不是**客户端直连的 wire API。
 - **交付**：`gateway` 二进制须含 **HTTP 接入层**（TLS/路由/JSON 信封/下游 brpc）；若仅有 brpc Service 脚手架，须在实现中补齐 HTTP 并在 `services/gateway/docs/changelog.md` 说明。
 
@@ -151,7 +153,29 @@ HTTP 接入层 → brpc Channel → 各业务域 brpc Server
 
 **启动顺序（最小联调）**：先启无依赖或少依赖域（如 user、content、affiliate）→ 再启 recommendation、tracking、governance → 最后 **gateway**。
 
-### 4.1 持久化与缓存（对齐 [`docs/architecture/README.md`](./architecture/README.md) §8）
+### 4.1 服务注册发现（生产约定）
+
+生产环境统一采用 Kubernetes 原生发现，不引入独立注册中心。
+
+- **注册与发现真源**：`Deployment/StatefulSet -> Service -> EndpointSlice -> CoreDNS`。
+- **调用地址规范**：服务间调用使用 Kubernetes DNS 名（例如 `<service>.<namespace>.svc.cluster.local`）或等价短域名；禁止硬编码 Pod IP。
+- **实例生命周期**：实例上下线由 Kubernetes readiness / liveness 与滚动发布流程驱动，禁止自建心跳线程重复实现注册逻辑。
+- **调用方实现**：`gateway` 与各域服务的下游地址 flags 在集群内应指向 Service DNS；本地联调可继续使用 `127.0.0.1:<port>`。
+- **组件边界**：如无明确跨数据中心或混合基础设施诉求，不新增 Consul/Nacos 等注册中心，避免双控制面。
+
+### 4.2 服务治理（Kubernetes + gateway 约定）
+
+当前阶段 Kubernetes 只用于编排与注册发现；服务治理由 `gateway` 与各域 `brpc` 统一承载，业务域只维护业务语义与契约。
+
+- **流量治理**：通过 `gateway` 与各域 `brpc` 管理超时、重试、限流、熔断和灰度。
+- **入口职责**：前置 `Nginx` 仅承担 TLS 终止、反向代理与基础网络能力；不承载业务限流语义。
+- **K8s 非目标（当前阶段）**：不启用 Ingress、Service Mesh、NetworkPolicy 等额外治理能力。
+- **安全策略**：访问控制与密钥轮转由基础设施统一管理，业务鉴权语义由 `gateway` 与域服务契约负责。
+- **失败语义**：业务错误码与业务失败语义仍以服务 `proto` 与 `docs/contracts/` 为准；治理层只处理网络与访问控制。
+- **可观测数据**：链路追踪、网关指标与服务指标统一接入 Prometheus / Grafana / Jaeger，服务日志接入 ELK。
+- **发布联动**：灰度与回滚策略应与 GitLab CI + ArgoCD 发布流程保持一致，避免代码配置与运行时策略漂移。
+
+### 4.3 持久化与缓存（对齐 [`docs/architecture/README.md`](./architecture/README.md) §8）
 
 | 组件 | 约定 |
 |------|------|

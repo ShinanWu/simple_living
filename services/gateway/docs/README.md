@@ -18,7 +18,7 @@
 | **统一对外访问面** | 所有终端（Web / iOS / Android / 小程序等）经同一入口访问后端；禁止客户端绕过 gateway 调用内部服务 |
 | **鉴权入口** | 校验 `Authorization` 等凭证（格式与头约定见 [auth.md](../../../docs/contracts/auth.md)）；将「已通过鉴权的用户/访客上下文」注入下游 RPC 的 metadata；gateway **可以调用** `user-domain` 发放或刷新 token，但**不**拥有账号体系与 token 生命周期规则本身 |
 | **路由** | 将 HTTP 路径与方法映射到具体内部 RPC 或聚合流程；路径与版本策略见 [api.md](./api.md) |
-| **限流与基础防护** | 按 IP、用户、客户端标识、接口维度限流；与 Istio 等协同时的分工在实现阶段细化，契约层约定「超限时的错误语义」对齐 [error-codes.md](../../../docs/contracts/error-codes.md) |
+| **限流与基础防护** | 按 IP、用户、客户端标识、接口维度限流；当前统一由 gateway 与各域 brpc 承载，契约层约定「超限时的错误语义」对齐 [error-codes.md](../../../docs/contracts/error-codes.md) |
 | **JSON ↔ proto 映射** | 对外 JSON 字段 **`snake_case`**，与 [contracts](../../../docs/contracts/README.md) 一致；请求/响应体与内部 `proto` 的字段级映射由 gateway 维护；**业务语义以各域 proto + 公共契约为准**，gateway 只做忠实转换与聚合层裁剪 |
 | **读路径聚合（BFF）** | 为页面或客户端场景组合多次只读 RPC，减少往返；聚合规则与页面契约见 [pages.md](./pages.md) |
 | **错误与信封统一** | 对外响应必须符合 [common-response.md](../../../docs/contracts/common-response.md)；将内部 RPC 错误码/状态映射为统一 `code` / `message`，不泄露内部栈与内部服务名 |
@@ -50,7 +50,25 @@
 
 Gateway **依赖各域已发布的 proto 与接口契约**，不复制、不私改他域 proto（参见 [contracts README](../../../docs/contracts/README.md) 二层模型）。
 
-### 4.3 契约依赖
+### 4.3 集群内地址规范（下游 brpc）
+
+- 默认下游地址采用 Kubernetes Service DNS，格式为：`brpc://<service>.simple-living.svc.cluster.local:<port>`。
+- 端口约定与 [`docs/engineering-conventions.md`](../../../docs/engineering-conventions.md) §4 保持一致：
+  - `user-domain`: `9101`
+  - `content-domain`: `9102`
+  - `recommendation-domain`: `9103`
+  - `affiliate-domain`: `9104`
+  - `tracking-domain`: `9105`
+  - `governance-domain`: `9106`
+- 本地联调允许通过启动 flags 覆盖为 `brpc://127.0.0.1:<port>`，不改变开发体验。
+- 运行时也可使用环境变量覆盖（例如 `GATEWAY_USER_DOMAIN_ADDR`）；如同时传入 flag，以 flag 为准。
+
+当前实现状态（精确待办）：
+
+- 已实现并支持 K8s DNS 默认值 + env/flag 覆盖的符号：`FLAGS_user_domain_addr`、`FLAGS_content_domain_addr`、`FLAGS_recommendation_domain_addr`、`FLAGS_tracking_domain_addr`（文件：`services/gateway/src/gateway_edge_server_main.cpp`）。
+- 待补齐符号（文档已定义但当前二进制尚未声明）：`FLAGS_affiliate_domain_addr`、`FLAGS_governance_domain_addr`（建议文件：`services/gateway/src/gateway_edge_server_main.cpp`；建议接入点：`GatewayPagesEdgeV2Impl` 下游 channel 初始化与相关 handler 调用链）。
+
+### 4.4 契约依赖
 
 - **必须**遵守 [docs/contracts/](../../../docs/contracts/) 中的公共约定：`common-response`、`error-codes`、`pagination`、`auth`、`guide-card`、`recommendation`、`redirect-attribution` 等。
 - 各 HTTP 路由的字段级定义以 [api.md](./api.md) 为准；[pages.md](./pages.md) 保留为 BFF 设计说明与路由编排补充。与内部 `proto` 不一致时，以 **先改文档、再改实现** 为准。

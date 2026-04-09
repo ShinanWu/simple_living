@@ -48,6 +48,7 @@
 - 客户端可见的公共 JSON 结构以 `docs/contracts/` 为准
 - 各服务内部 RPC 消息由服务 owner 自己维护 `proto`
 - `gateway` 负责将公共 JSON 契约映射到内部 `proto`
+- 前置 `Nginx` 只承担通用网络接入能力，不拥有公共 JSON 契约语义
 - 若 JSON 契约与内部 `proto` 出现冲突，必须先修改文档并统一映射层，不能临时各自解释
 
 ## 4. 什么应该放在这里
@@ -79,6 +80,7 @@
 | [guide-card.md](./guide-card.md) | 导购内容卡片 canonical schema（含商业披露与联盟上下文占位） |
 | [recommendation.md](./recommendation.md) | 推荐结果、`scene` 枚举及条目与导购卡片的引用关系 |
 | [redirect-attribution.md](./redirect-attribution.md) | 点击 ID、跳转落地链、渠道与转化回传字段语义 |
+| [theme-taxonomy.md](./theme-taxonomy.md) | 衣食住行主题枚举与跨端映射（`theme` 值域） |
 
 ## 6. 调用与依赖原则
 
@@ -115,5 +117,6 @@ docs/contracts/
 ├── auth.md
 ├── guide-card.md
 ├── recommendation.md
-└── redirect-attribution.md
+├── redirect-attribution.md
+└── theme-taxonomy.md
 ```

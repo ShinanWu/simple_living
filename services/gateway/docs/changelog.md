@@ -9,6 +9,31 @@
 
 ---
 
+## [1.0.3] - 2026-04-08
+
+### 实现同步
+
+- `proto/gateway_user_edge.proto` / `gateway_user_http_messages.proto`：对齐对外 JSON（`account_proof`、`guest` 的 `client_platform` 字符串、`SubmitFeedbackHttpRequest.target_type` 字符串、`ClearHistoryHttpRequest.scope` 字符串等）；为 brpc **restful 路径唯一**约束增加 `MeProfileHttp` / `MePreferencesHttp` / `MeHistoryHttp` / `MeConsentHttp`（在 handler 内按 HTTP 方法分发）；新增 `GetHealth`（`HealthCheckRequest`/`Response`）。
+- `src/gateway_edge_server_main.cpp`：注册 `/api/v2/...` restful 映射；通过预填 `Controller::response_attachment()` 输出与 `docs/contracts/common-response.md` 一致的 JSON 信封；Bearer / `X-Guest-Session-Id` 解析并注入下游 `user_id`/`session_id`（不信任客户端伪造的登录主体字段）。
+- 对外路由进一步统一为 **POST-only**：使用动作化路径区分语义（如 `/api/v2/me/profile/get|update`、`/api/v2/me/favorites/list|add|remove`、`/api/v2/auth/session/revoke`、`/api/v2/health/check`），旧的 GET/PUT/PATCH/DELETE 语义入口不再接受；`favorite_id` 改为 `remove` 请求体字段。
+
+---
+
+## [1.0.2] - 2026-04-06
+
+### 更新
+
+- `README.md`：新增“集群内地址规范（下游 brpc）”，默认约定 `brpc://<service>.simple-living.svc.cluster.local:<port>`，并补充本地联调覆盖策略（flag/env）。
+- `development.md`：对齐运行说明，明确集群内默认地址与本地 `127.0.0.1` 覆盖方式。
+
+### 实现同步
+
+- `src/gateway_edge_server_main.cpp`：下游默认地址切换到 K8s Service DNS（`user/content/recommendation/tracking`），并新增环境变量覆盖（仅在未显式传入 flag 时生效）：
+  - `GATEWAY_USER_DOMAIN_ADDR`
+  - `GATEWAY_CONTENT_DOMAIN_ADDR`
+  - `GATEWAY_RECOMMENDATION_DOMAIN_ADDR`
+  - `GATEWAY_TRACKING_DOMAIN_ADDR`
+
 ## [1.0.1] - 2026-03-29
 
 ### 新增

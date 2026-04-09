@@ -2,7 +2,7 @@
 
 ## 1. 文档范围与版本
 
-- **范围**：终端 → `gateway` 的 **HTTPS + JSON** 约定；本文件包含 **可直接实现** 的细粒度用户路由与页面聚合路由、请求/响应 `data` 形状、嵌套对象、枚举、错误码与到各域 RPC 的映射说明。
+- **范围**：终端经前置 `Nginx` 到 `gateway` 的 **HTTPS + JSON** 约定；本文件包含 **可直接实现** 的细粒度用户路由与页面聚合路由、请求/响应 `data` 形状、嵌套对象、枚举、错误码与到各域 RPC 的映射说明。
 - **路径版本**：`/api/v2/...` 与内部 `simple_living.user_domain` / `simple_living.gateway.user` proto 对齐；破坏性变更通过新路径或迁移期在 changelog 说明。
 - **字段命名**：JSON 一律 **`snake_case`**，与全局契约一致。
 - **时间**：业务时间字段在 JSON 中为 **ISO 8601 UTC 字符串**（例 `2026-03-28T12:00:00Z`）；机器时间戳仍可由网关写入信封 `meta.server_time_ms`（Unix 毫秒）。
@@ -15,6 +15,12 @@
 | 协议 | HTTPS |
 | 请求体 | `Content-Type: application/json`（本文件所列 POST/PATCH/PUT/DELETE 带体路由） |
 | 编码 | UTF-8 |
+
+### 2.0 前置 Nginx 约束
+
+- 生产入口建议采用 `Nginx -> gateway` 拓扑，`Nginx` 负责 TLS 终止、通用反向代理、基础限流与连接治理。
+- `Nginx` 不定义或改写业务 JSON 字段语义，不承担页面聚合与 JSON ↔ proto 映射职责。
+- 业务契约、错误码语义与字段稳定性仍以本文件和 `docs/contracts/` 为准。
 
 | 请求头 | 必填 | 说明 |
 |--------|------|------|
@@ -497,7 +503,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 |------------|------|------|------|
 | `cursor` | string | 否 | 分页游标 |
 | `limit` | integer | 否 | 默认 20，最大 100 |
-| `theme` | string | 否 | 可选主题过滤 |
+| `theme` | string | 否 | 可选主题过滤；值域见 `docs/contracts/theme-taxonomy.md` |
 
 | `data` | 类型 | 说明 |
 |------|------|------|

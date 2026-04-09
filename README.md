@@ -48,13 +48,25 @@ simple_living/
 │   ├── engineering-conventions.md        # 跨服务工程约定（Bazel、端口、测试、gateway 分层）
 │   ├── contracts/                         # 跨服务公共契约（JSON 语义等）
 │   │   └── README.md
+│   └── ...                                # 顶层设计文档（不放端侧细节）
 │   └── architecture/
 │       └── README.md                      # 技术与业务架构总览
 │
 ├── client/                                # 多端客户端
+│   ├── frontend-README.md                 # 前端详细设计总览
+│   ├── cross-platform-interaction-consensus.md
+│   ├── frontend-principles.md
+│   ├── frontend-information-architecture.md
+│   ├── frontend-page-specs.md
+│   ├── frontend-gateway-interaction.md
+│   ├── frontend-platform-mapping.md
+│   ├── frontend-mock-and-acceptance.md
 │   ├── ios/
+│   │   └── interaction-notes.md
 │   ├── android/
+│   │   └── interaction-notes.md
 │   ├── web/
+│   │   └── interaction-notes.md
 │   └── mini-program/
 │
 ├── services/                              # 服务主目录（文档 + proto + 实现）
@@ -114,12 +126,13 @@ simple_living/
 ## 技术选型
 
 - **客户端**：SwiftUI / Jetpack Compose / React 或 Vue / 微信小程序
-- **对外接口**：客户端统一通过 `gateway` 使用 HTTPS + JSON
+- **对外接口**：客户端统一通过前置 `Nginx` + `gateway` 访问；`Nginx` 承担 TLS 终止、基础限流等通用网络能力，`gateway` 仍是唯一业务入口并对外提供 HTTPS + JSON
 - **服务端**：C++ + brpc
 - **内部通信**：`gateway` 与各业务域、各业务域之间统一使用 `proto`
 - **构建系统**：Bazel
 - **容器与编排**：Docker + Kubernetes
-- **服务治理**：Istio
+- **K8s 使用范围**：仅用于容器编排与服务注册发现（Service + CoreDNS）
+- **服务治理**：当前由 `gateway` 与各域 `brpc` 统一承载（限流、超时、重试等）；暂不启用 Ingress / NetworkPolicy 等额外治理能力
 - **可观测性**：Prometheus + Grafana + ELK + Jaeger
 - **交付链路**：GitLab CI + ArgoCD + Terraform
 
@@ -129,6 +142,8 @@ simple_living/
 - [技术架构总览](./docs/architecture/README.md)
 - [文档先行开发规范](./docs/document-first-development.md)
 - [工程约定（Bazel / 端口 / 测试 / gateway 分层）](./docs/engineering-conventions.md)（与各服务 `services/<service>/docs/development.md` 配合）
+- [前端详细设计总览](./client/frontend-README.md)
+- [前端与 Gateway 交互设计](./client/frontend-gateway-interaction.md)
 - [合规基线](./docs/compliance.md)
 - [服务契约总览](./docs/contracts/README.md)
 - [业务服务总览](./services/README.md)

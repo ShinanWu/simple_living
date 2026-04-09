@@ -50,7 +50,7 @@
 | 项 | 约定 |
 |----|------|
 | 默认对外端口 | `8080`（`-port` 覆盖） |
-| 下游 | 为每个可能调用的域配置 `-*_domain_addr`，形式 `brpc://127.0.0.1:<端口>`；端口全表见 `docs/engineering-conventions.md` §4 |
+| 下游 | 默认使用集群内 `brpc://<service>.simple-living.svc.cluster.local:<端口>`；本地联调可覆盖为 `brpc://127.0.0.1:<端口>`；端口全表见 `docs/engineering-conventions.md` §4 |
 
 示例（先启动各域 brpc，再启 gateway）：
 
