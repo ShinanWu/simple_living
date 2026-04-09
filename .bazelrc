@@ -5,6 +5,6 @@ common --registry=https://raw.githubusercontent.com/secretflow/bazel-registry/ma
 build --cxxopt=-std=c++17
 build --host_cxxopt=-std=c++17
 
-# On Alibaba Cloud Linux (RHEL8-based), cc1plus lives in /usr/libexec/gcc which
-# is outside the default sandbox. Mount it in so GCC can find its C++ frontend.
-build --sandbox_add_mount_pair=/usr/libexec/gcc
+# On Alibaba Cloud Linux (RHEL8-based), cc1plus may live in /usr/libexec/gcc.
+# Enable this mount only when explicitly building with `--config=aliyun`.
+build:aliyun --sandbox_add_mount_pair=/usr/libexec/gcc

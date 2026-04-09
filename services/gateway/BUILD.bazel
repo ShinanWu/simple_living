@@ -21,7 +21,10 @@ proto_library(
         "proto/gateway_user_http_messages.proto",
     ],
     strip_import_prefix = "proto",
-    deps = ["//services/user-domain:user_domain_proto"],
+    deps = [
+        "//services/user-domain:user_domain_proto",
+        "@com_google_protobuf//:empty_proto",
+    ],
 )
 
 cc_proto_library(
@@ -53,5 +56,6 @@ cc_binary(
         "//services/recommendation-domain:recommendation_domain_cc_proto",
         "//services/tracking-domain:tracking_domain_cc_proto",
         "@brpc//:brpc",
+        "@com_google_protobuf//:protobuf",
     ],
 )

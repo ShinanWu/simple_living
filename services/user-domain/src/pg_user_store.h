@@ -1,6 +1,6 @@
 #pragma once
 
-#include <libpq-fe.h>
+#include <postgresql/libpq-fe.h>
 #include <mutex>
 #include <string>
 

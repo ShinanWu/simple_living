@@ -6,6 +6,7 @@ option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/gateway/proto/gwuserpb;gwuserpb";
 
 // protoc -I . -I ../../user-domain/proto gateway_user_edge.proto
+import "google/protobuf/empty.proto";
 import "user_domain_models.proto";
 import "gateway_user_http_messages.proto";
 
@@ -13,29 +14,22 @@ import "gateway_user_http_messages.proto";
 // Implementations validate JSON, inject identity from headers, then call UserDomainService.
 
 service GatewayUserEdgeV2 {
-  rpc PostGuestSession(simple_living.user_domain.EnsureGuestSessionRequest)
+  rpc PostGuestSession(GuestSessionHttpRequest)
       returns (simple_living.user_domain.EnsureGuestSessionResponse);
 
-  rpc PostAuthTokenIssue(simple_living.user_domain.IssueTokenPairRequest)
+  rpc PostAuthTokenIssue(TokenIssueHttpRequest)
       returns (simple_living.user_domain.IssueTokenPairResponse);
 
   rpc PostAuthTokenRefresh(RefreshTokenHttpRequest)
       returns (simple_living.user_domain.IssueTokenPairResponse);
 
-  rpc DeleteAuthSession(simple_living.user_domain.RevokeSessionRequest)
+  rpc DeleteAuthSession(RevokeSessionHttpRequest)
       returns (simple_living.user_domain.RevokeSessionResponse);
 
-  rpc GetMeProfile(simple_living.user_domain.GetProfileRequest)
-      returns (simple_living.user_domain.GetProfileResponse);
+  // Same URL as GET/PATCH; brpc restful maps are path-only, so HTTP method is dispatched in code.
+  rpc MeProfileHttp(google.protobuf.Empty) returns (google.protobuf.Empty);
 
-  rpc PatchMeProfile(simple_living.user_domain.UpdateProfileRequest)
-      returns (simple_living.user_domain.UpdateProfileResponse);
-
-  rpc GetMePreferences(simple_living.user_domain.GetPreferencesRequest)
-      returns (simple_living.user_domain.GetPreferencesResponse);
-
-  rpc PutMePreferences(simple_living.user_domain.UpdatePreferencesRequest)
-      returns (simple_living.user_domain.UpdatePreferencesResponse);
+  rpc MePreferencesHttp(google.protobuf.Empty) returns (google.protobuf.Empty);
 
   rpc GetMeFavorites(ListFavoritesHttpRequest)
       returns (simple_living.user_domain.ListFavoritesResponse);
@@ -46,24 +40,19 @@ service GatewayUserEdgeV2 {
   rpc DeleteMeFavorite(RemoveFavoriteHttpRequest)
       returns (simple_living.user_domain.RemoveFavoriteResponse);
 
-  rpc GetMeHistory(ListHistoryHttpRequest)
-      returns (simple_living.user_domain.ListHistoryResponse);
+  rpc MeHistoryHttp(google.protobuf.Empty) returns (google.protobuf.Empty);
 
   rpc PostMeHistoryEvent(RecordHistoryEventHttpRequest)
       returns (simple_living.user_domain.RecordHistoryEventResponse);
 
-  rpc DeleteMeHistory(ClearHistoryHttpRequest)
-      returns (simple_living.user_domain.ClearHistoryResponse);
-
   rpc PostMeFeedback(SubmitFeedbackHttpRequest)
       returns (simple_living.user_domain.SubmitFeedbackResponse);
 
-  rpc GetMeConsent(simple_living.user_domain.GetConsentRequest)
-      returns (simple_living.user_domain.GetConsentResponse);
-
-  rpc PutMeConsent(simple_living.user_domain.UpdateConsentRequest)
-      returns (simple_living.user_domain.UpdateConsentResponse);
+  rpc MeConsentHttp(google.protobuf.Empty) returns (google.protobuf.Empty);
 
   rpc GetMeSummary(simple_living.user_domain.GetMeSummaryRequest)
       returns (simple_living.user_domain.GetMeSummaryResponse);
+
+  rpc GetHealth(simple_living.user_domain.HealthCheckRequest)
+      returns (simple_living.user_domain.HealthCheckResponse);
 }

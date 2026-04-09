@@ -15,6 +15,38 @@ message RefreshTokenHttpRequest {
   optional simple_living.user_domain.RpcRequestContext request_context = 2;
 }
 
+// Public JSON uses lowercase platform strings (see services/gateway/docs/api.md).
+message GuestSessionHttpRequest {
+  optional string device_id = 1;
+  optional string client_platform = 2;
+  optional string app_version = 3;
+}
+
+message AccountProofHttp {
+  optional string user_id = 1;
+}
+
+message TokenIssueHttpRequest {
+  optional AccountProofHttp account_proof = 1;
+  optional string device_fingerprint = 2;
+  optional string client_platform = 3;
+  optional string app_version = 4;
+  optional string device_id = 5;
+}
+
+message RevokeSessionHttpRequest {
+  optional string revoke_scope = 1;
+}
+
+message PreferencesBodyHttp {
+  optional int32 preferences_version = 1;
+  repeated string themes = 2;
+}
+
+message PutMePreferencesHttpRequest {
+  optional PreferencesBodyHttp preferences = 1;
+}
+
 message ListFavoritesHttpRequest {
   optional string acting_user_id = 1;
   optional string cursor = 2;
@@ -57,7 +89,8 @@ message ClearHistoryHttpRequest {
     string acting_user_id = 1;
     string session_id = 2;
   }
-  optional simple_living.user_domain.ClearHistoryScope scope = 3;
+  // Public JSON uses short strings (e.g. "all"), not protobuf enum names.
+  optional string scope = 3;
   optional string before_time = 4;
 }
 
@@ -66,7 +99,8 @@ message SubmitFeedbackHttpRequest {
     string acting_user_id = 1;
     string session_id = 2;
   }
-  optional simple_living.user_domain.FeedbackTargetType target_type = 3;
+  // Public JSON uses short strings (e.g. "guide_card"); see api.md.
+  optional string target_type = 3;
   optional string target_id = 4;
   optional double rating = 5;
   repeated string reason_codes = 6;

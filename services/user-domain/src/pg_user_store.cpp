@@ -8,7 +8,7 @@
 #include <sstream>
 #include <vector>
 
-#include <libpq-fe.h>
+#include <postgresql/libpq-fe.h>
 
 #include <butil/logging.h>
 
