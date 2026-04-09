@@ -1,0 +1,15 @@
+bindPort = 7000
+
+# Public virtual-host ports exposed on remote host.
+vhostHTTPPort = 80
+vhostHTTPSPort = 443
+
+# Authentication for frpc -> frps.
+auth.method = "token"
+auth.token = "REPLACE_WITH_STRONG_TOKEN"
+
+# Optional dashboard (keep disabled by default in Phase1 minimal setup).
+# webServer.addr = "127.0.0.1"
+# webServer.port = 7500
+# webServer.user = "admin"
+# webServer.password = "REPLACE_WITH_DASHBOARD_PASSWORD"

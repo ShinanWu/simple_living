@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: affiliate-domain
+  namespace: simple-living
+  annotations:
+    simple-living.io/internal-dns: "affiliate-domain.simple-living.svc.cluster.local"
+spec:
+  type: ClusterIP
+  selector:
+    app: affiliate-domain
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 9104
+      targetPort: 9104

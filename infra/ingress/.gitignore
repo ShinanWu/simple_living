@@ -1,0 +1,8 @@
+## Keep templates, ignore real runtime configs
+frp/frpc.toml
+frp/frps.toml
+
+## Certificates/keys must never be committed
+*.pem
+*.key
+*.crt

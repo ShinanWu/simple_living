@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: content-domain
+  namespace: simple-living
+  labels:
+    app: content-domain
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: content-domain
+  template:
+    metadata:
+      labels:
+        app: content-domain
+    spec:
+      containers:
+        - name: content-domain
+          image: registry.example.com/simple-living/content-domain:__IMAGE_TAG__
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9102
+              name: grpc
+          envFrom:
+            - configMapRef:
+                name: common-env
+            - secretRef:
+                name: app-secrets
+          readinessProbe:
+            # Placeholder for gRPC health endpoint.
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            # Placeholder for gRPC health endpoint.
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

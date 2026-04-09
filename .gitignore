@@ -3,6 +3,7 @@
 # Editor
 .cursor/
 .vscode/
+.idea/
 
 # Node / frontend
 node_modules/
@@ -23,6 +24,12 @@ bazel-*/
 
 # Logs
 *.log
+*.out
+*.pid
+
+# Runtime/temp
+tmp/
+.cache/
 
 # Env files
 .env

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: content-domain
+  namespace: simple-living
+  annotations:
+    simple-living.io/internal-dns: "content-domain.simple-living.svc.cluster.local"
+spec:
+  type: ClusterIP
+  selector:
+    app: content-domain
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 9102
+      targetPort: 9102
