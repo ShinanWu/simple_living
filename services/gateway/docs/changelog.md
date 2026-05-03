@@ -9,6 +9,48 @@
 
 ---
 
+## [1.0.6] - 2026-04-20
+
+### 文档补充（运营后台最小闭环）
+
+- `api.md` 新增 `/api/v2/backoffice/*` 最小路由组说明：联盟伙伴、内容发布态、治理审核队列。
+- `pages.md` 在页面聚合总表新增“运营后台（最小）”条目，明确仍由 gateway 作为 BFF 分路由到 `affiliate-domain` / `content-domain` / `governance-domain`。
+- 保持网关边界不变：不承接跨域事务，不转移业务所有权。
+
+### 实现同步（运营后台 API）
+
+- `proto/gateway_pages_edge.proto` 新增 backoffice 聚合消息与 RPC：伙伴管理、内容状态、审核队列。
+- `src/gateway_edge_server_main.cpp` 新增 `/api/v2/backoffice/*` 路由映射与处理逻辑，提供最小可用运营后台后端能力（POST-only）。
+
+### 文档补充（先文档后开发）
+
+- 新增 `backoffice-backend.md`：明确运营管理后台后端目标、v1 路由、对象定义、审核/发布状态机、权限模型与审计要求。
+- 术语重命名：`ops` 统一更名为 `backoffice`，避免与运维（Ops/SRE）概念混淆。
+
+---
+
+## [1.0.5] - 2026-04-14
+
+### 契约调整（头部最小化，body 为业务真源）
+
+- HTTP 头收敛为鉴权优先：业务上下文不再依赖 `X-Client-*` 头。
+- `RefreshTokenHttpRequest` 恢复 `request_context` 入参，作为请求体业务上下文来源。
+- `src/gateway_edge_server_main.cpp` 调整为：刷新令牌链路仅读取体内 `request_context`，不再从请求头补齐。
+- 保留“身份主体只来自鉴权头”的规则，不恢复体内 `acting_user_id` / `session_id`。
+
+---
+
+## [1.0.4] - 2026-04-14
+
+### 契约重构（单一真源）
+
+- 移除“请求头 + 体内字段融合”策略：身份主体与客户端上下文统一由请求头提供，不再接受体内 `request_context`。
+- `gateway_user_http_messages.proto` 删除冲突来源字段：`RefreshTokenHttpRequest.request_context` 以及历史/反馈/收藏相关请求中的 `acting_user_id`、`session_id` 入口。
+- `src/gateway_edge_server_main.cpp` 改为仅基于请求头解析主体与上下文，移除体内主体覆盖逻辑，消除字段优先级歧义。
+- `api.md` 与示例请求同步更新为“请求头唯一真源”规范。
+
+---
+
 ## [1.0.3] - 2026-04-08
 
 ### 实现同步

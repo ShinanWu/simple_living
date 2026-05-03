@@ -37,22 +37,22 @@
 内容选品 -> 结构化导购内容 -> 个性化推荐 -> 渠道转链 -> 第三方成交 -> 佣金结算 -> 数据复盘优化
 ```
 
-## 推荐目录结构
+## 目录结构（强约束）
 
 ```text
 simple_living/
-├── docs/                                  # 文档主入口
+├── docs/                                  # 顶层设计与跨服务公共内容（唯一上层文档入口）
 │   ├── product-design.md                  # 产品顶层设计
 │   ├── compliance.md                      # 合规基线
 │   ├── document-first-development.md      # 文档先行与并行开发规范
 │   ├── engineering-conventions.md        # 跨服务工程约定（Bazel、端口、测试、gateway 分层）
 │   ├── contracts/                         # 跨服务公共契约（JSON 语义等）
 │   │   └── README.md
-│   └── ...                                # 顶层设计文档（不放端侧细节）
+│   ├── ...                                # 顶层设计文档（不放服务私有实现细节）
 │   └── architecture/
 │       └── README.md                      # 技术与业务架构总览
 │
-├── client/                                # 多端客户端
+├── client/                                # 多端客户端（每个端内自含 docs/src/tests/deploy）
 │   ├── frontend-README.md                 # 前端详细设计总览
 │   ├── cross-platform-interaction-consensus.md
 │   ├── frontend-principles.md
@@ -65,62 +65,71 @@ simple_living/
 │   │   └── interaction-notes.md
 │   ├── android/
 │   │   └── interaction-notes.md
-│   ├── web/
-│   │   └── interaction-notes.md
+│   ├── web/                                # 预留（当前无 C 端 Web 开发计划）
 │   └── mini-program/
 │
-├── services/                              # 服务主目录（文档 + proto + 实现）
+├── services/                              # 服务主目录（每个服务都是“准独立仓库”）
 │   ├── README.md                          # 业务服务总览
 │   ├── gateway/                           # 统一入口
 │   │   ├── docs/
 │   │   ├── proto/
 │   │   ├── src/
 │   │   ├── tests/
+│   │   ├── deploy/
 │   │   └── BUILD.bazel
 │   ├── user-domain/
 │   │   ├── docs/
 │   │   ├── proto/
 │   │   ├── src/
 │   │   ├── tests/
+│   │   ├── deploy/
 │   │   └── BUILD.bazel
 │   ├── content-domain/
 │   │   ├── docs/
 │   │   ├── proto/
 │   │   ├── src/
 │   │   ├── tests/
+│   │   ├── deploy/
 │   │   └── BUILD.bazel
 │   ├── recommendation-domain/
 │   │   ├── docs/
 │   │   ├── proto/
 │   │   ├── src/
 │   │   ├── tests/
+│   │   ├── deploy/
 │   │   └── BUILD.bazel
 │   ├── affiliate-domain/
 │   │   ├── docs/
 │   │   ├── proto/
 │   │   ├── src/
 │   │   ├── tests/
+│   │   ├── deploy/
 │   │   └── BUILD.bazel
 │   ├── tracking-domain/
 │   │   ├── docs/
 │   │   ├── proto/
 │   │   ├── src/
 │   │   ├── tests/
+│   │   ├── deploy/
 │   │   └── BUILD.bazel
+│   ├── platform/
+│   │   ├── README.md
+│   │   └── backoffice-web/
+│   │       ├── src/
+│   │       ├── deploy/
+│   │       └── Dockerfile
 │   └── governance-domain/
 │       ├── docs/
 │       ├── proto/
 │       ├── src/
 │       ├── tests/
+│       ├── deploy/
 │       └── BUILD.bazel
 │
-├── common/                                # 跨服务公共库（仅保留真正公共能力）
-├── infrastructure/                        # 基础设施适配
+├── infra/                                 # 公共基础设施脚本（不承载服务业务逻辑）
 ├── third_party/                           # 第三方依赖
-│
-├── data/                                  # 数据与脚本
-├── ops/                                   # 部署与运维
-└── platform/                              # 企业效能平台
+├── BUILD.bazel / MODULE.bazel             # 顶层构建入口（公共）
+└── ...                                    # 其他上层目录仅允许公共内容，禁止放服务私有实现
 ```
 
 ## 技术选型
@@ -147,3 +156,9 @@ simple_living/
 - [合规基线](./docs/compliance.md)
 - [服务契约总览](./docs/contracts/README.md)
 - [业务服务总览](./services/README.md)
+
+## 服务自治规则（硬约束）
+
+- 每个服务目录必须自包含：`docs/`、`proto/`、`src/`、`tests/`、`deploy/`、`BUILD.bazel`。
+- 服务迭代、发布、回滚默认在各自目录完成，不通过“全服务统一脚本”触发批量构建。
+- 跨服务通信只依赖 `docs/contracts/` 与各服务 `docs/api.md`，禁止依赖他域实现路径。

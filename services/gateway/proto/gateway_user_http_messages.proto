@@ -48,62 +48,43 @@ message PutMePreferencesHttpRequest {
 }
 
 message ListFavoritesHttpRequest {
-  optional string acting_user_id = 1;
-  optional string cursor = 2;
-  optional int32 limit = 3;
-  optional simple_living.user_domain.FavoriteContentType content_type = 4;
+  optional string cursor = 1;
+  optional int32 limit = 2;
+  optional simple_living.user_domain.FavoriteContentType content_type = 3;
 }
 
 message AddFavoriteHttpRequest {
-  optional string acting_user_id = 1;
-  optional string guide_card_id = 2;
+  optional string guide_card_id = 1;
 }
 
 message RemoveFavoriteHttpRequest {
-  optional string acting_user_id = 1;
-  optional string favorite_id = 2;
+  optional string favorite_id = 1;
 }
 
 message ListHistoryHttpRequest {
-  oneof owner {
-    string acting_user_id = 1;
-    string session_id = 2;
-  }
-  optional string cursor = 3;
-  optional int32 limit = 4;
+  optional string cursor = 1;
+  optional int32 limit = 2;
 }
 
 message RecordHistoryEventHttpRequest {
-  oneof owner {
-    string acting_user_id = 1;
-    string session_id = 2;
-  }
-  optional simple_living.user_domain.ContentRef content_ref = 3;
-  optional string occurred_at = 4;
-  optional simple_living.user_domain.HistorySourceSurface source_surface = 5;
-  optional string client_event_id = 6;
+  optional simple_living.user_domain.ContentRef content_ref = 1;
+  optional string occurred_at = 2;
+  optional simple_living.user_domain.HistorySourceSurface source_surface = 3;
+  optional string client_event_id = 4;
 }
 
 message ClearHistoryHttpRequest {
-  oneof owner {
-    string acting_user_id = 1;
-    string session_id = 2;
-  }
   // Public JSON uses short strings (e.g. "all"), not protobuf enum names.
-  optional string scope = 3;
-  optional string before_time = 4;
+  optional string scope = 1;
+  optional string before_time = 2;
 }
 
 message SubmitFeedbackHttpRequest {
-  oneof actor {
-    string acting_user_id = 1;
-    string session_id = 2;
-  }
   // Public JSON uses short strings (e.g. "guide_card"); see api.md.
-  optional string target_type = 3;
-  optional string target_id = 4;
-  optional double rating = 5;
-  repeated string reason_codes = 6;
-  optional string free_text = 7;
-  optional string client_request_id = 8;
+  optional string target_type = 1;
+  optional string target_id = 2;
+  optional double rating = 3;
+  repeated string reason_codes = 4;
+  optional string free_text = 5;
+  optional string client_request_id = 6;
 }

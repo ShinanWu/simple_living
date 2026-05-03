@@ -41,9 +41,6 @@ def make_headers(auth: str) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "X-Client-Platform": "web",
-        "X-Client-Version": "smoke-test",
-        "X-Device-Id": "smoke-device-001",
     }
     if auth in ("optional", "required") and ACCESS_TOKEN:
         headers["Authorization"] = f"Bearer {ACCESS_TOKEN}"
@@ -84,7 +81,19 @@ def build_cases() -> list[Case]:
     return [
         Case("guest_session", "POST", "/api/v2/guest/session", {"device_id": "dev-001", "client_platform": "web"}),
         Case("token_issue", "POST", "/api/v2/auth/token/issue", {"account_proof": {"user_id": "user_demo"}}),
-        Case("token_refresh", "POST", "/api/v2/auth/token/refresh", {"refresh_token": REFRESH_TOKEN}),
+        Case(
+            "token_refresh",
+            "POST",
+            "/api/v2/auth/token/refresh",
+            {
+                "refresh_token": REFRESH_TOKEN,
+                "request_context": {
+                    "client_platform": "web",
+                    "app_version": "smoke-test",
+                    "device_id": "smoke-device-001",
+                },
+            },
+        ),
         Case("auth_session_delete", "POST", "/api/v2/auth/session/revoke", {"revoke_scope": "single_session"}, auth="required"),
         Case("me_profile_get", "POST", "/api/v2/me/profile/get", auth="optional"),
         Case("me_profile_patch", "POST", "/api/v2/me/profile/update", {"display_name": "Smoke Test"}, auth="required"),

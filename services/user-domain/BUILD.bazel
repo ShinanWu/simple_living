@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_proto_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_proto_library", "cc_test")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//build:brpc_copts.bzl", "BRPC_EXAMPLE_COPTS")
 
@@ -52,5 +52,22 @@ cc_binary(
         ":pg_user_store",
         ":user_domain_cc_proto",
         "@brpc//:brpc",
+    ],
+)
+
+sh_test(
+    name = "user_domain_store_smoke_test",
+    srcs = ["tests/user_domain_store_smoke_test.sh"],
+    data = [
+        "src/pg_user_store.cpp",
+        "src/pg_user_store.h",
+    ],
+)
+
+cc_test(
+    name = "pg_user_store_unit_test",
+    srcs = ["tests/pg_user_store_unit_test.cpp"],
+    deps = [
+        ":pg_user_store",
     ],
 )

@@ -128,9 +128,70 @@ message MeSummaryResponse {
   optional ConsentBlock consent = 3;
 }
 
+message BackofficePartner {
+  optional string partner_id = 1;
+  optional string display_name = 2;
+  optional string status = 3;
+  optional string primary_channel_code = 4;
+}
+
+message BackofficeListPartnersRequest {}
+
+message BackofficeCreatePartnerRequest {
+  optional string partner_id = 1;
+  optional string display_name = 2;
+  optional string status = 3;
+  optional string primary_channel_code = 4;
+}
+
+message BackofficePartnersResponse {
+  repeated BackofficePartner items = 1;
+}
+
+message BackofficeContentItem {
+  optional string content_id = 1;
+  optional string title = 2;
+  optional string theme = 3;
+  optional string status = 4;
+}
+
+message BackofficeListContentItemsRequest {}
+
+message BackofficeUpdateContentStatusRequest {
+  optional string content_id = 1;
+  optional string status = 2;
+}
+
+message BackofficeContentItemsResponse {
+  repeated BackofficeContentItem items = 1;
+}
+
+message BackofficeReviewItem {
+  optional string review_id = 1;
+  optional string subject_id = 2;
+  optional string status = 3;
+}
+
+message BackofficeListReviewsRequest {}
+
+message BackofficeUpdateReviewStatusRequest {
+  optional string review_id = 1;
+  optional string status = 2;
+}
+
+message BackofficeReviewsResponse {
+  repeated BackofficeReviewItem items = 1;
+}
+
 service GatewayPagesEdgeV2 {
   rpc GetHomeFeed(HomeFeedRequest) returns (HomeFeedResponse);
   rpc GetGuideDetail(GuideDetailRequest) returns (GuideDetailResponse);
   rpc PrepareRedirect(RedirectPrepareRequest) returns (RedirectPrepareResponse);
   rpc GetMeSummary(MeSummaryRequest) returns (MeSummaryResponse);
+  rpc GetBackofficeAffiliatePartners(BackofficeListPartnersRequest) returns (BackofficePartnersResponse);
+  rpc PostBackofficeAffiliatePartner(BackofficeCreatePartnerRequest) returns (BackofficePartnersResponse);
+  rpc GetBackofficeContentItems(BackofficeListContentItemsRequest) returns (BackofficeContentItemsResponse);
+  rpc PatchBackofficeContentItemStatus(BackofficeUpdateContentStatusRequest) returns (BackofficeContentItemsResponse);
+  rpc GetBackofficeGovernanceReviews(BackofficeListReviewsRequest) returns (BackofficeReviewsResponse);
+  rpc PatchBackofficeGovernanceReviewStatus(BackofficeUpdateReviewStatusRequest) returns (BackofficeReviewsResponse);
 }

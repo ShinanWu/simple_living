@@ -8,8 +8,10 @@
 #include <sys/time.h>
 
 #include <cstdlib>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "gateway_user_edge.pb.h"
 #include "gateway_pages_edge.pb.h"
@@ -202,19 +204,6 @@ bool EnsurePost(brpc::Controller* outer) {
     return true;
 }
 
-void FillRpcContextFromHeaders(brpc::Controller* outer,
-                               simple_living::user_domain::RpcRequestContext* ctx) {
-    if (const std::string* p = outer->http_request().GetHeader("X-Client-Platform")) {
-        ctx->set_client_platform(ParseClientPlatform(*p));
-    }
-    if (const std::string* v = outer->http_request().GetHeader("X-Client-Version")) {
-        ctx->set_app_version(*v);
-    }
-    if (const std::string* d = outer->http_request().GetHeader("X-Device-Id")) {
-        ctx->set_device_id(*d);
-    }
-}
-
 enum class ActorKind { kNone = 0, kUser, kGuest };
 
 struct ResolvedActor {
@@ -234,7 +223,6 @@ bool ResolveActor(simple_living::user_domain::UserDomainService_Stub* stub,
             brpc::Controller c;
             simple_living::user_domain::IntrospectAccessTokenRequest ireq;
             ireq.set_access_token(token);
-            FillRpcContextFromHeaders(outer, ireq.mutable_request_context());
             simple_living::user_domain::IntrospectAccessTokenResponse iresp;
             stub->IntrospectAccessToken(&c, &ireq, &iresp, nullptr);
             if (!c.Failed() && iresp.valid()) {
@@ -286,13 +274,9 @@ public:
         simple_living::user_domain::EnsureGuestSessionRequest dreq;
         if (req->has_device_id()) {
             dreq.set_device_id(req->device_id());
-        } else if (const std::string* d = outer->http_request().GetHeader("X-Device-Id")) {
-            dreq.set_device_id(*d);
         }
         if (req->has_client_platform()) {
             dreq.set_client_platform(ParseClientPlatform(req->client_platform()));
-        } else if (const std::string* p = outer->http_request().GetHeader("X-Client-Platform")) {
-            dreq.set_client_platform(ParseClientPlatform(*p));
         }
         if (req->has_app_version()) {
             dreq.set_app_version(req->app_version());
@@ -325,8 +309,6 @@ public:
         }
         if (req->has_client_platform()) {
             ireq.set_client_platform(ParseClientPlatform(req->client_platform()));
-        } else {
-            FillRpcContextFromHeaders(outer, ireq.mutable_request_context());
         }
         if (req->has_app_version()) {
             ireq.set_app_version(req->app_version());
@@ -355,8 +337,6 @@ public:
         rreq.set_refresh_token(req->refresh_token());
         if (req->has_request_context()) {
             *rreq.mutable_request_context() = req->request_context();
-        } else {
-            FillRpcContextFromHeaders(outer, rreq.mutable_request_context());
         }
         simple_living::user_domain::IntrospectRefreshTokenResponse rresp;
         user_stub_.IntrospectRefreshToken(&cntl, &rreq, &rresp, nullptr);
@@ -629,18 +609,12 @@ public:
                 return;
             }
             simple_living::user_domain::ClearHistoryRequest dreq;
-            if (hreq.has_acting_user_id()) {
-                dreq.set_user_id(hreq.acting_user_id());
-            } else if (hreq.has_session_id()) {
-                dreq.set_session_id(hreq.session_id());
-            } else {
-                ResolvedActor actor;
-                if (ResolveActor(&user_stub_, outer, &actor)) {
-                    if (actor.kind == ActorKind::kUser) {
-                        dreq.set_user_id(actor.user_id);
-                    } else {
-                        dreq.set_session_id(actor.session_id);
-                    }
+            ResolvedActor actor;
+            if (ResolveActor(&user_stub_, outer, &actor)) {
+                if (actor.kind == ActorKind::kUser) {
+                    dreq.set_user_id(actor.user_id);
+                } else {
+                    dreq.set_session_id(actor.session_id);
                 }
             }
             dreq.set_scope(ParseClearHistoryScope(hreq.scope()));
@@ -665,18 +639,12 @@ public:
         auto* outer = static_cast<brpc::Controller*>(controller_base);
         if (!EnsurePost(outer)) return;
         simple_living::user_domain::RecordHistoryEventRequest dreq;
-        if (req->has_acting_user_id()) {
-            dreq.set_user_id(req->acting_user_id());
-        } else if (req->has_session_id()) {
-            dreq.set_session_id(req->session_id());
-        } else {
-            ResolvedActor actor;
-            if (ResolveActor(&user_stub_, outer, &actor)) {
-                if (actor.kind == ActorKind::kUser) {
-                    dreq.set_user_id(actor.user_id);
-                } else {
-                    dreq.set_session_id(actor.session_id);
-                }
+        ResolvedActor actor;
+        if (ResolveActor(&user_stub_, outer, &actor)) {
+            if (actor.kind == ActorKind::kUser) {
+                dreq.set_user_id(actor.user_id);
+            } else {
+                dreq.set_session_id(actor.session_id);
             }
         }
         if (req->has_content_ref()) {
@@ -702,18 +670,12 @@ public:
         auto* outer = static_cast<brpc::Controller*>(controller_base);
         if (!EnsurePost(outer)) return;
         simple_living::user_domain::SubmitFeedbackRequest dreq;
-        if (req->has_acting_user_id()) {
-            dreq.set_user_id(req->acting_user_id());
-        } else if (req->has_session_id()) {
-            dreq.set_session_id(req->session_id());
-        } else {
-            ResolvedActor actor;
-            if (ResolveActor(&user_stub_, outer, &actor)) {
-                if (actor.kind == ActorKind::kUser) {
-                    dreq.set_user_id(actor.user_id);
-                } else {
-                    dreq.set_session_id(actor.session_id);
-                }
+        ResolvedActor actor;
+        if (ResolveActor(&user_stub_, outer, &actor)) {
+            if (actor.kind == ActorKind::kUser) {
+                dreq.set_user_id(actor.user_id);
+            } else {
+                dreq.set_session_id(actor.session_id);
             }
         }
         dreq.set_target_type(ParseFeedbackTargetTypeStr(req->target_type()));
@@ -822,6 +784,72 @@ public:
 }  // namespace user
 
 namespace pages {
+
+namespace {
+
+struct BackofficeState {
+    std::mutex mu;
+    std::vector<BackofficePartner> partners;
+    std::vector<BackofficeContentItem> contents;
+    std::vector<BackofficeReviewItem> reviews;
+};
+
+BackofficeState& MutableBackofficeState() {
+    static BackofficeState state;
+    static const bool initialized = [] {
+        {
+            BackofficePartner p1;
+            p1.set_partner_id("pdd");
+            p1.set_display_name("拼多多联盟");
+            p1.set_status("active");
+            p1.set_primary_channel_code("pdd");
+            state.partners.push_back(p1);
+        }
+        {
+            BackofficePartner p2;
+            p2.set_partner_id("douyin");
+            p2.set_display_name("抖音电商");
+            p2.set_status("draft");
+            p2.set_primary_channel_code("douyin");
+            state.partners.push_back(p2);
+        }
+        {
+            BackofficeContentItem c1;
+            c1.set_content_id("topic_1001");
+            c1.set_title("通勤衣橱升级专题");
+            c1.set_theme("clothing");
+            c1.set_status("published");
+            state.contents.push_back(c1);
+        }
+        {
+            BackofficeContentItem c2;
+            c2.set_content_id("rank_1002");
+            c2.set_title("高性价比早餐榜");
+            c2.set_theme("food");
+            c2.set_status("draft");
+            state.contents.push_back(c2);
+        }
+        {
+            BackofficeReviewItem r1;
+            r1.set_review_id("rev_9001");
+            r1.set_subject_id("guide_card_1001");
+            r1.set_status("pending");
+            state.reviews.push_back(r1);
+        }
+        {
+            BackofficeReviewItem r2;
+            r2.set_review_id("rev_9002");
+            r2.set_subject_id("topic_1001");
+            r2.set_status("approved");
+            state.reviews.push_back(r2);
+        }
+        return true;
+    }();
+    (void)initialized;
+    return state;
+}
+
+}  // namespace
 
 class GatewayPagesEdgeV2Impl : public GatewayPagesEdgeV2 {
     brpc::Channel rec_ch_;
@@ -965,6 +993,136 @@ public:
         resp->mutable_counts()->set_history_count(0);
         FinishOk(outer, *resp);
     }
+
+    void GetBackofficeAffiliatePartners(::google::protobuf::RpcController* controller_base,
+                                 const BackofficeListPartnersRequest*,
+                                 BackofficePartnersResponse* resp,
+                                 ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        auto* outer = static_cast<brpc::Controller*>(controller_base);
+        if (!EnsurePost(outer)) return;
+        auto& state = MutableBackofficeState();
+        {
+            std::lock_guard<std::mutex> lk(state.mu);
+            for (const auto& item : state.partners) {
+                *resp->add_items() = item;
+            }
+        }
+        FinishOk(outer, *resp);
+    }
+
+    void PostBackofficeAffiliatePartner(::google::protobuf::RpcController* controller_base,
+                                 const BackofficeCreatePartnerRequest* req,
+                                 BackofficePartnersResponse* resp,
+                                 ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        auto* outer = static_cast<brpc::Controller*>(controller_base);
+        if (!EnsurePost(outer)) return;
+        if (req->partner_id().empty() || req->display_name().empty()) {
+            FinishBizError(outer, 10002, "Validation failed", brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
+        auto& state = MutableBackofficeState();
+        {
+            std::lock_guard<std::mutex> lk(state.mu);
+            BackofficePartner created;
+            created.set_partner_id(req->partner_id());
+            created.set_display_name(req->display_name());
+            created.set_status(req->status().empty() ? "draft" : req->status());
+            created.set_primary_channel_code(req->primary_channel_code());
+            state.partners.insert(state.partners.begin(), created);
+            for (const auto& item : state.partners) {
+                *resp->add_items() = item;
+            }
+        }
+        FinishOk(outer, *resp);
+    }
+
+    void GetBackofficeContentItems(::google::protobuf::RpcController* controller_base,
+                            const BackofficeListContentItemsRequest*,
+                            BackofficeContentItemsResponse* resp,
+                            ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        auto* outer = static_cast<brpc::Controller*>(controller_base);
+        if (!EnsurePost(outer)) return;
+        auto& state = MutableBackofficeState();
+        {
+            std::lock_guard<std::mutex> lk(state.mu);
+            for (const auto& item : state.contents) {
+                *resp->add_items() = item;
+            }
+        }
+        FinishOk(outer, *resp);
+    }
+
+    void PatchBackofficeContentItemStatus(::google::protobuf::RpcController* controller_base,
+                                   const BackofficeUpdateContentStatusRequest* req,
+                                   BackofficeContentItemsResponse* resp,
+                                   ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        auto* outer = static_cast<brpc::Controller*>(controller_base);
+        if (!EnsurePost(outer)) return;
+        if (req->content_id().empty() || req->status().empty()) {
+            FinishBizError(outer, 10002, "Validation failed", brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
+        auto& state = MutableBackofficeState();
+        {
+            std::lock_guard<std::mutex> lk(state.mu);
+            for (auto& item : state.contents) {
+                if (item.content_id() == req->content_id()) {
+                    item.set_status(req->status());
+                }
+            }
+            for (const auto& item : state.contents) {
+                *resp->add_items() = item;
+            }
+        }
+        FinishOk(outer, *resp);
+    }
+
+    void GetBackofficeGovernanceReviews(::google::protobuf::RpcController* controller_base,
+                                 const BackofficeListReviewsRequest*,
+                                 BackofficeReviewsResponse* resp,
+                                 ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        auto* outer = static_cast<brpc::Controller*>(controller_base);
+        if (!EnsurePost(outer)) return;
+        auto& state = MutableBackofficeState();
+        {
+            std::lock_guard<std::mutex> lk(state.mu);
+            for (const auto& item : state.reviews) {
+                *resp->add_items() = item;
+            }
+        }
+        FinishOk(outer, *resp);
+    }
+
+    void PatchBackofficeGovernanceReviewStatus(::google::protobuf::RpcController* controller_base,
+                                        const BackofficeUpdateReviewStatusRequest* req,
+                                        BackofficeReviewsResponse* resp,
+                                        ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        auto* outer = static_cast<brpc::Controller*>(controller_base);
+        if (!EnsurePost(outer)) return;
+        if (req->review_id().empty() || req->status().empty()) {
+            FinishBizError(outer, 10002, "Validation failed", brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
+        auto& state = MutableBackofficeState();
+        {
+            std::lock_guard<std::mutex> lk(state.mu);
+            for (auto& item : state.reviews) {
+                if (item.review_id() == req->review_id()) {
+                    item.set_status(req->status());
+                }
+            }
+            for (const auto& item : state.reviews) {
+                *resp->add_items() = item;
+            }
+        }
+        FinishOk(outer, *resp);
+    }
 };
 
 }  // namespace pages
@@ -1024,7 +1182,13 @@ int main(int argc, char* argv[]) {
         "/api/v2/pages/home_feed       => GetHomeFeed,"
         "/api/v2/pages/guide_detail    => GetGuideDetail,"
         "/api/v2/pages/redirect_prepare => PrepareRedirect,"
-        "/api/v2/pages/me_summary      => GetMeSummary";
+        "/api/v2/pages/me_summary      => GetMeSummary,"
+        "/api/v2/backoffice/affiliate/partners => GetBackofficeAffiliatePartners,"
+        "/api/v2/backoffice/affiliate/partners/add => PostBackofficeAffiliatePartner,"
+        "/api/v2/backoffice/content/items => GetBackofficeContentItems,"
+        "/api/v2/backoffice/content/items/status => PatchBackofficeContentItemStatus,"
+        "/api/v2/backoffice/governance/reviews => GetBackofficeGovernanceReviews,"
+        "/api/v2/backoffice/governance/reviews/status => PatchBackofficeGovernanceReviewStatus";
     if (server.AddService(&g_pages_edge, brpc::SERVER_DOESNT_OWN_SERVICE, kPagesRestful) != 0) {
         LOG(ERROR) << "Fail to add GatewayPagesEdgeV2";
         return 1;

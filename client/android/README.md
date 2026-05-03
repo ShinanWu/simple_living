@@ -35,4 +35,4 @@ Use Android Studio (open `client/android`) or command line:
 ## Notes
 
 - Field names in API models use `snake_case` semantics from docs/contracts.
-- Repository is fake; swap with real network layer under `data/gateway` when gateway integration starts.
+- Repository is fake; swap with real network layer under `client/android/app/src/main/java/com/simpleliving/android/data/gateway` when gateway integration starts.

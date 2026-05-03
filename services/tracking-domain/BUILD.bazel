@@ -35,3 +35,12 @@ cc_binary(
         "@brpc//:brpc",
     ],
 )
+
+sh_test(
+    name = "tracking_domain_contract_smoke_test",
+    srcs = ["tests/tracking_domain_contract_smoke_test.sh"],
+    data = [
+        "proto/tracking_domain.proto",
+        "src/tracking_domain_server_main.cpp",
+    ],
+)

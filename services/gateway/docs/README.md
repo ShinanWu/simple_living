@@ -76,6 +76,8 @@ Gateway **依赖各域已发布的 proto 与接口契约**，不复制、不私�
 ## 5. 文档与并行开发
 
 - **实现与交付**：[development.md](./development.md)（文档阅读顺序、Bazel、联调、测试、合并前检查）。
+- **单服务部署**：[../deploy/README.md](../deploy/README.md)（QEMU，独立构建/分发/部署/回滚/验收）。
+- **运营后台后端能力**：[backoffice-backend.md](./backoffice-backend.md)（管理/审核 API、状态机、权限与审计约束）。
 - 客户端与测试可仅依赖：`api.md`、公共契约与 mock；需要理解聚合编排时再参考 `pages.md`。
 - Gateway 实现者可依赖：本文档、`workflow.md`、`data-model.md`、各域 proto。
 - 域服务团队可假设：对外 JSON 由 gateway 翻译，域接口保持 proto 稳定演进并做好兼容性。

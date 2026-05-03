@@ -16,12 +16,12 @@
 ## A1 网络入口组（frps/frpc/nginx）
 
 - **目标**: 打通公网入口链路并稳定运行。
-- **主要目录**: `infra/ingress/`
+- **主要目录**: `services/proxy/`
 - **输入**:
-  - `infra/ingress/frp/frps.toml.example`
-  - `infra/ingress/frp/frpc.toml.example`
-  - `infra/ingress/nginx/gateway.conf.example`
-  - `infra/ingress/README.md`
+  - `services/proxy/src/frp/frps.toml.example`
+  - `services/proxy/src/frp/frpc.toml.example`
+  - `services/proxy/src/nginx/gateway.conf.example`
+  - `services/proxy/docs/README.md`
 - **产出**:
   - 可执行的 systemd 服务步骤
   - Nginx TLS 终止与反代配置
@@ -33,7 +33,7 @@
 ## A2 K8s 基座组（RKE2）
 
 - **目标**: 建立 `simple-living` 命名空间与基础配置。
-- **主要目录**: `infra/k8s/base/`
+- **主要目录**: `infra/k8s/base/`（仅 namespace/config/secret）
 - **输入**:
   - `namespace.yaml`
   - `configmap-common.yaml`
@@ -50,7 +50,7 @@
 ## A3 业务部署组（镜像与编排）
 
 - **目标**: 完成 gateway 与 6 个 domain 的镜像与 Deployment 对接。
-- **主要目录**: `infra/k8s/base/`, `services/*/`
+- **主要目录**: `services/*/deploy/k8s/`, `infra/k8s/base/`
 - **输入**:
   - `docs/engineering-conventions.md` 端口与目标约定
   - 各服务 `docs/development.md`
@@ -81,7 +81,7 @@
 - **目标**: 打通日志、指标、告警与故障定位路径。
 - **主要目录**: `infra/`, `docs/`
 - **输入**:
-  - `infra/ingress/README.md`
+  - `services/proxy/docs/README.md`
   - `infra/k8s/README.md`
 - **产出**:
   - 最小指标面板定义（QPS、P95、5xx、重启次数）

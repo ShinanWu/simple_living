@@ -1,0 +1,13 @@
+FROM alpine:3.20
+
+RUN apk add --no-cache nginx frp bash curl
+
+COPY services/proxy/src/nginx/gateway.conf.example /etc/nginx/http.d/default.conf
+COPY services/proxy/deploy/start_proxy.sh /usr/local/bin/start_proxy.sh
+
+RUN chmod +x /usr/local/bin/start_proxy.sh \
+    && mkdir -p /var/log/frp /run/nginx
+
+EXPOSE 80 7000 10080
+
+ENTRYPOINT ["/usr/local/bin/start_proxy.sh"]

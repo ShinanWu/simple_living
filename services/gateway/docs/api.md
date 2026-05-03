@@ -26,9 +26,6 @@
 |--------|------|------|
 | `Authorization` | 按路由 | 已登录路由使用 `Bearer <access_token>` |
 | `X-Request-Id` | 否 | 可参与生成；响应 `meta.request_id` **以网关最终值为准** |
-| `X-Client-Platform` | 推荐 | 见 §6 `client_platform` |
-| `X-Client-Version` | 推荐 | 应用版本号，如 `1.4.2` |
-| `X-Device-Id` | 推荐 | 稳定设备标识；访客会话与风控辅助 |
 
 ### 2.1 主体载体（登录 / 访客）
 
@@ -37,12 +34,12 @@
 - **优先级**：若同时携带登录 Bearer 与 `X-Guest-Session-Id`，以 Bearer 解析出的登录主体为准，忽略访客会话头。
 - **未携带主体**：对标记为“Bearer 或访客会话”的路由返回 `20001`。
 
-### 2.2 `request_context` 与请求头合并规则
+### 2.2 单一来源规则（身份来自头，业务上下文来自 body）
 
-- 仅带头、不带体内 `request_context`：直接由头生成 `request_context`
-- 同时带头与体内 `request_context`：**体内显式字段优先，缺失字段再由头补齐**
-- 仅带体内 `request_context`：按体内字段透传
-- 路由未列出 `request_context` 时，默认 **不接受** 该字段
+- 身份主体仅来自请求头：`Authorization` 或 `X-Guest-Session-Id`。
+- 客户端业务上下文统一来自请求体字段（含顶层字段或体内 `request_context`）；网关不依赖 `X-Client-*` 头构建业务上下文。
+- 网关不接受体内 `acting_user_id` / `session_id` 作为主体来源。
+- 若未来为 Nginx 增加上下文相关请求头，这些头仅供网关前置层使用，不参与业务语义融合。
 
 ## 3. 响应信封（顶层）
 
@@ -154,15 +151,9 @@
 | `favorites_count` | integer | 是 | |
 | `history_count` | integer | 是 | |
 
-### 5.10 `request_context`（可选 JSON 体字段，对齐头信息）
+### 5.10 请求上下文来源
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `client_platform` | string | 否 | 体内显式字段优先；缺失时由 `X-Client-Platform` 补齐 |
-| `app_version` | string | 否 | 对齐 `X-Client-Version` |
-| `device_id` | string | 否 | 对齐 `X-Device-Id` |
-
-**固定规则**：本项目统一采用“**体内显式字段优先，缺失字段由请求头补齐**”。
+`request_context` 可作为对外 JSON 入参，且仅作为业务上下文来源之一。客户端上下文优先来自请求体，不依赖 `X-Client-*` 头。
 
 ### 5.11 `account_proof`（登录发令牌，oneof 形态）
 
@@ -277,7 +268,6 @@
 | `client_platform` | string | 否 |
 | `app_version` | string | 否 |
 | `device_id` | string | 否 |
-| `request_context` | object | 否 | §5.10 |
 
 | `data` | 类型 | 说明 |
 |------|------|------|
@@ -295,7 +285,7 @@
 - `account_proof.phone_otp` → `IssueTokenPairRequest.phone_otp`
 - `account_proof.oauth` → `IssueTokenPairRequest.oauth`
 - `device_fingerprint` → `IssueTokenPairRequest.device_fingerprint`
-- `client_platform` / `app_version` / `device_id` / `request_context` 合并后写入对应字段
+- `client_platform` / `app_version` / `device_id` 由请求体字段写入对应内部上下文字段
 - OTP / OAuth 的外部校验在网关完成；`user-domain` 不重复承担第三方证明交换职责
 
 ### 9.3 `POST /api/v2/auth/token/refresh`
@@ -303,7 +293,7 @@
 | 请求体字段 | 类型 | 必填 |
 |------------|------|------|
 | `refresh_token` | string | 是 |
-| `request_context` | object | 否 |
+| `request_context` | object | 否 | 仅以请求体为来源，不从请求头补齐 |
 
 **流程**：`IntrospectRefreshToken`；失败返回 `20003`；成功则 `IssueTokenPair`（实现可合并 rotation 策略）。`data` 同 §9.2。
 
@@ -356,7 +346,6 @@
 | 请求体字段 | 类型 | 必填 |
 |------------|------|------|
 | `guide_card_id` | string | 是 |
-| `request_context` | object | 否 | §5.10；体内显式字段优先于头 |
 
 `data`: `{ "favorite_id": string, "already_favorited": boolean }`。
 
@@ -462,6 +451,12 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 | GET | `/api/v2/pages/guide_detail` | 无（可选 Bearer 或访客会话） | 主体仅用于个性化相关推荐、埋点与风控补充 |
 | POST | `/api/v2/pages/redirect_prepare` | Bearer 或访客会话 | 必须具备主体，便于点击归因与幂等 |
 | GET | `/api/v2/pages/me_summary` | Bearer 或访客会话 | 与 `/api/v2/me/summary` 一致 |
+| POST | `/api/v2/backoffice/affiliate/partners` | Bearer（运营角色） | 联盟伙伴列表 |
+| POST | `/api/v2/backoffice/affiliate/partners/add` | Bearer（运营角色） | 新增联盟伙伴（最小元信息） |
+| POST | `/api/v2/backoffice/content/items` | Bearer（运营角色） | 内容管理最小列表 |
+| POST | `/api/v2/backoffice/content/items/status` | Bearer（运营角色） | 内容发布态切换 |
+| POST | `/api/v2/backoffice/governance/reviews` | Bearer（审核或运营） | 审核队列最小列表 |
+| POST | `/api/v2/backoffice/governance/reviews/status` | Bearer（审核或运营） | 审核状态更新（通过/拒绝） |
 
 ### 13.1 聚合对象定义
 
@@ -630,6 +625,25 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 
 - `UserDomainService/GetMeSummary`
 
+### 13.6 `POST /api/v2/backoffice/*`（运营平台最小路由）
+
+该组路由用于 `affiliate-domain`、`content-domain`、`governance-domain` 的运营后台最小闭环，仍遵循标准信封与 `snake_case`。
+
+| 路由 | `data` 结构 | 下游 |
+|------|-------------|------|
+| `POST /api/v2/backoffice/affiliate/partners` | `{ "items": [{ "partner_id", "display_name", "status", "primary_channel_code" }] }` | affiliate-domain |
+| `POST /api/v2/backoffice/affiliate/partners/add` | 同上（返回创建后列表） | affiliate-domain |
+| `POST /api/v2/backoffice/content/items` | `{ "items": [{ "content_id", "title", "theme", "status" }] }` | content-domain |
+| `POST /api/v2/backoffice/content/items/status` | 同上（返回更新后列表） | content-domain |
+| `POST /api/v2/backoffice/governance/reviews` | `{ "items": [{ "review_id", "subject_id", "status" }] }` | governance-domain |
+| `POST /api/v2/backoffice/governance/reviews/status` | 同上（返回更新后列表） | governance-domain |
+
+边界说明：
+
+- 网关负责鉴权、字段校验与 JSON ↔ proto 映射。
+- 审核与治理规则仍归 `governance-domain`；内容主数据归 `content-domain`；伙伴配置归 `affiliate-domain`。
+- v1 不提供跨域事务型写接口。
+
 ## 14. Gateway Pages Edge Proto
 
 页面聚合相关的 `proto2` 见：
@@ -650,17 +664,9 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 POST /api/v2/me/favorites HTTP/1.1
 Authorization: Bearer <access_token>
 Content-Type: application/json
-X-Client-Platform: ios
-X-Client-Version: 1.4.2
-X-Device-Id: device_9f1b5e18
 
 {
-  "guide_card_id": "guide_card_1001",
-  "request_context": {
-    "client_platform": "ios",
-    "app_version": "1.4.2",
-    "device_id": "device_9f1b5e18"
-  }
+  "guide_card_id": "guide_card_1001"
 }
 ```
 
@@ -690,9 +696,6 @@ X-Device-Id: device_9f1b5e18
 ```http
 GET /api/v2/me/summary HTTP/1.1
 Authorization: Bearer <access_token>
-X-Client-Platform: ios
-X-Client-Version: 1.4.2
-X-Device-Id: device_9f1b5e18
 ```
 
 #### HTTP Response
@@ -738,8 +741,6 @@ X-Device-Id: device_9f1b5e18
 ```http
 GET /api/v2/pages/home_feed?cursor=&limit=2 HTTP/1.1
 Authorization: Bearer <access_token>
-X-Client-Platform: ios
-X-Client-Version: 1.4.2
 ```
 
 #### HTTP Response
@@ -827,7 +828,7 @@ Content-Type: application/json
 POST /api/v2/auth/token/refresh HTTP/1.1
 Content-Type: application/json
 
-{"refresh_token":"rt_xxx"}
+{"refresh_token":"rt_xxx","request_context":{"client_platform":"ios","app_version":"1.4.2","device_id":"device_9f1b5e18"}}
 ```
 
 #### HTTP Response

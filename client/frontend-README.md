@@ -19,10 +19,11 @@
 - [前端跨端交互共识（全局）](./cross-platform-interaction-consensus.md)
 - [iOS 交互实现说明](./ios/interaction-notes.md)
 - [Android 交互实现说明](./android/interaction-notes.md)
-- [Web 交互实现说明](./web/interaction-notes.md)
+- Web C 端实现：当前无开发计划（避免与运营后台实现边界混淆）
 - [前端与 Gateway 交互设计](./frontend-gateway-interaction.md)
 - [三端实现映射](./frontend-platform-mapping.md)
 - [Mock 数据与验收矩阵](./frontend-mock-and-acceptance.md)
+- [运营后台平台 v1 方案](./backoffice-platform-v1.md)
 
 ## 3. 与顶层文档关系
 

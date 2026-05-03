@@ -129,8 +129,7 @@ public final class HttpGatewayAPI: GatewayAPI {
             )),
             clientPlatform: settings.clientPlatform,
             deviceId: settings.deviceId,
-            appVersion: settings.appVersion,
-            requestContext: rpcRequestContextDTO()
+            appVersion: settings.appVersion
         )
         return try await postIssueToken(body: body)
     }
@@ -144,8 +143,7 @@ public final class HttpGatewayAPI: GatewayAPI {
             )),
             clientPlatform: settings.clientPlatform,
             deviceId: settings.deviceId,
-            appVersion: settings.appVersion,
-            requestContext: rpcRequestContextDTO()
+            appVersion: settings.appVersion
         )
         return try await postIssueToken(body: body)
     }
@@ -157,7 +155,11 @@ public final class HttpGatewayAPI: GatewayAPI {
         let url = settings.baseURL.appendingPathComponent("api/v2/auth/token/refresh")
         let payload = RefreshTokenBodyDTO(
             refreshToken: refresh,
-            requestContext: rpcRequestContextDTO()
+            requestContext: RpcRequestContextDTO(
+                clientPlatform: settings.clientPlatform,
+                appVersion: settings.appVersion,
+                deviceId: settings.deviceId
+            )
         )
         let encoded = try encoder.encode(payload)
         let (data, _) = try await dataTask(url, method: "POST", body: encoded, jsonBody: true, authMode: .none)
@@ -217,14 +219,6 @@ public final class HttpGatewayAPI: GatewayAPI {
         case bearerOrGuest
     }
 
-    private func rpcRequestContextDTO() -> RpcRequestContextDTO {
-        RpcRequestContextDTO(
-            clientPlatform: settings.clientPlatform,
-            appVersion: settings.appVersion,
-            deviceId: settings.deviceId
-        )
-    }
-
     private func postIssueToken<Body: Encodable>(body: Body) async throws -> AuthTokenPair {
         let url = settings.baseURL.appendingPathComponent("api/v2/auth/token/issue")
         let encoded = try encoder.encode(body)
@@ -259,10 +253,6 @@ public final class HttpGatewayAPI: GatewayAPI {
         if jsonBody {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        request.setValue(settings.clientPlatform, forHTTPHeaderField: "X-Client-Platform")
-        request.setValue(settings.appVersion, forHTTPHeaderField: "X-Client-Version")
-        request.setValue(settings.deviceId, forHTTPHeaderField: "X-Device-Id")
-
         switch authMode {
         case .none:
             break
@@ -404,7 +394,6 @@ private struct IssueTokenPhoneBodyDTO: Encodable {
     let clientPlatform: String
     let deviceId: String
     let appVersion: String?
-    let requestContext: RpcRequestContextDTO
 
     struct AccountProof: Encodable {
         let phoneOtp: PhoneOtp
@@ -422,7 +411,6 @@ private struct IssueTokenWeChatBodyDTO: Encodable {
     let clientPlatform: String
     let deviceId: String
     let appVersion: String?
-    let requestContext: RpcRequestContextDTO
 
     struct AccountProof: Encodable {
         let oauth: OAuth
@@ -437,7 +425,7 @@ private struct IssueTokenWeChatBodyDTO: Encodable {
 
 private struct RefreshTokenBodyDTO: Encodable {
     let refreshToken: String
-    let requestContext: RpcRequestContextDTO?
+    let requestContext: RpcRequestContextDTO
 }
 
 private struct TokenPairDataDTO: Decodable {

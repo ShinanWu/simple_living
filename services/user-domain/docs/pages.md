@@ -14,7 +14,7 @@
 
 | 页面 / 模块 | user-domain 数据 | 备注 |
 |-------------|------------------|------|
-| 冷启动 / 访客态 | `EnsureGuestSession` | 与 `X-Device-Id` 等头配合 |
+| 冷启动 / 访客态 | `EnsureGuestSession` | 与请求体中的 `device_id`、`client_platform` 配合 |
 | 登录 / 注册成功 | `IssueTokenPair` | 客户端仅存契约约定令牌 |
 | 自动登录 / 刷新 | `IntrospectRefreshToken` + `IssueTokenPair` | 错误码 `20002`/`20003` 走重新登录 |
 | Token 校验（每请求） | `IntrospectAccessToken` | 在 gateway，不在端上直连 |

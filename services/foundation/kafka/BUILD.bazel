@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+sh_test(
+    name = "kafka_smoke_test",
+    srcs = ["tests/kafka_smoke_test.sh"],
+)

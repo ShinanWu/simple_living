@@ -26,6 +26,7 @@
 | 导购详情页 | `GET /api/v2/pages/guide_detail` | `ContentService/BatchGetGuideCards` + `GovernanceCooperationService/BatchGetCooperationLabels` + 可选 `RecommendationService/QueryRecommendations` | `guide`、`disclosures`、`related[]` 分区；禁止泄漏内部审核状态细节 |
 | 跳转准备页 | `POST /api/v2/pages/redirect_prepare` | `TrackingLinkService/AssembleTrackingLink` | 返回可点击 URL、click_id 等，字段语义见 [redirect-attribution.md](../../../docs/contracts/redirect-attribution.md) |
 | 「我的」摘要 | `GET /api/v2/pages/me_summary` | `UserDomainService/GetMeSummary` | `user_id` / `is_guest` 与 [auth.md](../../../docs/contracts/auth.md) 可选摘要一致 |
+| 运营后台（最小） | `POST /api/v2/backoffice/...` | `affiliate-domain` + `content-domain` + `governance-domain`（按模块分路由） | 运营写路径由网关转发到单域操作，不做跨域分布式写事务 |
 
 **说明**：逻辑 RPC 名与 `services/*/proto/*.proto` 对齐；若本文与 `api.md` 不一致，以 `api.md` 为准。gateway 负责 **并行调用** 与 **超时预算**（见 [workflow.md](./workflow.md)）。
 

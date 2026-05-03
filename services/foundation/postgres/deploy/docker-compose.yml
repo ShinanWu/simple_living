@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: simple
+      POSTGRES_PASSWORD: simple
+      POSTGRES_DB: simple_living
+    ports:
+      - "5432:5432"
+    volumes:
+      - simple_living_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simple -d simple_living"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  simple_living_pg:

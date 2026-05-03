@@ -18,7 +18,7 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `channel_code` | string | 联盟或跳转渠道编码，如 `pdd`、`douyin`；与 [guide-card.md](./guide-card.md) 中 `affiliate_context.channel_codes` 取值域一致 |
-| `client_platform` | string | 与 [auth.md](./auth.md) `X-Client-Platform` 同枚举 |
+| `client_platform` | string | 与 [auth.md](./auth.md) 客户端平台枚举一致（通常来自请求体） |
 | `client_version` | string | 可选 |
 
 ## 4. 内容与推荐来源

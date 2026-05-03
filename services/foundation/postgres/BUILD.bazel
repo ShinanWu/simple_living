@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+sh_test(
+    name = "postgres_smoke_test",
+    srcs = ["tests/postgres_smoke_test.sh"],
+)

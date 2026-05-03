@@ -87,7 +87,7 @@
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-关系型平面：**PostgreSQL** 为权威 OLTP 存储；Schema 与迁移由各域 `docs/data-model.md` 与基础设施约定共同约束。缓存为 **Redis**；异步与事件总线为 **Kafka**（开发环境可用与 Kafka 协议兼容的 broker，见 `infra/dev/README.md`）。
+关系型平面：**PostgreSQL** 为权威 OLTP 存储；Schema 与迁移由各域 `docs/data-model.md` 与基础设施约定共同约束。缓存为 **Redis**；异步与事件总线为 **Kafka**（开发与联调可见 `services/foundation/postgres/docs/README.md`、`services/foundation/redis/docs/README.md`、`services/foundation/kafka/docs/README.md`）。
 
 ## 5. 服务间协作原则
 
@@ -425,8 +425,7 @@ services/
     ├── tests/
     └── BUILD.bazel
 
-common/
-infrastructure/
+infra/
 third_party/
 ```
 
@@ -435,7 +434,7 @@ third_party/
 - `services/<service>/docs/` 是服务文档的唯一人工维护入口和单一事实来源
 - `services/<service>/` 是服务实现、`proto`、测试与构建配置的唯一落点
 - 业务代码与业务文档按服务边界聚合，便于 AI 或人类独立开发
-- 公共能力只保留真正公共的部分，避免 `common` 演变为大杂烩
+- 公共能力只保留真正公共的部分，避免共享代码目录演变为大杂烩
 
 ## 8. 技术选型
 
@@ -470,7 +469,7 @@ third_party/
 
 说明：
 
-- 开发与联调阶段可使用 `infra/dev/docker-compose.yml` 提供 PostgreSQL/Redis/Kafka 依赖；该 Compose 不等同于生产编排方案。
+- 开发与联调阶段应按服务自治原则分别执行 `bash services/foundation/postgres/deploy/deploy_service.sh up`、`bash services/foundation/redis/deploy/deploy_service.sh up`、`bash services/foundation/kafka/deploy/deploy_service.sh up`；这些单服务 Compose 封装入口不等同于生产编排方案。
 - 若未来出现大量非 Kubernetes 工作负载，再评估是否引入额外注册发现组件；当前默认不引入 Consul。
 
 ## 9. 前端体验与交互架构

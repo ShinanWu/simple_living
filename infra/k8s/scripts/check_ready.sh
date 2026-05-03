@@ -3,6 +3,7 @@ set -euo pipefail
 
 NAMESPACE="${1:-simple-living}"
 TIMEOUT="${TIMEOUT:-180s}"
+DEPLOYMENTS="${DEPLOYMENTS:-}"
 
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "kubectl not found in PATH" >&2
@@ -10,17 +11,21 @@ if ! command -v kubectl >/dev/null 2>&1; then
 fi
 
 echo "Checking rollout status in namespace: ${NAMESPACE}"
-kubectl -n "${NAMESPACE}" rollout status deploy/user-domain --timeout="${TIMEOUT}"
-kubectl -n "${NAMESPACE}" rollout status deploy/content-domain --timeout="${TIMEOUT}"
-kubectl -n "${NAMESPACE}" rollout status deploy/recommendation-domain --timeout="${TIMEOUT}"
-kubectl -n "${NAMESPACE}" rollout status deploy/affiliate-domain --timeout="${TIMEOUT}"
-kubectl -n "${NAMESPACE}" rollout status deploy/tracking-domain --timeout="${TIMEOUT}"
-kubectl -n "${NAMESPACE}" rollout status deploy/governance-domain --timeout="${TIMEOUT}"
-kubectl -n "${NAMESPACE}" rollout status deploy/gateway --timeout="${TIMEOUT}"
+
+if [[ -n "${DEPLOYMENTS}" ]]; then
+  for dep in ${DEPLOYMENTS}; do
+    kubectl -n "${NAMESPACE}" rollout status "deploy/${dep}" --timeout="${TIMEOUT}"
+  done
+else
+  mapfile -t all_deployments < <(kubectl -n "${NAMESPACE}" get deploy -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+  for dep in "${all_deployments[@]}"; do
+    kubectl -n "${NAMESPACE}" rollout status "deploy/${dep}" --timeout="${TIMEOUT}"
+  done
+fi
 
 echo
 echo "DNS/service quick checks:"
-kubectl -n "${NAMESPACE}" get svc user-domain content-domain recommendation-domain affiliate-domain tracking-domain governance-domain gateway -o wide
+kubectl -n "${NAMESPACE}" get svc -o wide
 
 echo
 echo "Pods:"

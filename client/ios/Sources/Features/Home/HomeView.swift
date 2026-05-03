@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 import SimpleLivingCore
 
 struct HomeView: View {
@@ -13,6 +12,8 @@ struct HomeView: View {
     @State private var activeCard: HomeCard?
     @State private var isCardDragging = false
     @State private var cardDragOffset: CGFloat = 0
+    @State private var themePulseTask: Task<Void, Never>?
+    @State private var dragResetTask: Task<Void, Never>?
 
     private let nextCardThreshold: CGFloat = 90
     private let refreshHintThreshold: CGFloat = 28
@@ -25,23 +26,40 @@ struct HomeView: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            themeTabs
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 12)
-            .gesture(
-                DragGesture(minimumDistance: 18)
-                    .onEnded(handleThemeSwipe)
-            )
+        VStack(spacing: 0) {
+            headerView
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
 
             content
                 .padding(.horizontal, 16)
+                .padding(.top, 12)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            bottomThemeTabs
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
         }
-        .navigationTitle("简单生活")
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(.systemBackground),
+                    themeAccent(viewModel.selectedTheme).opacity(0.07),
+                    Color(.secondarySystemBackground).opacity(0.7)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
         .navigationDestination(item: $activeCard) { card in
-            GuideDetailView(api: api, context: card.feedContext)
+            GuideDetailView(
+                api: api,
+                context: card.feedContext,
+                previewTitle: card.title,
+                previewReason: card.reason,
+                theme: viewModel.selectedTheme
+            )
         }
         .onAppear { viewModel.onAppear() }
         .onReceive(viewModel.$state.dropFirst()) { newState in
@@ -56,14 +74,61 @@ struct HomeView: View {
         }
         .onReceive(viewModel.$selectedTheme.dropFirst()) { _ in
             themeFocusPulse = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            themePulseTask?.cancel()
+            themePulseTask = Task {
+                try? await Task.sleep(nanoseconds: 220_000_000)
+                guard !Task.isCancelled else { return }
                 themeFocusPulse = false
             }
         }
+        .onDisappear {
+            themePulseTask?.cancel()
+            dragResetTask?.cancel()
+        }
     }
 
-    private var themeTabs: some View {
-        HStack(spacing: 8) {
+    private var headerView: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("简单生活")
+                    .font(.title2.weight(.bold))
+                Text(themeSlogan(viewModel.selectedTheme))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .id(viewModel.selectedTheme)
+            }
+            Spacer()
+
+            NavigationLink {
+                MeSummaryView(api: api)
+            } label: {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.primary.opacity(0.82))
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(
+                        Circle().stroke(.white.opacity(0.4), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.white.opacity(0.28), lineWidth: 1)
+        )
+        .animation(.easeInOut(duration: 0.2), value: viewModel.selectedTheme)
+    }
+
+    private var bottomThemeTabs: some View {
+        HStack(spacing: 10) {
             ForEach(Theme.allCases) { theme in
                 let isSelected = viewModel.selectedTheme == theme
                 Button {
@@ -75,14 +140,14 @@ struct HomeView: View {
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(isSelected ? .primary : .secondary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 8)
                         .background {
                             if isSelected {
                                 ZStack {
                                     Capsule(style: .continuous)
                                         .fill(.white.opacity(0.34))
                                     Capsule(style: .continuous)
-                                        .strokeBorder(.white.opacity(0.55), lineWidth: 0.6)
+                                        .strokeBorder(.white.opacity(0.55), lineWidth: 0.8)
                                 }
                                 .matchedGeometryEffect(id: "theme-liquid-pill", in: themeTabNamespace)
                                 .shadow(color: .white.opacity(0.3), radius: 8, y: 2)
@@ -96,16 +161,20 @@ struct HomeView: View {
         .padding(6)
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(.white.opacity(0.2), lineWidth: 1)
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(.white.opacity(0.2), lineWidth: 0.9)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.white.opacity(0.22))
                     .opacity(themeFocusPulse ? 1 : 0)
                     .blur(radius: themeFocusPulse ? 0 : 7)
             }
             .animation(.easeOut(duration: 0.28), value: themeFocusPulse)
+        )
+        .gesture(
+            DragGesture(minimumDistance: 18)
+                .onEnded(handleThemeSwipe)
         )
     }
 
@@ -135,6 +204,8 @@ struct HomeView: View {
         let card = cards[index]
         let pullHintOpacity = min(max((pullOffset - refreshHintThreshold) / 18, 0), 1)
         let isReadyToRefresh = pullOffset >= refreshTriggerThreshold
+        let endHintOpacity = min(max((-cardDragOffset - 18) / 30, 0), 1)
+        let shouldShowEndHint = index == cards.count - 1 && cardDragOffset < -18
 
         return VStack(spacing: 12) {
             if pullOffset >= refreshHintThreshold {
@@ -144,20 +215,28 @@ struct HomeView: View {
                     .opacity(pullHintOpacity)
             }
 
+            if shouldShowEndHint {
+                Text("简单生活就先到这里吧")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .opacity(endHintOpacity)
+                    .transition(.opacity)
+            }
+
             GeometryReader { proxy in
                 let pageDistance = max(proxy.size.height, 1)
                 ZStack {
                     if cardDragOffset > 0, index > 0 {
-                        cardContent(cards[index - 1], position: index, total: cards.count)
+                        cardContent(cards[index - 1], position: index, total: cards.count, cardHeight: pageDistance)
                             .offset(y: cardDragOffset - pageDistance)
                     }
 
                     if cardDragOffset < 0, index + 1 < cards.count {
-                        cardContent(cards[index + 1], position: index + 2, total: cards.count)
+                        cardContent(cards[index + 1], position: index + 2, total: cards.count, cardHeight: pageDistance)
                             .offset(y: cardDragOffset + pageDistance)
                     }
 
-                    cardContent(card, position: index + 1, total: cards.count)
+                    cardContent(card, position: index + 1, total: cards.count, cardHeight: pageDistance)
                         .offset(y: cardDragOffset)
                 }
                 .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.84), value: cardDragOffset)
@@ -176,20 +255,44 @@ struct HomeView: View {
         }
     }
 
-    private func cardContent(_ card: HomeCard, position: Int, total: Int) -> some View {
-        Button {
+    private func cardContent(_ card: HomeCard, position: Int, total: Int, cardHeight: CGFloat) -> some View {
+        let imageHeight = min(max(cardHeight - 220, 300), 520)
+        return Button {
             if !isCardDragging {
                 activeCard = card
             }
         } label: {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(card.title)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 14) {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                themeAccent(viewModel.selectedTheme).opacity(0.24),
+                                themeAccent(viewModel.selectedTheme).opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(height: imageHeight)
+                    .overlay {
+                        Image(systemName: themeImage(viewModel.selectedTheme))
+                            .font(.system(size: 48, weight: .semibold))
+                            .foregroundStyle(themeAccent(viewModel.selectedTheme).opacity(0.88))
+                    }
 
-                Text(card.reason)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("推荐理由")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(card.reason == "-" ? "为你精选的轻量推荐" : card.reason)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .frame(height: 44, alignment: .topLeading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer(minLength: 0)
 
@@ -197,17 +300,14 @@ struct HomeView: View {
                     Text("\(position)/\(total)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("上滑看下一个")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(22)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
                     .strokeBorder(.white.opacity(0.22), lineWidth: 1)
             )
         }
@@ -251,9 +351,7 @@ struct HomeView: View {
                 pullOffset = 0
                 cardDragOffset = 0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                isCardDragging = false
-            }
+            scheduleDragReset()
         }
 
         let vertical = value.translation.height
@@ -276,9 +374,6 @@ struct HomeView: View {
                 withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.8, blendDuration: 0.2)) {
                     currentIndex = nextIndex
                 }
-            } else {
-                isRefreshing = true
-                viewModel.refreshRecommendations()
             }
         } else if shouldFlipPrev, currentIndex > 0 {
             withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.8, blendDuration: 0.2)) {
@@ -306,6 +401,54 @@ struct HomeView: View {
         guard nextIndex != current else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             viewModel.onThemeChanged(Theme.allCases[nextIndex])
+        }
+    }
+
+    private func scheduleDragReset() {
+        dragResetTask?.cancel()
+        dragResetTask = Task {
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard !Task.isCancelled else { return }
+            isCardDragging = false
+        }
+    }
+
+    private func themeSlogan(_ theme: Theme) -> String {
+        switch theme {
+        case .clothing:
+            return "简单搭配，你也很美"
+        case .food:
+            return "好好吃饭，就是治愈"
+        case .housing:
+            return "住得舒服，心才安定"
+        case .transport:
+            return "轻松出发，步步从容"
+        }
+    }
+
+    private func themeAccent(_ theme: Theme) -> Color {
+        switch theme {
+        case .clothing:
+            return .pink
+        case .food:
+            return .orange
+        case .housing:
+            return .mint
+        case .transport:
+            return .blue
+        }
+    }
+
+    private func themeImage(_ theme: Theme) -> String {
+        switch theme {
+        case .clothing:
+            return "tshirt"
+        case .food:
+            return "fork.knife"
+        case .housing:
+            return "house"
+        case .transport:
+            return "car"
         }
     }
 }

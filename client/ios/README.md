@@ -39,7 +39,7 @@ This directory provides a minimal iOS scaffold aligned with `client/frontend-*.m
 | `GATEWAY_ACCESS_TOKEN` | 可选，已登录时 `Bearer` 对应 token（通常不设，改用 App 内登录后的持久化） |
 | `GATEWAY_REFRESH_TOKEN` | 可选，覆盖本地持久化的 refresh token（一般不设） |
 | `GATEWAY_GUEST_SESSION_ID` | 可选，已有访客会话时可注入，否则客户端会对 `POST /api/v2/guest/session` 懒创建 |
-| `GATEWAY_APP_VERSION` | 可选，写入 `X-Client-Version`，默认 `0.1.0` |
+| `GATEWAY_APP_VERSION` | 可选，写入请求体中的 `app_version` / `request_context.app_version`，默认 `0.1.0` |
 
 未设置 `GATEWAY_BASE_URL` 时使用 **Mock**，便于离线跑通 UI。
 

@@ -9,18 +9,8 @@ struct AppShellView: View {
     }
 
     var body: some View {
-        TabView {
-            NavigationStack {
-                HomeView(api: api)
-            }
-            .tabItem {
-                Label("首页", systemImage: "house")
-            }
-
-            MeSummaryView(api: api)
-                .tabItem {
-                    Label("我的", systemImage: "person")
-                }
+        NavigationStack {
+            HomeView(api: api)
         }
     }
 }

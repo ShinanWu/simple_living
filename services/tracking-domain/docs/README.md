@@ -37,6 +37,7 @@ Shared enums and field dictionaries for redirects and attribution are maintained
 | File | Contents |
 |------|----------|
 | [development.md](./development.md) | Implementation and delivery: build, run, test, merge checklist, shared doc index |
+| [../deploy/README.md](../deploy/README.md) | Single-service deployment guide (QEMU, build/distribute/deploy/rollback/verify) |
 | [api.md](./api.md) | Self-contained internal RPC/proto contract, messages, enums, errors, and integration rules |
 | [pages.md](./pages.md) | Client surfaces and integration points per terminal |
 | [data-model.md](./data-model.md) | Entities, fields, indexes (logical) |

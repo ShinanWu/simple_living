@@ -1,0 +1,14 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "proxy_configs",
+    srcs = glob([
+        "src/frp/*.example",
+        "src/nginx/*.example",
+    ]),
+)
+
+sh_test(
+    name = "proxy_ingress_smoke_test",
+    srcs = ["tests/proxy_ingress_smoke_test.sh"],
+)

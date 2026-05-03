@@ -9,30 +9,14 @@ if ! command -v kubectl >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[1/4] Applying namespace/config..."
+echo "[1/2] Applying cluster base resources..."
 kubectl apply -f "${BASE_DIR}/namespace.yaml"
 kubectl apply -f "${BASE_DIR}/configmap-common.yaml"
 kubectl apply -f "${BASE_DIR}/secret-template.yaml"
 
-echo "[2/4] Applying services..."
-kubectl apply -f "${BASE_DIR}/service-user-domain.yaml"
-kubectl apply -f "${BASE_DIR}/service-content-domain.yaml"
-kubectl apply -f "${BASE_DIR}/service-recommendation-domain.yaml"
-kubectl apply -f "${BASE_DIR}/service-affiliate-domain.yaml"
-kubectl apply -f "${BASE_DIR}/service-tracking-domain.yaml"
-kubectl apply -f "${BASE_DIR}/service-governance-domain.yaml"
-kubectl apply -f "${BASE_DIR}/service-gateway.yaml"
+echo "[2/2] Current base summary..."
+kubectl get ns simple-living
+kubectl -n simple-living get configmap common-env
+kubectl -n simple-living get secret app-secrets
 
-echo "[3/4] Applying deployments..."
-kubectl apply -f "${BASE_DIR}/deployment-user-domain.yaml"
-kubectl apply -f "${BASE_DIR}/deployment-content-domain.yaml"
-kubectl apply -f "${BASE_DIR}/deployment-recommendation-domain.yaml"
-kubectl apply -f "${BASE_DIR}/deployment-affiliate-domain.yaml"
-kubectl apply -f "${BASE_DIR}/deployment-tracking-domain.yaml"
-kubectl apply -f "${BASE_DIR}/deployment-governance-domain.yaml"
-kubectl apply -f "${BASE_DIR}/deployment-gateway.yaml"
-
-echo "[4/4] Current workload summary..."
-kubectl -n simple-living get svc,deploy,pod
-
-echo "Apply done."
+echo "Base apply done. Service workloads are managed in services/<service>/deploy/k8s."

@@ -59,3 +59,33 @@ cc_binary(
         "@com_google_protobuf//:protobuf",
     ],
 )
+
+sh_test(
+    name = "gateway_contract_smoke_test",
+    srcs = ["tests/gateway_contract_smoke_test.sh"],
+    data = [
+        "proto/gateway_pages_edge.proto",
+        "src/gateway_edge_server_main.cpp",
+    ],
+)
+
+sh_test(
+    name = "gateway_pages_golden_contract_test",
+    srcs = ["tests/gateway_pages_golden_contract_test.sh"],
+    data = [
+        "docs/api.md",
+        "proto/gateway_pages_edge.proto",
+        "src/gateway_edge_server_main.cpp",
+    ],
+)
+
+sh_test(
+    name = "gateway_user_golden_contract_test",
+    srcs = ["tests/gateway_user_golden_contract_test.sh"],
+    data = [
+        "docs/api.md",
+        "proto/gateway_user_edge.proto",
+        "proto/gateway_user_http_messages.proto",
+        "src/gateway_edge_server_main.cpp",
+    ],
+)

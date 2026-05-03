@@ -181,9 +181,9 @@ HTTP 接入层 → brpc Channel → 各业务域 brpc Server
 |------|------|
 | **关系型数据库** | **PostgreSQL**（各域 `data-model.md` 定义表结构、索引与迁移策略）。 |
 | **缓存** | **Redis**（会话、热点读、限流等按域文档执行）。 |
-| **消息** | **Kafka**（异步、回传、解耦链路；开发环境见 `infra/dev/docker-compose.yml`）。 |
+| **消息** | **Kafka**（异步、回传、解耦链路；开发环境见 `services/foundation/kafka/deploy/deploy_service.sh`）。 |
 
-域服务实现应通过 **连接池 + 仓储层** 访问上述组件；**不得**将进程内数据结构当作跨实例权威状态。本地或**远程 Linux 类生产主机**可先执行 `docker compose -f infra/dev/docker-compose.yml up -d` 启动 PostgreSQL、Redis、与 Kafka 兼容 broker，再运行服务（见 `infra/dev/README.md`）。
+域服务实现应通过 **连接池 + 仓储层** 访问上述组件；**不得**将进程内数据结构当作跨实例权威状态。本地或**远程 Linux 类生产主机**应分别执行各依赖服务的独立启动命令（示例）：`bash services/foundation/postgres/deploy/deploy_service.sh up`、`bash services/foundation/redis/deploy/deploy_service.sh up`、`bash services/foundation/kafka/deploy/deploy_service.sh up`，再运行业务服务。
 
 ---
 

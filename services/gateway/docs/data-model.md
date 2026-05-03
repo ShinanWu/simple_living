@@ -29,9 +29,9 @@ Gateway 的「数据模型」工作 = **将上述契约与内部 proto 字段对
 | `trace_id` | 追踪系统注入/生成 | 分布式追踪串联 |
 | `user_id` | 鉴权成功后解析令牌 | 下游 RPC 用户维度 |
 | `is_guest` | 无登录态或访客令牌 | 下游降级与统计 |
-| `client_platform` | `X-Client-Platform` | 限流、推荐 scene、审计 |
-| `client_version` | `X-Client-Version` | 兼容性与灰度 |
-| `device_id` | `X-Device-Id` | 访客归因与风控辅助 |
+| `client_platform` | 请求体字段（顶层或 `request_context`） | 限流、推荐 scene、审计 |
+| `client_version` | 请求体字段（如 `app_version` 或 `request_context.app_version`） | 兼容性与灰度 |
+| `device_id` | 请求体字段（顶层或 `request_context`） | 访客归因与风控辅助 |
 
 **注意**：具体令牌解析、用户存在性校验由 **user-domain** 等实现；gateway 只做入口校验与上下文注入，不在此文档重复账号模型。
 

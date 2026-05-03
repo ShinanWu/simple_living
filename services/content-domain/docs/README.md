@@ -56,6 +56,7 @@
 | 文档 | 说明 |
 |------|------|
 | [development.md](./development.md) | 本服务实现与交付：构建、运行、测试、合并前检查与公共文档索引 |
+| [../deploy/README.md](../deploy/README.md) | 单服务部署说明（QEMU，独立构建/分发/部署/回滚/验收） |
 | [api.md](./api.md) | 自包含的内部 RPC / proto 契约，含完整请求/响应、嵌套对象与错误语义 |
 | [pages.md](./pages.md) | 客户端页面与内容数据映射 |
 | [data-model.md](./data-model.md) | 核心实体与枚举 |

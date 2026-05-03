@@ -58,6 +58,33 @@
 - 配置运营
 - 风险控制与下架
 
+### `proxy`
+
+- 用户入口流量接入（Nginx / FRP）
+- TLS 终止与反向代理入口规则
+- 边缘连通性与入口健康检查脚本
+
+### `platform/backoffice-web`
+
+- 运营管理后台 Web（platform 侧）
+- 覆盖 affiliate/content/governance 最小运营动作
+- 单服务部署入口：`services/platform/backoffice-web/deploy/`
+
+### `foundation/postgres`
+
+- 关系型存储运行服务
+- 默认库与账号用于本地/联调环境
+
+### `foundation/redis`
+
+- 缓存运行服务
+- 会话与热数据缓存基础能力
+
+### `foundation/kafka`
+
+- 异步消息运行服务（Kafka 协议兼容）
+- 事件回传与解耦链路基础能力
+
 ## 3. 每个服务必须具备的文档
 
 ```text
@@ -71,7 +98,18 @@ services/<service>/docs/
 └── changelog.md
 ```
 
-## 4. 每个服务建议具备的实现目录
+```text
+services/<service>/deploy/
+├── README.md
+├── start_nodes.sh
+├── check_nodes.sh
+├── deploy_service.sh
+└── stop_nodes.sh
+```
+
+## 4. 每个服务必须具备的实现目录
+
+业务域服务（gateway 与各 domain）：
 
 ```text
 services/<service>/
@@ -81,18 +119,32 @@ services/<service>/
 └── BUILD.bazel
 ```
 
+基础运行服务（postgres/redis/kafka/proxy）：
+
+```text
+services/<service>/
+├── docs/
+├── deploy/
+├── tests/
+└── BUILD.bazel
+```
+
 说明：
 
 - `services/<service>/docs/` 是该服务的**人工维护契约入口**
 - `services/<service>/` 是该服务的**实现与协议落地目录**
+- `services/<service>/deploy/` 是该服务的**独立部署入口**（单服务构建/分发/部署）
 - `proto` 与实现代码应和服务边界一起内聚，不再额外放到 `server/` 之类的技术层目录
+
+> 目录约束按“服务类型”执行：业务域服务需包含 `proto/src/tests/BUILD.bazel`；基础运行服务需包含 `docs/deploy/tests/BUILD.bazel`。
 
 ## 5. 设计要求
 
 - 一个服务只负责一个稳定业务边界
 - 一个服务内部允许文档、规则、代码紧密耦合
 - 服务之间只能通过公开契约协作
-- 公共能力尽量少而精，避免沉淀过多无边界代码到 `common`
+- 公共能力尽量少而精，避免沉淀过多无边界共享代码
+- 服务之间禁止通过源码目录相互引用实现细节（例如直接 include 他域 `src/` 私有头文件）
 
 ## 6. 实现与交付文档从哪里读
 

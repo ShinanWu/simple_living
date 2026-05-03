@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+sh_test(
+    name = "redis_smoke_test",
+    srcs = ["tests/redis_smoke_test.sh"],
+)

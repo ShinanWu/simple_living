@@ -9,7 +9,7 @@
 DEFINE_int32(port, 9101, "TCP port for user-domain brpc server");
 DEFINE_string(pg_conninfo,
               "host=127.0.0.1 port=5432 dbname=simple_living user=simple password=simple",
-              "libpq connection string; must point to PostgreSQL (see infra/dev/docker-compose.yml)");
+              "libpq connection string; must point to PostgreSQL (see services/foundation/postgres/deploy/docker-compose.yml)");
 
 namespace simple_living {
 namespace user_domain {
@@ -212,7 +212,7 @@ int main(int argc, char* argv[]) {
     simple_living::user_domain::PgUserStore store;
     if (!store.ConnectAndInit(FLAGS_pg_conninfo)) {
         LOG(ERROR) << "PostgreSQL ConnectAndInit failed; check -pg_conninfo and that the server is running "
-                        "(see infra/dev/README.md)";
+                        "(see services/foundation/postgres/docs/README.md)";
         return 1;
     }
 

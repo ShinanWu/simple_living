@@ -18,11 +18,14 @@
 |--------|------|------|
 | `Authorization` | 按接口定义 | 推荐：`Bearer <access_token>`；仅允许服务端签发的令牌 |
 | `X-Request-Id` | 否 | 客户端可生成并传入，便于与 [common-response.md](./common-response.md) 的 `meta.request_id` 对齐；若网关覆盖以服务端为准 |
-| `X-Client-Platform` | 推荐 | 枚举小写字符串，如 `web`、`ios`、`android`、`wechat_miniprogram`、`douyin_miniprogram` |
-| `X-Client-Version` | 推荐 | 应用语义化版本，如 `1.4.2` |
-| `X-Device-Id` | 推荐 | 稳定设备标识（由各端按隐私合规生成）；用于访客归因与风控，**不得**当作唯一安全凭据 |
 
 具体接口可额外要求 `X-App-Id` 等，须在接口文档列出。
+
+单一来源约束：
+
+- 主体身份仅来自请求头（`Authorization` 或网关约定的访客会话头）。
+- 客户端上下文默认来自请求体字段（顶层字段或 `request_context`）。
+- 公共契约默认不接受体内 `acting_user_id`、`session_id` 作为身份来源。
 
 ## 4. 令牌类型（逻辑角色）
 
@@ -60,7 +63,7 @@
 ## 7. 小程序补充
 
 - 可将平台侧 `openid` 等与内部 `user_id` 的映射完全放在服务端，客户端契约层只暴露 `access_token` 与上述标准头。
-- `X-Client-Platform` 须能区分不同小程序宿主，便于统计与渠道策略。
+- `client_platform` 字段（请求体）须能区分不同小程序宿主，便于统计与渠道策略。
 
 ## 8. 兼容性
 
