@@ -1,0 +1,76 @@
+<view class="home" style="--accent: {{themeMeta.accent}}">
+  <view class="home__topbar">
+    <view class="home__search" bindtap="onSearchTap">
+      <text class="home__search-icon">🔍</text>
+      <text class="home__search-placeholder sl-muted">搜索少糖推荐</text>
+    </view>
+    <view class="home__me" bindtap="goMe">
+      <text class="home__me-icon">👤</text>
+    </view>
+  </view>
+
+  <view class="home__body">
+    <block wx:if="{{loadState === 'loading'}}">
+      <view class="home__loading">
+        <text class="sl-muted">加载中…</text>
+      </view>
+    </block>
+    <block wx:elif="{{loadState === 'offline'}}">
+      <state-placeholder title="网络不可用" bind:action="onRetry" />
+    </block>
+    <block wx:elif="{{loadState === 'error'}}">
+      <state-placeholder title="{{errorMessage}}" bind:action="onRetry" />
+    </block>
+    <block wx:elif="{{loadState === 'empty'}}">
+      <state-placeholder title="暂无内容" bind:action="onRetry" />
+    </block>
+    <block wx:else>
+      <view wx:if="{{pullHint}}" class="home__pull-hint sl-muted">{{pullHint}}</view>
+      <view wx:if="{{endHint}}" class="home__pull-hint sl-muted">{{brandEndHint}}</view>
+
+      <view
+        class="home__card-wrap"
+        bindtouchstart="onCardTouchStart"
+        bindtouchmove="onCardTouchMove"
+        bindtouchend="onCardTouchEnd"
+        bindtouchcancel="onCardTouchEnd"
+      >
+        <view class="home__card sl-card" style="transform: translateY({{cardOffset}}px);">
+          <view class="home__cover" bindtap="openDetail">
+            <image
+              wx:if="{{currentCard.coverUrl}}"
+              class="home__cover-img"
+              src="{{currentCard.coverUrl}}"
+              mode="aspectFill"
+            />
+            <view wx:else class="home__cover-fallback">
+              <text class="home__cover-emoji">{{themeMeta.icon}}</text>
+            </view>
+          </view>
+          <view class="home__reason" bindtap="openDetail">
+            <text class="home__reason-label sl-muted">推荐理由</text>
+            <text class="home__reason-text">{{currentCard.reasonDisplay}}</text>
+          </view>
+          <text class="home__index sl-muted">{{cardIndex + 1}}/{{cards.length}}</text>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view
+    class="home__themes sl-card"
+    bindtouchstart="onThemeTouchStart"
+    bindtouchend="onThemeTouchEnd"
+  >
+    <view
+      wx:for="{{themes}}"
+      wx:key="key"
+      class="home__theme-item {{selectedTheme === item.key ? 'home__theme-item--active' : ''}}"
+      hover-class="home__theme-item--pressed"
+      data-theme="{{item.key}}"
+      catchtap="onThemeTap"
+    >
+      <text class="home__theme-label">{{item.title}}</text>
+    </view>
+  </view>
+</view>

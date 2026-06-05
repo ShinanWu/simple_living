@@ -1,4 +1,4 @@
-"""Simple Living monorepo: C++ services on Apache brpc (see docs/architecture/README.md)."""
+"""少糖 (Shaotang) monorepo: C++ services on Apache brpc (see services/README.md)."""
 
 module(
     name = "simple_living",

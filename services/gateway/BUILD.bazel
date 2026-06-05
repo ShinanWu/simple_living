@@ -1,6 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
-load("//build:brpc_copts.bzl", "BRPC_EXAMPLE_COPTS")
+load("//build_defs:brpc_copts.bzl", "BRPC_EXAMPLE_COPTS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -22,7 +22,7 @@ proto_library(
     ],
     strip_import_prefix = "proto",
     deps = [
-        "//services/user-domain:user_domain_proto",
+        "//services/user-server:user_server_proto",
         "@com_google_protobuf//:empty_proto",
     ],
 )
@@ -51,10 +51,12 @@ cc_binary(
     deps = [
         ":gateway_pages_cc_proto",
         ":gateway_user_cc_proto",
-        "//services/user-domain:user_domain_cc_proto",
-        "//services/content-domain:content_domain_cc_proto",
-        "//services/recommendation-domain:recommendation_domain_cc_proto",
-        "//services/tracking-domain:tracking_domain_cc_proto",
+        "//common/proto:catalog_cc_proto",
+        "//common/proto:content_service_cc_proto",
+        "//services/platform/backoffice-backend:governance_server_cc_proto",
+        "//services/recommendation-server:recommendation_server_cc_proto",
+        "//services/tracking-server:tracking_server_cc_proto",
+        "//services/user-server:user_server_cc_proto",
         "@brpc//:brpc",
         "@com_google_protobuf//:protobuf",
     ],
@@ -86,6 +88,15 @@ sh_test(
         "docs/api.md",
         "proto/gateway_user_edge.proto",
         "proto/gateway_user_http_messages.proto",
+        "src/gateway_edge_server_main.cpp",
+    ],
+)
+
+sh_test(
+    name = "gateway_backoffice_contract_smoke_test",
+    srcs = ["tests/gateway_backoffice_contract_smoke_test.sh"],
+    data = [
+        "proto/gateway_pages_edge.proto",
         "src/gateway_edge_server_main.cpp",
     ],
 )

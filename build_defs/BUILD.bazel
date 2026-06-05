@@ -1,0 +1,2 @@
+# Shared Bazel macros and copts for all C++ brpc services.
+exports_files(["brpc_copts.bzl"])

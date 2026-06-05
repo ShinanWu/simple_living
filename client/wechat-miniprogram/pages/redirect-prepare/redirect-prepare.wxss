@@ -1,0 +1,62 @@
+.redirect {
+  min-height: 100vh;
+  padding: 32rpx;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #fafafa 0%, #f0f0f2 55%, #e8e8ea 100%);
+}
+
+.redirect__center {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.redirect__panel {
+  padding: 36rpx 32rpx;
+}
+
+.redirect__headline {
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.redirect__meta {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  word-break: break-all;
+}
+
+.redirect__label {
+  display: block;
+  margin-top: 28rpx;
+  font-size: 22rpx;
+}
+
+.redirect__url {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  word-break: break-all;
+  color: #2563eb;
+}
+
+.redirect__actions {
+  margin-top: 36rpx;
+  display: flex;
+  gap: 20rpx;
+}
+
+.redirect__btn {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+}
+
+.redirect__hint {
+  display: block;
+  margin-top: 24rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+}

@@ -1,0 +1,74 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//build_defs:brpc_copts.bzl", "BRPC_EXAMPLE_COPTS")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "proto_files",
+    srcs = glob(["proto/*.proto"]),
+)
+
+filegroup(
+    name = "docs",
+    srcs = glob(["docs/**/*.md"]),
+)
+
+proto_library(
+    name = "tracking_server_proto",
+    srcs = ["proto/tracking_server.proto"],
+    strip_import_prefix = "proto",
+    deps = ["@com_google_protobuf//:timestamp_proto"],
+)
+
+cc_proto_library(
+    name = "tracking_server_cc_proto",
+    deps = [":tracking_server_proto"],
+)
+
+cc_library(
+    name = "link_snapshot_reader",
+    srcs = ["src/snapshot_reader.cpp"],
+    hdrs = ["src/snapshot_reader.h"],
+    copts = BRPC_EXAMPLE_COPTS,
+    deps = [
+        "//common/proto:catalog_cc_proto",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "pg_tracking_store",
+    srcs = ["src/pg_tracking_store.cpp"],
+    hdrs = ["src/pg_tracking_store.h"],
+    copts = BRPC_EXAMPLE_COPTS + select({
+        "@platforms//os:linux": ["-I/usr/include/postgresql"],
+        "//conditions:default": [],
+    }),
+    linkopts = ["-lpq"],
+    deps = [
+        ":tracking_server_cc_proto",
+        "@brpc//:brpc",
+    ],
+)
+
+cc_binary(
+    name = "tracking_server",
+    srcs = ["src/tracking_server_main.cpp"],
+    copts = BRPC_EXAMPLE_COPTS,
+    deps = [
+        ":link_snapshot_reader",
+        ":pg_tracking_store",
+        ":tracking_server_cc_proto",
+        "@brpc//:brpc",
+    ],
+)
+
+sh_test(
+    name = "tracking_server_contract_smoke_test",
+    srcs = ["tests/tracking_server_contract_smoke_test.sh"],
+    data = [
+        "proto/tracking_server.proto",
+        "src/tracking_server_main.cpp",
+    ],
+)

@@ -1,0 +1,63 @@
+page {
+  --sl-bg: #f4f4f5;
+  --sl-surface: rgba(255, 255, 255, 0.55);
+  --sl-surface-strong: rgba(255, 255, 255, 0.72);
+  --sl-text: #18181b;
+  --sl-text-secondary: #71717a;
+  --sl-border: rgba(255, 255, 255, 0.4);
+  --sl-radius-lg: 30rpx;
+  --sl-radius-md: 20rpx;
+  --sl-shadow: 0 8px 32px rgba(24, 24, 27, 0.07);
+  --sl-blur: saturate(180%) blur(30px);
+  background: var(--sl-bg);
+  color: var(--sl-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  font-size: 28rpx;
+  line-height: 1.5;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.sl-muted {
+  color: var(--sl-text-secondary);
+}
+
+.sl-card {
+  background: var(--sl-surface);
+  backdrop-filter: var(--sl-blur);
+  -webkit-backdrop-filter: var(--sl-blur);
+  border-radius: var(--sl-radius-lg);
+  box-shadow: var(--sl-shadow);
+  border: 1rpx solid var(--sl-border);
+}
+
+.sl-card-strong {
+  background: var(--sl-surface-strong);
+  backdrop-filter: var(--sl-blur);
+  -webkit-backdrop-filter: var(--sl-blur);
+  border-radius: var(--sl-radius-lg);
+  box-shadow: var(--sl-shadow);
+  border: 1rpx solid rgba(255, 255, 255, 0.5);
+}
+
+.sl-btn-primary {
+  background: linear-gradient(135deg, #18181b 0%, #3f3f46 100%);
+  color: #fff;
+  border-radius: 999rpx;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(24, 24, 27, 0.12);
+}
+
+.sl-btn-primary[disabled] {
+  opacity: 0.45;
+}
+
+.sl-btn-ghost {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  color: var(--sl-text);
+  border-radius: 999rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 2px 12px rgba(24, 24, 27, 0.04);
+}

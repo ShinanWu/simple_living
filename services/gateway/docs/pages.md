@@ -13,8 +13,8 @@
 | **聚合非所有权** | 聚合响应中的业务含义仍来自各域；gateway 不新增业务规则，只做编排、并行、字段拼装与对外裁剪 |
 | **只读优先** | 默认页面接口为 GET 或 POST-body 只读查询；写操作保持单域单事务，不经由复杂聚合 |
 | **契约先行** | 每个页面接口必须在本文档登记：路径、下游 RPC 列表、`data` 形状引用（contracts 或内嵌表格） |
-| **失败策略显式** | 部分依赖失败时，选择「整页失败」或「降级字段为 null/空列表」须在接口级写死，且 `code`/`warnings` 行为符合 [common-response.md](../../../docs/contracts/common-response.md) |
-| **与公共契约一致** | 导购卡片、推荐条目、跳转字段须符合 [guide-card.md](../../../docs/contracts/guide-card.md)、[recommendation.md](../../../docs/contracts/recommendation.md)、[redirect-attribution.md](../../../docs/contracts/redirect-attribution.md) |
+| **失败策略显式** | 部分依赖失败时，选择「整页失败」或「降级字段为 null/空列表」须在接口级写死，且 `code`/`warnings` 行为符合 [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) |
+| **与公共契约一致** | 导购卡片、推荐条目、跳转字段须符合 [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) |
 
 ## 3. 首批页面接口
 
@@ -22,11 +22,11 @@
 
 | 页面 / 场景 | 对外路径（以 `api.md` 为准） | 下游 RPC（逻辑名） | `data` 要点 |
 |-------------|------------------|---------------------|-------------|
-| 首页推荐流 | `GET /api/v2/pages/home_feed` | `RecommendationService/QueryRecommendations` + `ContentService/BatchGetGuideCards` + 可选治理可见性过滤 | `items[]` 引用推荐契约 + 卡片 ID；卡片富展示可内嵌 [guide-card](../../../docs/contracts/guide-card.md) 子集 |
+| 首页推荐流 | `GET /api/v2/pages/home_feed` | `RecommendationService/QueryRecommendations` + `ContentService/BatchGetGuideCards` + 可选治理可见性过滤 | `items[]` 引用推荐契约 + 卡片 ID；卡片富展示可内嵌 [导购卡片契约](../../../.cursor/rules/shared-contracts.mdc) 子集 |
 | 导购详情页 | `GET /api/v2/pages/guide_detail` | `ContentService/BatchGetGuideCards` + `GovernanceCooperationService/BatchGetCooperationLabels` + 可选 `RecommendationService/QueryRecommendations` | `guide`、`disclosures`、`related[]` 分区；禁止泄漏内部审核状态细节 |
-| 跳转准备页 | `POST /api/v2/pages/redirect_prepare` | `TrackingLinkService/AssembleTrackingLink` | 返回可点击 URL、click_id 等，字段语义见 [redirect-attribution.md](../../../docs/contracts/redirect-attribution.md) |
-| 「我的」摘要 | `GET /api/v2/pages/me_summary` | `UserDomainService/GetMeSummary` | `user_id` / `is_guest` 与 [auth.md](../../../docs/contracts/auth.md) 可选摘要一致 |
-| 运营后台（最小） | `POST /api/v2/backoffice/...` | `affiliate-domain` + `content-domain` + `governance-domain`（按模块分路由） | 运营写路径由网关转发到单域操作，不做跨域分布式写事务 |
+| 跳转准备页 | `POST /api/v2/pages/redirect_prepare` | `TrackingLinkService/AssembleTrackingLink` | 返回可点击 URL、click_id 等，字段语义见 [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) |
+| 「我的」摘要 | `GET /api/v2/pages/me_summary` | `UserServerService/GetMeSummary` | `user_id` / `is_guest` 与 [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) 可选摘要一致 |
+| 运营后台（最小） | `POST /api/v2/backoffice/...` | `platform/backoffice-backend`（content / governance / affiliate 三模块，进程内协作） | 运营写路径由网关转发至单进程多 service，不做跨域分布式写事务 |
 
 **说明**：逻辑 RPC 名与 `services/*/proto/*.proto` 对齐；若本文与 `api.md` 不一致，以 `api.md` 为准。gateway 负责 **并行调用** 与 **超时预算**（见 [workflow.md](./workflow.md)）。
 
@@ -34,7 +34,7 @@
 
 - 顶层仍为标准信封；页面专属负载放在 `data` 内。
 - 建议 `data` 顶层按 **稳定分区键** 组织，例如：`feed`、`pagination`、`guide`、`affiliate`、`tracking`，避免深层随意嵌套导致端上解析分裂。
-- 列表分页：统一使用 [pagination.md](../../../docs/contracts/pagination.md) 的 `data.items` + `data.pagination`（若该页带列表）。
+- 列表分页：统一使用 [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) 的 `data.items` + `data.pagination`（若该页带列表）。
 
 ## 5. 与细粒度 API 的关系
 
@@ -49,7 +49,7 @@
 2. 公共契约中的卡片/推荐/跳转结构；
 3. `meta.request_id` 排障。
 
-Mock 数据应模拟 **部分下游失败** 场景，验证降级策略与 `warnings`。
+测试夹具应模拟 **部分下游失败** 场景，验证降级策略与 `warnings`；运行时与验收必须使用真实 gateway。
 
 ## 7. 非目标
 

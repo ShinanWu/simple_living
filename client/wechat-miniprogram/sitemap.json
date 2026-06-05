@@ -1,0 +1,4 @@
+{
+  "desc": "少糖",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

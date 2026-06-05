@@ -1,0 +1,4 @@
+<web-view wx:if="{{safeUrl}}" src="{{safeUrl}}"></web-view>
+<view wx:else class="web-outbound__fallback">
+  <text class="sl-muted">链接无效或为空</text>
+</view>

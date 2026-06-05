@@ -4,15 +4,15 @@ package simple_living.gateway.user;
 
 option go_package = "github.com/simple_living/services/gateway/proto/gwuserpb;gwuserpb";
 
-// protoc -I . -I ../../user-domain/proto gateway_user_http_messages.proto
-import "user_domain_models.proto";
+// protoc -I . -I ../../user-server/proto gateway_user_http_messages.proto
+import "user_server_models.proto";
 
 // JSON-oriented bodies and query-backed shapes for the user edge. Timestamps that arrive as
-// ISO 8601 strings in HTTP are parsed by the gateway before building user-domain Timestamp fields.
+// ISO 8601 strings in HTTP are parsed by the gateway before building user-server Timestamp fields.
 
 message RefreshTokenHttpRequest {
   optional string refresh_token = 1;
-  optional simple_living.user_domain.RpcRequestContext request_context = 2;
+  optional simple_living.user_server.RpcRequestContext request_context = 2;
 }
 
 // Public JSON uses lowercase platform strings (see services/gateway/docs/api.md).
@@ -50,7 +50,7 @@ message PutMePreferencesHttpRequest {
 message ListFavoritesHttpRequest {
   optional string cursor = 1;
   optional int32 limit = 2;
-  optional simple_living.user_domain.FavoriteContentType content_type = 3;
+  optional simple_living.user_server.FavoriteContentType content_type = 3;
 }
 
 message AddFavoriteHttpRequest {
@@ -67,9 +67,9 @@ message ListHistoryHttpRequest {
 }
 
 message RecordHistoryEventHttpRequest {
-  optional simple_living.user_domain.ContentRef content_ref = 1;
+  optional simple_living.user_server.ContentRef content_ref = 1;
   optional string occurred_at = 2;
-  optional simple_living.user_domain.HistorySourceSurface source_surface = 3;
+  optional simple_living.user_server.HistorySourceSurface source_surface = 3;
   optional string client_event_id = 4;
 }
 

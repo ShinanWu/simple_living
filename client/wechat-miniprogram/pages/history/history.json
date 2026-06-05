@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "浏览历史",
+  "usingComponents": {
+    "state-placeholder": "/components/state-placeholder/state-placeholder"
+  }
+}

@@ -3,7 +3,7 @@
 ## 1. 文档范围与版本
 
 - **范围**：终端经前置 `Nginx` 到 `gateway` 的 **HTTPS + JSON** 约定；本文件包含 **可直接实现** 的细粒度用户路由与页面聚合路由、请求/响应 `data` 形状、嵌套对象、枚举、错误码与到各域 RPC 的映射说明。
-- **路径版本**：`/api/v2/...` 与内部 `simple_living.user_domain` / `simple_living.gateway.user` proto 对齐；破坏性变更通过新路径或迁移期在 changelog 说明。
+- **路径版本**：`/api/v2/...` 与内部 `simple_living.user_server` / `simple_living.gateway.user` proto 对齐；破坏性变更通过新路径或迁移期在 changelog 说明。
 - **字段命名**：JSON 一律 **`snake_case`**，与全局契约一致。
 - **时间**：业务时间字段在 JSON 中为 **ISO 8601 UTC 字符串**（例 `2026-03-28T12:00:00Z`）；机器时间戳仍可由网关写入信封 `meta.server_time_ms`（Unix 毫秒）。
 - **Proto 骨架**：`services/gateway/proto/gateway_user_http_messages.proto`、`gateway_user_edge.proto`、`gateway_pages_edge.proto`；下游类型见各域 `services/<service>/proto/`。
@@ -20,7 +20,7 @@
 
 - 生产入口建议采用 `Nginx -> gateway` 拓扑，`Nginx` 负责 TLS 终止、通用反向代理、基础限流与连接治理。
 - `Nginx` 不定义或改写业务 JSON 字段语义，不承担页面聚合与 JSON ↔ proto 映射职责。
-- 业务契约、错误码语义与字段稳定性仍以本文件和 `docs/contracts/` 为准。
+- 业务契约、错误码语义与字段稳定性仍以本文件和 `.cursor/rules/shared-contracts.mdc` 为准。
 
 | 请求头 | 必填 | 说明 |
 |--------|------|------|
@@ -170,18 +170,18 @@
 | 枚举名 | 允许值 | 备注 |
 |--------|--------|------|
 | `client_platform` | `web`, `ios`, `android`, `wechat_miniprogram`, `douyin_miniprogram` | 与鉴权契约头约定一致 |
-| `content_ref_type` | `guide_card` | 扩展需协同 content-domain |
+| `content_ref_type` | `guide_card` | 扩展需协同 platform/backoffice-backend |
 | `favorite_content_type` | `guide_card` | 列表筛选；默认 `guide_card` |
 | `feedback_target_type` | `guide_card`, `recommendation_result`, `app`, `other` | |
 | `history_source_surface` | `feed`, `search`, `detail` | |
 | `clear_history_scope` | `all`, `before_time` | `before_time` 须配合 `before_time` 时间字段 |
 | `revoke_scope`（DELETE `/auth/session` 体字段） | `single_session`, `all_user_sessions` | 映射 `RevokeSessionScope` |
 
-**映射到 proto**：网关将字符串枚举转为 `user_domain_models.proto` 中对应 `enum` 数值（实现侧维护表；新增值仅追加）。
+**映射到 proto**：网关将字符串枚举转为 `user_server_models.proto` 中对应 `enum` 数值（实现侧维护表；新增值仅追加）。
 
 ## 7. 路由总表（用户相关 v2）
 
-| 方法 | 路径 | 鉴权 | 默认 limit | 主下游 RPC（`UserDomainService`） |
+| 方法 | 路径 | 鉴权 | 默认 limit | 主下游 RPC（`UserServerService`） |
 |------|------|------|------------|-----------------------------------|
 | POST | `/api/v2/guest/session` | 无 | — | `EnsureGuestSession` |
 | POST | `/api/v2/auth/token/issue` | 无（由上游校验链保证） | — | `IssueTokenPair` |
@@ -203,18 +203,36 @@
 | GET | `/api/v2/me/summary` | Bearer 或访客 | — | `GetMeSummary` |
 | GET | `/api/v2/health` | 无 | — | `HealthCheck`（可与其他域探活组合） |
 
-**内部（非表列 HTTP）**：`IntrospectAccessToken`、`GetSignalBundleRef`、`ResolveSignalBundle` 由网关在入口或 BFF 流程中直接调用 `UserDomainService`，**不**对终端暴露独立路径。
+**内部（非表列 HTTP）**：`IntrospectAccessToken`、`GetSignalBundleRef`、`ResolveSignalBundle` 由网关在入口或 BFF 流程中直接调用 `UserServerService`，**不**对终端暴露独立路径。
 
 ## 8. 错误码与 HTTP 状态
 
-客户端以 JSON **`code`** 为准。常用映射：
+客户端以 JSON **`code`** 为准。完整码值区间与语义以 [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) §错误码为准，本节只列 gateway 实际使用/映射的码及触发条件，不重述全文。
+
+### 8.1 网关入口层错误码（`10050`–`10099` 预留区）
+
+以下码由 gateway **入口/路由/聚合层**产生（非透传自业务域），取值固定，仅允许在区间内追加：
+
+| `code` | 语义 | 典型 HTTP | 触发条件 |
+|--------|------|-----------|----------|
+| `10050` | 路由不存在 | 404 | 请求 path/method 未匹配任何已登记路由 |
+| `10051` | 方法不被允许 | 405 | path 命中但 HTTP 方法不支持 |
+| `10052` | 请求体解析失败 | 400 | JSON 语法错误或非 `application/json` 体 |
+| `10053` | 网关聚合部分失败（已降级） | 200 | 页面聚合中可降级依赖失败，返回部分数据 + `warnings`（仅 `success===true` 时） |
+| `10054` | 网关聚合关键依赖失败 | 502/504 | 页面聚合中**不可降级**的关键下游失败，整页失败（HTTP 依失败类型取 502/504） |
+
+### 8.2 通用 / 鉴权 / 资源类（入口校验或透传细分）
 
 | `code` | 语义 | 典型 HTTP |
 |--------|------|-----------|
 | `0` | 成功 | 200 |
 | `10001` | 缺少必填参数 | 400 |
 | `10002` | 参数校验失败 | 400 |
+| `10003` | 不支持的内容类型 | 415/400 |
+| `10004` | 接口版本不支持 | 400/426 |
 | `10005` | 请求频率超限 | 429 |
+| `10006` | 请求体过大 | 413 |
+| `10007` | 版本冲突（乐观锁） | 409 |
 | `20001` | 未登录或会话缺失 | 401 |
 | `20002` | 访问令牌无效或过期 | 401 |
 | `20003` | 刷新令牌无效或过期 | 401 |
@@ -225,7 +243,22 @@
 | `90002` | 依赖超时 | 504 |
 | `90003` | 依赖错误 | 502 |
 
-**gRPC → JSON**：默认映射如下，业务码始终放入信封 `code`（非仅 `message`）：
+### 8.3 业务域错误码透传
+
+gateway 对客户端**透传**各业务域返回的领域码，不重映射其语义（仅在缺乏明确业务码时按 §8.4 的 gRPC 兜底映射）：
+
+| 区间 | 来源域 | 典型码（语义见各域 `api.md` + 共享契约） |
+|------|--------|------------------------------------------|
+| `30000`–`30999` | platform/backoffice-backend（见 `../../platform/backoffice-backend/docs/api.md`） | `30001` 不存在、`30002` 已下架/不可见、`30003` 未发布 |
+| `40000`–`40999` | recommendation-server（见 `../../recommendation-server/docs/api.md`） | `40001` 场景不支持、`40002` 推荐不可用、`40003` 已降级 |
+| `50000`–`50999` | affiliate / tracking（见 `../../tracking-server/docs/api.md`、`../../platform/backoffice-backend/docs/api.md`） | `50001` 渠道不可用、`50002` 转链失败、`50003` 链接失效 |
+| `60000`–`60999` | platform/backoffice-backend（见 `../../platform/backoffice-backend/docs/api.md`） | `60001` 合规拦截、`60002` 地域/策略限制 |
+
+透传规则：顶层 `code` 用主因码；字段级细分放 `errors[].code`（仍在区间内）；gateway **不**泄露内部栈、内部服务名与 proto 字段名。
+
+### 8.4 gRPC → JSON 兜底映射
+
+当下游未返回明确业务码时，按下游 gRPC `Code` 兜底映射；业务码始终放入信封 `code`（非仅 `message`）：
 
 | gRPC `Code` | 默认 JSON `code` | 默认 HTTP | 说明 |
 |-------------|------------------|-----------|------|
@@ -286,7 +319,7 @@
 - `account_proof.oauth` → `IssueTokenPairRequest.oauth`
 - `device_fingerprint` → `IssueTokenPairRequest.device_fingerprint`
 - `client_platform` / `app_version` / `device_id` 由请求体字段写入对应内部上下文字段
-- OTP / OAuth 的外部校验在网关完成；`user-domain` 不重复承担第三方证明交换职责
+- OTP / OAuth 的外部校验在网关完成；`user-server` 不重复承担第三方证明交换职责
 
 ### 9.3 `POST /api/v2/auth/token/refresh`
 
@@ -425,9 +458,9 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 | JSON → RPC | Gateway | 校验类型与必填；枚举字符串 → proto enum；ISO 时间 → `google.protobuf.Timestamp` |
 | RPC → JSON | Gateway | 过滤敏感字段；`Timestamp` → ISO 字符串；不泄露内部分枚举名 |
 | 身份注入 | Gateway | 从 `IntrospectAccessToken` 结果注入 `user_id` / `session_id`，**禁止**信任客户端伪造的 `user_id` 请求字段（除显式公开路由） |
-| 业务真相 | user-domain | 网关不发明业务规则；冲突以域服务与契约为准 |
+| 业务真相 | user-server | 网关不发明业务规则；冲突以域服务与契约为准 |
 
-**禁止**：在网关引入与 `user_domain_models.proto` / 公共契约 **含义冲突** 的新字段语义。
+**禁止**：在网关引入与 `user_server_models.proto` / 公共契约 **含义冲突** 的新字段语义。
 
 ## 11. 幂等与去重
 
@@ -454,6 +487,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 | POST | `/api/v2/backoffice/affiliate/partners` | Bearer（运营角色） | 联盟伙伴列表 |
 | POST | `/api/v2/backoffice/affiliate/partners/add` | Bearer（运营角色） | 新增联盟伙伴（最小元信息） |
 | POST | `/api/v2/backoffice/content/items` | Bearer（运营角色） | 内容管理最小列表 |
+| POST | `/api/v2/backoffice/content/items/add` | Bearer（运营角色） | 新增导购内容并写入 platform/backoffice-backend CMS |
 | POST | `/api/v2/backoffice/content/items/status` | Bearer（运营角色） | 内容发布态切换 |
 | POST | `/api/v2/backoffice/governance/reviews` | Bearer（审核或运营） | 审核队列最小列表 |
 | POST | `/api/v2/backoffice/governance/reviews/status` | Bearer（审核或运营） | 审核状态更新（通过/拒绝） |
@@ -468,7 +502,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 | `scene` | string | 是 | 推荐场景，通常为 `home_feed` |
 | `rank` | integer | 是 | 1-based |
 | `guide_card_id` | string | 是 | 导购卡片 ID |
-| `guide_card` | object | 否 | 内联卡片，结构遵循 [guide-card.md](../../../docs/contracts/guide-card.md) |
+| `guide_card` | object | 否 | 内联卡片，结构遵循 [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) |
 | `reason_tags` | array | 否 | 推荐解释短标签 |
 
 #### `guide_detail_payload`
@@ -486,7 +520,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 | `landing_url` | string | 是 | 最终受控跳转入口 |
 | `click_id` | string | 否 | 若本次链路已分配点击 ID 则返回 |
 | `expires_at` | string | 否 | ISO 8601 UTC |
-| `attribution` | object | 否 | 回显的归因字段子集，遵循 [redirect-attribution.md](../../../docs/contracts/redirect-attribution.md) |
+| `attribution` | object | 否 | 回显的归因字段子集，遵循 [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) |
 
 ### 13.2 `GET /api/v2/pages/home_feed`
 
@@ -498,7 +532,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 |------------|------|------|------|
 | `cursor` | string | 否 | 分页游标 |
 | `limit` | integer | 否 | 默认 20，最大 100 |
-| `theme` | string | 否 | 可选主题过滤；值域见 `docs/contracts/theme-taxonomy.md` |
+| `theme` | string | 否 | 可选主题过滤；值域见 `.cursor/rules/shared-contracts.mdc` |
 
 | `data` | 类型 | 说明 |
 |------|------|------|
@@ -567,7 +601,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 
 - `include_related=false` 时不得调用推荐 RPC
 - `guide_card_id` 不存在时返回 `30001`
-- `data.guide` 的字段语义以 `docs/contracts/guide-card.md` 为准，网关负责从内部 `GuideCard` 裁剪
+- `data.guide` 的字段语义以 `.cursor/rules/shared-contracts.mdc` 为准，网关负责从内部 `GuideCard` 裁剪
 - `data.related` 仅返回 `recommendation_id`、`scene`、`rank`、`guide_card_id`、`reason_tags`；不内联 `guide_card`
 
 ### 13.4 `POST /api/v2/pages/redirect_prepare`
@@ -623,25 +657,26 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 
 **下游 RPC**
 
-- `UserDomainService/GetMeSummary`
+- `UserServerService/GetMeSummary`
 
-### 13.6 `POST /api/v2/backoffice/*`（运营平台最小路由）
+### 13.6 `POST /api/v2/backoffice/*`（运营平台路由）
 
-该组路由用于 `affiliate-domain`、`content-domain`、`governance-domain` 的运营后台最小闭环，仍遵循标准信封与 `snake_case`。
+该组路由用于 `platform/backoffice-backend`（content / governance / affiliate 三模块）的运营后台能力，仍遵循标准信封与 `snake_case`。
 
 | 路由 | `data` 结构 | 下游 |
 |------|-------------|------|
-| `POST /api/v2/backoffice/affiliate/partners` | `{ "items": [{ "partner_id", "display_name", "status", "primary_channel_code" }] }` | affiliate-domain |
-| `POST /api/v2/backoffice/affiliate/partners/add` | 同上（返回创建后列表） | affiliate-domain |
-| `POST /api/v2/backoffice/content/items` | `{ "items": [{ "content_id", "title", "theme", "status" }] }` | content-domain |
-| `POST /api/v2/backoffice/content/items/status` | 同上（返回更新后列表） | content-domain |
-| `POST /api/v2/backoffice/governance/reviews` | `{ "items": [{ "review_id", "subject_id", "status" }] }` | governance-domain |
-| `POST /api/v2/backoffice/governance/reviews/status` | 同上（返回更新后列表） | governance-domain |
+| `POST /api/v2/backoffice/affiliate/partners` | `{ "items": [{ "partner_id", "display_name", "status", "primary_channel_code" }] }` | platform/backoffice-backend |
+| `POST /api/v2/backoffice/affiliate/partners/add` | 同上（返回创建后列表） | platform/backoffice-backend |
+| `POST /api/v2/backoffice/content/items` | `{ "items": [{ "content_id", "title", "theme", "status", "summary", "landing_url", "external_item_id" }] }` | platform/backoffice-backend |
+| `POST /api/v2/backoffice/content/items/add` | 同上（返回创建后列表） | platform/backoffice-backend |
+| `POST /api/v2/backoffice/content/items/status` | 同上（返回更新后列表） | platform/backoffice-backend |
+| `POST /api/v2/backoffice/governance/reviews` | `{ "items": [{ "review_id", "subject_id", "status" }] }` | platform/backoffice-backend |
+| `POST /api/v2/backoffice/governance/reviews/status` | 同上（返回更新后列表） | platform/backoffice-backend |
 
 边界说明：
 
 - 网关负责鉴权、字段校验与 JSON ↔ proto 映射。
-- 审核与治理规则仍归 `governance-domain`；内容主数据归 `content-domain`；伙伴配置归 `affiliate-domain`。
+- 审核与治理规则归 **governance** 模块；内容主数据归 **content** 模块；伙伴配置归 **affiliate** 模块（均在 `platform/backoffice-backend` 单进程）。
 - v1 不提供跨域事务型写接口。
 
 ## 14. Gateway Pages Edge Proto
@@ -654,7 +689,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 
 ## 附录 A. 典型 HTTP 请求 / 响应示例
 
-以下示例使用真实对外 JSON 形状，便于前端、测试与其他 Agent 直接联调。响应信封遵循 `docs/contracts/common-response.md`；时间字段使用 ISO 8601 UTC 字符串。
+以下示例使用真实对外 JSON 形状，便于前端、测试与其他 Agent 直接联调。响应信封遵循 `.cursor/rules/shared-contracts.mdc`；时间字段使用 ISO 8601 UTC 字符串。
 
 ### A.1 `POST /api/v2/me/favorites`
 
@@ -1113,4 +1148,77 @@ Authorization: Bearer <access_token>
 
 ```json
 {"success":true,"code":0,"message":"ok","data":{"profile":{"user_id":"user_01HSYQK5PZ4K4J9R2M8D","is_guest":false},"counts":{"favorites_count":0,"history_count":0},"consent":{"personalization_allowed":true,"consent_version":"2026-03-v1","updated_at":"2026-03-28T12:00:00Z"}},"meta":{"request_id":"req_20","server_time_ms":1774699800000}}
+```
+
+## 附录 B. 典型错误响应示例
+
+错误响应同样遵循 `.cursor/rules/shared-contracts.mdc` 信封：`code !== 0` ⇔ `success === false`；`data` 多为 `null`；客户端以 `code` 分支。
+
+### B.1 访问令牌过期（`20002`，HTTP 401）
+
+```json
+{"success":false,"code":20002,"message":"access token expired","data":null,"meta":{"request_id":"req_e1","server_time_ms":1774699800000}}
+```
+
+### B.2 参数校验失败（`10002`，HTTP 400，含字段级 `errors`）
+
+```json
+{
+  "success": false,
+  "code": 10002,
+  "message": "validation failed",
+  "data": null,
+  "errors": [
+    { "field": "guide_card_id", "code": 10001, "message": "required" }
+  ],
+  "meta": { "request_id": "req_e2", "server_time_ms": 1774699800000 }
+}
+```
+
+### B.3 频率超限（`10005`，HTTP 429）
+
+```json
+{"success":false,"code":10005,"message":"rate limit exceeded","data":null,"meta":{"request_id":"req_e3","server_time_ms":1774699800000}}
+```
+
+### B.4 路由不存在（`10050`，HTTP 404，网关入口层）
+
+```json
+{"success":false,"code":10050,"message":"route not found","data":null,"meta":{"request_id":"req_e4","server_time_ms":1774699800000}}
+```
+
+### B.5 详情页内容已下架（透传 platform/backoffice-backend `30002`，HTTP 410/404）
+
+```json
+{"success":false,"code":30002,"message":"content unavailable","data":null,"meta":{"request_id":"req_e5","server_time_ms":1774699800000}}
+```
+
+### B.6 首页聚合部分降级（`success===true` + `warnings`）
+
+关键下游（推荐+内容）成功、可降级依赖（相关推荐/治理增强）失败时，返回主数据并附 `warnings`，顶层仍 `code: 0`：
+
+```json
+{
+  "success": true,
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "items": [
+      { "recommendation_id": "rec_01HSZ15H0N8HG9P5P2E0", "scene": "home_feed", "rank": 1, "guide_card_id": "guide_card_1001" }
+    ],
+    "pagination": { "next_cursor": null, "has_more": false, "limit": 20 }
+  },
+  "warnings": [
+    { "code": 10053, "message": "governance enrichment degraded" }
+  ],
+  "meta": { "request_id": "req_e6", "server_time_ms": 1774699920000 }
+}
+```
+
+### B.7 跳转准备关键依赖失败（`10054`，HTTP 502/504）
+
+跳转准备无可降级路径，关键下游（tracking 组链）失败时整请求失败：
+
+```json
+{"success":false,"code":10054,"message":"tracking link assembly unavailable","data":null,"meta":{"request_id":"req_e7","server_time_ms":1774699800000}}
 ```

@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "少糖",
+  "usingComponents": {
+    "state-placeholder": "/components/state-placeholder/state-placeholder"
+  }
+}

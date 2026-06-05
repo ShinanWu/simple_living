@@ -1,0 +1,4 @@
+<view class="placeholder">
+  <text class="placeholder__title">{{title}}</text>
+  <button wx:if="{{actionTitle}}" class="sl-btn-ghost placeholder__btn" bindtap="onAction">{{actionTitle}}</button>
+</view>

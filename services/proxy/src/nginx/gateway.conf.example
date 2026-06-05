@@ -1,41 +1,53 @@
-# Phase1 minimal public ingress:
-# - Remote public host: frps exposes 80/443
-# - Local private side: nginx terminates TLS and proxies to gateway service
-# - gateway remains the only business public entry
+# Access log format for observability (rt = total, urt = upstream time).
+log_format ingress '$remote_addr - $host [$time_local] "$request" '
+                   '$status $body_bytes_sent rt=$request_time urt=$upstream_response_time '
+                   'ua="$http_user_agent" xff="$http_x_forwarded_for"';
 
-upstream gateway_backend {
-    # QEMU lab formal path:
-    # frps(80) -> frpc(on nginx node) -> nginx(80) -> host-forwarded gateway(18080) -> gateway:8080
-    server 10.0.2.2:18080;
+# Coarse-grained ingress rate limiting (fine-grained business limits live in gateway).
+limit_req_zone $binary_remote_addr zone=ingress_req:10m rate=20r/s;
+
+upstream simple_living_gateway {
+    server 127.0.0.1:8080;
     keepalive 32;
 }
 
+upstream simple_living_backoffice {
+    server 127.0.0.1:8088;
+    keepalive 16;
+}
+
 server {
-    listen 80;
-    listen [::]:80;
+    listen 80 default_server;
     server_name _;
 
-    location = /healthz {
-        add_header Content-Type text/plain;
-        return 200 "ok\n";
-    }
+    access_log /var/log/nginx/access.log ingress;
+    error_log  /var/log/nginx/error.log warn;
 
-    location / {
-        proxy_pass http://gateway_backend;
+    location /api/ {
+        limit_req zone=ingress_req burst=40 nodelay;
+        proxy_pass http://simple_living_gateway;
         proxy_http_version 1.1;
-
-        # Preserve caller and ingress context for gateway.
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto http;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Port 80;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+    }
 
-        proxy_connect_timeout 5s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+    # Health check is never rate-limited so monitoring stays reliable.
+    location /healthz {
+        access_log off;
+        proxy_pass http://simple_living_gateway/api/v2/health/check;
+    }
+
+    location /backoffice {
+        limit_req zone=ingress_req burst=40 nodelay;
+        proxy_pass http://simple_living_backoffice;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
     }
 }
-
-# HTTPS block intentionally omitted in current phase.

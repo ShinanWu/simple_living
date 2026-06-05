@@ -1,30 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-ENV_FILE="${ENV_FILE:-${ROOT_DIR}/infra/lab/nodes.env}"
+ENV_FILE="${ENV_FILE:-${ROOT_DIR}/environments/local-qemu/nodes.env}"
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 
-SERVICE_NAME="gateway"
-IMAGE_REPO="gateway"
-IMAGE_TAG="${IMAGE_TAG:-latest}"
-BASE_IMAGE="${BASE_IMAGE:-debian:bookworm-slim}"
-TARGET_HOST="${NODE_IP_GATEWAY}"
-SSH_PORT="${SSH_PORT:-22}"
-TARGET_SSH_PORT="${NODE_SSH_PORT_GATEWAY:-${SSH_PORT}}"
-BUILD_SSH_PORT="${NODE_SSH_PORT_BUILD:-${SSH_PORT}}"
-QEMU_BUILD_WORKDIR="${QEMU_BUILD_WORKDIR:-/home/ubuntu/simple_living}"
-IMAGE_NAME="localhost/${IMAGE_REPO}:${IMAGE_TAG}"
+export DEPLOY_ROOT_DIR="${ROOT_DIR}"
+export DEPLOY_SERVICE_NAME="gateway"
+export DEPLOY_BAZEL_TARGET="//services/gateway:gateway_edge_server"
+export DEPLOY_BAZEL_BIN_REL="services/gateway/gateway_edge_server"
+export DEPLOY_DOCKERFILE_REL="services/gateway/deploy/Dockerfile.cpp-service"
+export DEPLOY_TARGET_HOST="${NODE_IP_GATEWAY}"
+export DEPLOY_TARGET_SSH_PORT="${NODE_SSH_PORT_GATEWAY:-${SSH_PORT:-22}}"
+export DEPLOY_BUILD_SSH_PORT="${NODE_SSH_PORT_BUILD:-${SSH_PORT:-22}}"
+export DEPLOY_CONTAINER_NAME="simple-living-gateway"
+export DEPLOY_DOCKER_NETWORK="bridge"
+export DEPLOY_PORT_MAP="-p 8080:8080"
+export DEPLOY_EXTRA_RUN_ARGS="-e GATEWAY_USER_SERVER_ADDR=10.0.2.2:19101 -e GATEWAY_RECOMMENDATION_SERVER_ADDR=10.0.2.2:19103 -e GATEWAY_TRACKING_SERVER_ADDR=10.0.2.2:19105 -e GATEWAY_BACKOFFICE_BACKEND_ADDR=10.0.2.2:19110 -e EXPORT_DIR=/var/lib/simple-living/exports"
+export DEPLOY_SERVER_FLAGS=""
 
-REMOTE_BUILD_CMD="cd '${QEMU_BUILD_WORKDIR}' && if command -v bazelisk >/dev/null 2>&1; then bazelisk build ${BAZEL_BUILD_ARGS:-} //services/gateway:gateway_edge_server; elif command -v bazel >/dev/null 2>&1; then bazel build ${BAZEL_BUILD_ARGS:-} //services/gateway:gateway_edge_server; else echo 'missing bazel/bazelisk'; exit 2; fi && build_ctx=\$(mktemp -d) && cp bazel-bin/services/gateway/gateway_edge_server \${build_ctx}/server && cp services/gateway/deploy/Dockerfile.cpp-service \${build_ctx}/Dockerfile.cpp-service && if command -v docker >/dev/null 2>&1; then ctr=docker; else ctr=podman; fi && \$ctr build --build-arg BASE_IMAGE='${BASE_IMAGE}' -f \${build_ctx}/Dockerfile.cpp-service -t '${IMAGE_NAME}' \${build_ctx} && rm -rf \${build_ctx}"
-ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${BUILD_SSH_PORT}" -i "${SSH_KEY_PATH}" "${SSH_USER}@${NODE_IP_BUILD}" "${REMOTE_BUILD_CMD}"
-
-if [[ "${TARGET_HOST}" != "${NODE_IP_BUILD}" || "${TARGET_SSH_PORT}" != "${BUILD_SSH_PORT}" ]]; then
-  ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${BUILD_SSH_PORT}" -i "${SSH_KEY_PATH}" "${SSH_USER}@${NODE_IP_BUILD}" "if command -v docker >/dev/null 2>&1; then c=docker; else c=podman; fi; \$c save '${IMAGE_NAME}'" | ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${TARGET_SSH_PORT}" -i "${SSH_KEY_PATH}" "${SSH_USER}@${TARGET_HOST}" "if sudo -n docker version >/dev/null 2>&1; then c='sudo -n docker'; elif sudo -n podman version >/dev/null 2>&1; then c='sudo -n podman'; elif sudo -n docker version >/dev/null 2>&1; then c='sudo -n docker'; elif sudo -n podman version >/dev/null 2>&1; then c='sudo -n podman'; elif command -v docker >/dev/null 2>&1; then c=docker; else c=podman; fi; \$c load"
-fi
-
-EXTRA_RUN_ARGS="-e GATEWAY_USER_DOMAIN_ADDR=10.0.2.2:19101 -e GATEWAY_CONTENT_DOMAIN_ADDR=10.0.2.2:19102 -e GATEWAY_RECOMMENDATION_DOMAIN_ADDR=10.0.2.2:19103 -e GATEWAY_TRACKING_DOMAIN_ADDR=10.0.2.2:19105"
-REMOTE_DEPLOY_CMD="if sudo -n docker version >/dev/null 2>&1; then ctr='sudo -n docker'; elif sudo -n podman version >/dev/null 2>&1; then ctr='sudo -n podman'; elif command -v docker >/dev/null 2>&1; then ctr=docker; elif command -v podman >/dev/null 2>&1; then ctr=podman; else echo 'missing docker/podman'; exit 2; fi; (\$ctr rm -f 'simple-living-gateway' >/dev/null 2>&1 || true) && \$ctr run --pull=never -d --name 'simple-living-gateway' --restart unless-stopped -p '8080:8080' ${EXTRA_RUN_ARGS} '${IMAGE_NAME}' >/dev/null && [ \$(\$ctr inspect -f '{{.State.Status}}' 'simple-living-gateway' 2>/dev/null || echo unknown) = running ]"
-ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${TARGET_SSH_PORT}" -i "${SSH_KEY_PATH}" "${SSH_USER}@${TARGET_HOST}" "${REMOTE_DEPLOY_CMD}"
-
-echo "Deployed ${SERVICE_NAME} on ${TARGET_HOST}"
+exec bash "${ROOT_DIR}/tools/deploy_cpp_service.sh"

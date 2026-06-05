@@ -1,0 +1,29 @@
+.list-page {
+  padding: 24rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.list-page__center {
+  min-height: 40vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.list-page__item {
+  padding: 28rpx;
+  margin-bottom: 16rpx;
+}
+
+.list-page__title {
+  font-size: 30rpx;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.list-page__meta {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+}

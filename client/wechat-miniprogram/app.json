@@ -1,0 +1,22 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/guide-detail/guide-detail",
+    "pages/redirect-prepare/redirect-prepare",
+    "pages/me/me",
+    "pages/login/login",
+    "pages/favorites/favorites",
+    "pages/history/history",
+    "pages/web-outbound/web-outbound"
+  ],
+  "window": {
+    "navigationBarTitleText": "少糖",
+    "navigationBarBackgroundColor": "#f7f7f8",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f4f4f5",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

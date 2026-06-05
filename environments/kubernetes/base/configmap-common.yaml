@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: common-env
+  namespace: simple-living
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "INFO"
+  TZ: "Asia/Shanghai"
+  USER_SERVER_GRPC_ENDPOINT: "brpc://user-server.simple-living.svc.cluster.local:9101"
+  RECOMMENDATION_SERVER_GRPC_ENDPOINT: "brpc://recommendation-server.simple-living.svc.cluster.local:9103"
+  TRACKING_SERVER_GRPC_ENDPOINT: "brpc://tracking-server.simple-living.svc.cluster.local:9105"
+  BACKOFFICE_BACKEND_GRPC_ENDPOINT: "brpc://backoffice-backend.simple-living.svc.cluster.local:9110"
+  EXPORT_DIR: "/var/lib/simple-living/exports"

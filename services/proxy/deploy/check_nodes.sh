@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-ENV_FILE="${ENV_FILE:-${ROOT_DIR}/infra/lab/nodes.env}"
+ENV_FILE="${ENV_FILE:-${ROOT_DIR}/environments/local-qemu/nodes.env}"
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "ERROR: env file not found: ${ENV_FILE}" >&2
   exit 1

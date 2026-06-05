@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "导购详情",
+  "usingComponents": {
+    "state-placeholder": "/components/state-placeholder/state-placeholder"
+  }
+}

@@ -3,7 +3,7 @@
 ## 1. 目标与范围
 
 - 本文定义前端登录相关交互流程、状态和异常处理，供 Web/iOS/Android 统一实现。
-- 前端仅调用 `gateway` 对外 JSON 接口；登录业务真相由 `user-domain` 持有。
+- 前端仅调用 `gateway` 对外 JSON 接口；登录业务真相由 `user-server` 持有。
 - v1 支持两类登录：手机号注册/登录（自有方式）与微信登录。
 - 登录面板默认突出微信主 CTA，同时保留手机号注册/登录入口并可用。
 
@@ -129,5 +129,5 @@ App 启动
 
 ## 12. 相关文档
 
-- 登录场景 Mock 与验收扩展：[frontend-mock-and-acceptance.md](./frontend-mock-and-acceptance.md) §4
+- 登录场景测试夹具与验收扩展：[frontend-mock-and-acceptance.md](./frontend-mock-and-acceptance.md) §4
 - 三端统一错误文案与 CTA：[frontend-login-error-copy.md](./frontend-login-error-copy.md)

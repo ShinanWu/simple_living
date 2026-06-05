@@ -5,10 +5,9 @@
 .vscode/
 .idea/
 
-# Node / frontend
+# Node / frontend (do not ignore Bazel package build_defs/)
 node_modules/
 dist/
-build/
 .next/
 .nuxt/
 coverage/

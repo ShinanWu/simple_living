@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracking-server
+  namespace: simple-living
+  annotations:
+    simple-living.io/internal-dns: "tracking-server.simple-living.svc.cluster.local"
+spec:
+  type: ClusterIP
+  selector:
+    app: tracking-server
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 9105
+      targetPort: 9105

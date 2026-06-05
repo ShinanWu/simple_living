@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommendation-server
+  namespace: simple-living
+  annotations:
+    simple-living.io/internal-dns: "recommendation-server.simple-living.svc.cluster.local"
+spec:
+  type: ClusterIP
+  selector:
+    app: recommendation-server
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 9103
+      targetPort: 9103

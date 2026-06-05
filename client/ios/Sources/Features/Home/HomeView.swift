@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var cardDragOffset: CGFloat = 0
     @State private var themePulseTask: Task<Void, Never>?
     @State private var dragResetTask: Task<Void, Never>?
+    @State private var showSearchPlaceholder = false
 
     private let nextCardThreshold: CGFloat = 90
     private let refreshHintThreshold: CGFloat = 28
@@ -89,42 +90,90 @@ struct HomeView: View {
 
     private var headerView: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("简单生活")
-                    .font(.title2.weight(.bold))
-                Text(themeSlogan(viewModel.selectedTheme))
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                    .id(viewModel.selectedTheme)
+            Button {
+                showSearchPlaceholder = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Text("搜索少糖推荐")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    ZStack {
+                        Capsule(style: .continuous)
+                            .fill(.ultraThinMaterial)
+                        Capsule(style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.15), .white.opacity(0.03)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.white.opacity(0.45), .white.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
+                )
+                .shadow(color: .black.opacity(0.03), radius: 6, y: 2)
             }
-            Spacer()
+            .buttonStyle(.plain)
 
             NavigationLink {
                 MeSummaryView(api: api)
             } label: {
                 Image(systemName: "person.crop.circle.fill")
-                    .font(.title2)
+                    .font(.title3)
                     .foregroundStyle(Color.primary.opacity(0.82))
-                    .frame(width: 44, height: 44)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .overlay(
-                        Circle().stroke(.white.opacity(0.4), lineWidth: 1)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        ZStack {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.white.opacity(0.15), .white.opacity(0.03)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
                     )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.45), .white.opacity(0.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.03), radius: 6, y: 2)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(.white.opacity(0.28), lineWidth: 1)
-        )
-        .animation(.easeInOut(duration: 0.2), value: viewModel.selectedTheme)
+        .padding(.vertical, 8)
+        .alert("搜索功能即将上线", isPresented: $showSearchPlaceholder) {
+            Button("知道了", role: .cancel) {}
+        }
     }
 
     private var bottomThemeTabs: some View {
@@ -164,12 +213,28 @@ struct HomeView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.ultraThinMaterial)
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(.white.opacity(0.2), lineWidth: 0.9)
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.12), .white.opacity(0.03)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.45), .white.opacity(0.12)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.9
+                    )
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.white.opacity(0.22))
                     .opacity(themeFocusPulse ? 1 : 0)
                     .blur(radius: themeFocusPulse ? 0 : 7)
             }
+            .shadow(color: .black.opacity(0.04), radius: 10, y: 4)
             .animation(.easeOut(duration: 0.28), value: themeFocusPulse)
         )
         .gesture(
@@ -216,7 +281,7 @@ struct HomeView: View {
             }
 
             if shouldShowEndHint {
-                Text("简单生活就先到这里吧")
+                Text("少糖就先到这里吧")
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.secondary)
                     .opacity(endHintOpacity)
@@ -305,11 +370,36 @@ struct HomeView: View {
             }
             .padding(22)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    .white.opacity(0.18),
+                                    .white.opacity(0.04)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .strokeBorder(.white.opacity(0.22), lineWidth: 1)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.5), .white.opacity(0.15)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
             )
+            .shadow(color: .black.opacity(0.05), radius: 16, y: 8)
+            .shadow(color: themeAccent(viewModel.selectedTheme).opacity(0.06), radius: 24, y: 12)
         }
         .buttonStyle(.plain)
         .id(card.id)

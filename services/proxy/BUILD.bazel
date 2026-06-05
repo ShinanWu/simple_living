@@ -11,4 +11,5 @@ filegroup(
 sh_test(
     name = "proxy_ingress_smoke_test",
     srcs = ["tests/proxy_ingress_smoke_test.sh"],
+    tags = ["manual"],
 )

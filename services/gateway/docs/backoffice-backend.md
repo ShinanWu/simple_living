@@ -2,81 +2,362 @@
 
 ## 1. 目标
 
-本文定义 **运营管理后台的后端能力**（管理、审核、可见性、发布协同），并作为前端页面实现与联调验收的后端基础。  
+本文定义 **运营管理后台的后端能力**（管理、审核、可见性、发布协同），并作为前端页面实现与联调验收的后端基础。
 入口统一为 `gateway`，业务真相分别归属：
 
-- `affiliate-domain`：伙伴与联盟规则
-- `content-domain`：内容主数据与发布版本
-- `governance-domain`：审核、可见性、策略与风险
+- **affiliate 模块**：伙伴与联盟规则
+- **content 模块**：内容主数据与发布版本
+- **governance 模块**：审核、可见性、策略与风险
 
-## 2. v1 最小闭环
+（均运行于 `platform/backoffice-backend` 单进程。）
 
-v1 以“可用后端 API + 可审计操作”为目标，覆盖三条主线：
+## 2. 商业化闭环
+
+后端能力以"真实领域写入 + 可审计操作 + 可扩展权限"为目标，覆盖三条主线：
 
 1. **联盟管理**：查询伙伴、新增伙伴
-2. **内容运营**：查询内容项、变更发布态
-3. **治理审核**：查询审核队列、提交审核结论（通过/拒绝）
+2. **内容运营**：内容 CRUD、提交审核、版本发布、上下架、回滚
+3. **治理审核**：查询审核队列、提交审核结论（通过/拒绝）、可见性裁决
 
 所有接口走标准信封（`success/code/message/data/meta`），字段 `snake_case`。
 
-## 3. 路由（v2）
+## 3. 路由（v3）
+
+### 3.1 联盟管理
 
 | 模块 | 方法 + 路径 | 说明 |
 |------|------|------|
-| affiliate | `GET /api/v2/backoffice/affiliate/partners` | 伙伴列表 |
+| affiliate | `POST /api/v2/backoffice/affiliate/partners` | 伙伴列表 |
 | affiliate | `POST /api/v2/backoffice/affiliate/partners/add` | 新增伙伴 |
-| content | `GET /api/v2/backoffice/content/items` | 内容列表 |
-| content | `PATCH /api/v2/backoffice/content/items/status` | 内容状态更新 |
-| governance | `GET /api/v2/backoffice/governance/reviews` | 审核队列列表 |
-| governance | `PATCH /api/v2/backoffice/governance/reviews/status` | 审核状态更新 |
+
+### 3.2 内容管理
+
+| 模块 | 方法 + 路径 | 说明 |
+|------|------|------|
+| content | `POST /api/v2/backoffice/content/items` | 内容列表，支持资源类型、主题、状态过滤 |
+| content | `POST /api/v2/backoffice/content/items/add` | 新增内容，写入 platform/backoffice-backend |
+| content | `POST /api/v2/backoffice/content/items/update` | 更新内容（编辑或修订） |
+| content | `POST /api/v2/backoffice/content/items/detail` | 获取内容详情（含版本历史） |
+| content | `POST /api/v2/backoffice/content/items/submit-review` | 提交审核 |
+| content | `POST /api/v2/backoffice/content/items/publish` | 发布指定版本 |
+| content | `POST /api/v2/backoffice/content/items/status` | 内容状态变更 |
+| content | `POST /api/v2/backoffice/content/items/rollback` | 版本回滚 |
+
+### 3.3 治理审核
+
+| 模块 | 方法 + 路径 | 说明 |
+|------|------|------|
+| governance | `POST /api/v2/backoffice/governance/reviews` | 审核队列列表 |
+| governance | `POST /api/v2/backoffice/governance/reviews/status` | 审核状态更新 |
+| governance | `POST /api/v2/backoffice/governance/visibility` | 可见性裁决 |
 
 ## 4. 数据对象（对外 JSON）
 
 ### 4.1 `backoffice_partner`
 
-- `partner_id`
-- `display_name`
-- `status` (`draft|active|disabled|sunset`)
-- `primary_channel_code`
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `partner_id` | string | 伙伴唯一标识 |
+| `display_name` | string | 展示名称 |
+| `status` | enum | `draft` / `active` / `disabled` / `sunset` |
+| `primary_channel_code` | string | 主渠道编码 |
 
 ### 4.2 `backoffice_content_item`
 
-- `content_id`
-- `title`
-- `theme`
-- `status`（v2 最小实现：`draft|published`）
+内容管理核心数据对象，支持四种资源类型。
 
-### 4.3 `backoffice_review_item`
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `content_id` | string | 是 | 内容唯一标识 |
+| `resource_kind` | enum | 是 | `guide_card` / `editorial_content` / `topic` / `ranking_list` |
+| `title` | string | 是 | 标题 |
+| `subtitle` | string | 否 | 副标题 |
+| `theme_ids` | string[] | 否 | 关联主题 ID 列表 |
+| `tag_ids` | string[] | 否 | 标签 ID 列表 |
+| `content_status` | enum | 是 | `draft` / `in_review` / `published` / `scheduled` / `offline` / `archived` |
+| `revision` | int64 | 是 | 当前版本号 |
+| `published_revision` | int64 | 是 | 当前发布版本号 |
+| `summary` | string | 否 | 推荐摘要 |
+| `cover_media` | `MediaRef` | 否 | 封面媒体 |
+| `landing_url` | string | 否 | 落地页链接 |
+| `external_item_id` | string | 否 | 外部商品/服务 ID |
+| `affiliate_refs` | `AffiliateRef[]` | 否 | 联盟渠道引用 |
+| `commercial_disclosure_required` | bool | 否 | 是否需要商业披露 |
+| `effective_from` | string | 否 | 生效时间 (ISO 8601) |
+| `effective_to` | string | 否 | 失效时间 (ISO 8601) |
+| `created_at` | string | 是 | 创建时间 (ISO 8601) |
+| `updated_at` | string | 是 | 更新时间 (ISO 8601) |
+| `created_by` | string | 否 | 创建者 |
+| `updated_by` | string | 否 | 更新者 |
 
-- `review_id`
-- `subject_id`
-- `status`（v2 最小实现：`pending|approved|rejected`）
+**`MediaRef`**
 
-## 5. 领域协作规则
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `media_id` | string | 素材库 ID |
+| `url` | string | CDN 地址 |
+| `type` | string | `image` / `video` / `icon` |
+| `width` | int | 可选 |
+| `height` | int | 可选 |
+
+**`AffiliateRef`**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `channel` | string | 渠道标识（如 `PDD` / `DOUYIN`） |
+| `external_item_id` | string | 渠道侧商品 ID |
+| `external_shop_id` | string | 可选，店铺 ID |
+| `payload` | map | 扩展字段 |
+
+### 4.3 `backoffice_content_detail`
+
+内容详情对象，含版本历史。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `content` | `backoffice_content_item` | 当前版本 |
+| `revision_history` | `ContentRevision[]` | 版本历史 |
+| `review_state` | `ReviewState` | 审核状态 |
+| `visibility_verdict` | `VisibilityVerdict` | 可见性裁决 |
+
+**`ContentRevision`**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `revision` | int64 | 版本号 |
+| `created_at` | string | 创建时间 (ISO 8601) |
+| `created_by` | string | 创建者 |
+| `change_summary` | string | 变更说明 |
+
+**`ReviewState`**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `review_id` | string | 审核单 ID |
+| `status` | string | `pending` / `in_review` / `approved` / `rejected` / `needs_info` |
+| `submitted_at` | string | 提交时间 (ISO 8601) |
+| `reviewer_id` | string | 审核员 |
+| `comment` | string | 审核意见 |
+
+**`VisibilityVerdict`**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `state` | string | `published` / `unpublished` / `restricted` |
+| `reason_code` | string | 裁决原因码 |
+| `source` | string | `review` / `manual_ops` / `policy` / `system` |
+| `effective_from` | string | 生效时间 (ISO 8601) |
+| `version` | int64 | 裁决版本号 |
+
+### 4.4 `backoffice_review_item`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `review_id` | string | 审核单 ID |
+| `subject_id` | string | 审核对象 ID |
+| `resource_kind` | string | 资源类型 |
+| `status` | enum | `pending` / `in_review` / `approved` / `rejected` / `needs_info` / `completed` |
+| `priority` | int | 优先级 |
+| `enqueue_reason` | string | 入审原因 |
+| `enqueued_at` | string | 入审时间 (ISO 8601) |
+| `reviewer_id` | string | 审核员 |
+| `comment` | string | 审核意见 |
+| `decided_at` | string | 裁决时间 (ISO 8601) |
+
+### 4.5 请求/响应体定义
+
+#### 4.5.1 `POST /api/v2/backoffice/content/items/update` — 更新内容
+
+**请求体** `BackofficeUpdateContentItemRequest`：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `content_id` | string | 是 | 内容 ID |
+| `revision` | int64 | 是 | 当前版本号（乐观锁） |
+| `title` | string | 否 | 标题 |
+| `subtitle` | string | 否 | 副标题 |
+| `summary` | string | 否 | 推荐摘要 |
+| `landing_url` | string | 否 | 落地页链接 |
+| `external_item_id` | string | 否 | 外部商品 ID |
+| `cover_url` | string | 否 | 封面图 URL |
+| `theme` | string | 否 | 主题 |
+| `change_summary` | string | 否 | 变更说明 |
+
+**响应体** `BackofficeContentItemsResponse`：
+
+同列表接口。
+
+---
+
+#### 4.5.2 `POST /api/v2/backoffice/content/items/detail` — 内容详情
+
+**请求体** `BackofficeContentDetailRequest`：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `content_id` | string | 是 | 内容 ID |
+
+**响应体** `BackofficeContentDetailResponse`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `content` | `BackofficeContentItem` | 当前版本内容 |
+| `revision_history` | `ContentRevision[]` | 版本历史 |
+| `review_state` | `ReviewState` | 当前审核状态 |
+| `visibility_verdict` | `VisibilityVerdict` | 可见性裁决 |
+
+---
+
+#### 4.5.3 `POST /api/v2/backoffice/content/items/submit-review` — 提交审核
+
+**请求体** `BackofficeSubmitReviewRequest`：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `content_id` | string | 是 | 内容 ID |
+| `revision` | int64 | 是 | 要提交审核的版本号 |
+| `change_summary` | string | 否 | 变更说明 |
+
+**响应体** `BackofficeSubmitReviewResponse`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `success` | bool | 是否成功 |
+| `review_id` | string | 审核单 ID |
+| `content_status` | string | 更新后的内容状态 |
+
+---
+
+#### 4.5.4 `POST /api/v2/backoffice/content/items/publish` — 发布版本
+
+**请求体** `BackofficePublishRequest`：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `content_id` | string | 是 | 内容 ID |
+| `revision` | int64 | 是 | 要发布的版本号 |
+
+**响应体** `BackofficePublishResponse`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `success` | bool | 是否成功 |
+| `content_id` | string | 内容 ID |
+| `published_revision` | int64 | 已发布版本号 |
+| `visibility_state` | string | 可见性状态 |
+
+---
+
+#### 4.5.5 `POST /api/v2/backoffice/content/items/rollback` — 版本回滚
+
+**请求体** `BackofficeRollbackRequest`：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `content_id` | string | 是 | 内容 ID |
+| `target_revision` | int64 | 是 | 回滚目标版本号 |
+| `change_summary` | string | 否 | 回滚说明 |
+
+**响应体** `BackofficeRollbackResponse`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `success` | bool | 是否成功 |
+| `new_revision` | int64 | 新版本号（回滚后生成） |
+| `content_id` | string | 内容 ID |
+
+---
+
+#### 4.5.6 `POST /api/v2/backoffice/governance/visibility` — 可见性裁决
+
+**请求体** `BackofficeSetVisibilityRequest`：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `content_id` | string | 是 | 内容 ID |
+| `state` | string | 是 | `published` / `unpublished` / `restricted` |
+| `reason_code` | string | 否 | 裁决原因码 |
+| `effective_from` | string | 否 | 生效时间 (ISO 8601) |
+
+**响应体** `BackofficeSetVisibilityResponse`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `success` | bool | 是否成功 |
+| `content_id` | string | 内容 ID |
+| `visibility_state` | string | 更新后的可见性状态 |
+
+---
+
+## 5. 状态机
+
+### 5.1 内容生命周期状态机
+
+```
+draft ──submit──> in_review ──approve──> published
+  │                    │                     │
+  │<──reject───────────┘                     ├──offline──> archived
+  │                                          │
+  └──────────────────edit────────────────────┘
+```
+
+| 状态 | 说明 | 可执行操作 |
+|------|------|------------|
+| `draft` | 草稿，不可见 | 编辑、提交审核、删除 |
+| `in_review` | 审核中 | 查看审核状态 |
+| `published` | 已发布，可见 | 下架、提交修订、回滚版本 |
+| `scheduled` | 定时发布 | 取消发布、编辑生效时间 |
+| `offline` | 已下架 | 重新发布、归档 |
+| `archived` | 已归档 | 仅查看 |
+
+### 5.2 审核状态机
+
+```
+pending ──assign──> in_review ──decision──> approved ──publish──> completed
+                                              │
+                                              ├──rejected────────> completed
+                                              │
+                                              └──needs_info──────> completed
+```
+
+### 5.3 可见性裁决规则
 
 - 审核通过 **不自动发布**
-- 发布可见性最终以 `governance-domain` 裁决为准
+- 发布可见性最终以 `platform/backoffice-backend` 裁决为准
+- 即使 `content_status = published`，若治理裁决非 `published`，用户侧不可见
+- `SetVisibilityVerdict` 为显式操作，需运营角色
+
+## 6. 领域协作规则
+
+- 审核通过 **不自动发布**
+- 发布可见性最终以 `platform/backoffice-backend` 裁决为准
 - gateway 不承载跨域事务；跨域一致性通过流程与补偿保证
-
-## 6. 状态机（v1）
-
-- 审核：`pending -> in_review -> (approved | rejected | needs_info) -> completed`
-- 内容：`draft -> in_review -> published -> offline -> archived`
+- 内容主数据与发布态不保存在 gateway 内存中，必须以 `platform/backoffice-backend` PostgreSQL 为准
 
 ## 7. 权限模型（业务级）
 
-- `backoffice_admin`
-- `reviewer`
-- `content_operator`
-- `partner_operator`
+| 角色 | 权限 |
+|------|------|
+| `backoffice_admin` | 全部运营操作 |
+| `content_operator` | 内容创建、编辑、提交审核、发布/下架 |
+| `reviewer` | 审核裁决、可见性裁决 |
+| `partner_operator` | 伙伴管理 |
 
 ## 8. 审计与可观测性
 
 建议事件名：
 
 - `backoffice.partner.created`
+- `backoffice.content.created`
+- `backoffice.content.updated`
 - `backoffice.content.status_changed`
+- `backoffice.content.submitted_for_review`
+- `backoffice.content.published`
+- `backoffice.content.rolled_back`
 - `backoffice.review.status_changed`
+- `backoffice.visibility.changed`
+
+所有写操作必须在响应中回传 `meta.request_id` 与 `meta.trace_id`，用于审计追踪。
 
 ## 9. 开发顺序（严格文档先行）
 

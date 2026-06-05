@@ -1,0 +1,196 @@
+syntax = "proto2";
+
+package simple_living.content_server;
+
+import "catalog.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+option cc_generic_services = true;
+option go_package = "github.com/simple_living/common/proto/content_service;contentservicepb";
+
+// ContentService RPC contract. Data messages live in catalog.proto (common/).
+
+message ListThemesRequest {
+  optional string locale = 1;
+  optional bool include_inactive = 2;
+}
+
+message ListThemesResponse {
+  repeated catalog.ThemeSummary themes = 1;
+  optional string etag = 2;
+  optional int64 version = 3;
+}
+
+message GetThemeDetailRequest {
+  optional string theme_id = 1;
+}
+
+message GetThemeDetailResponse {
+  optional catalog.ThemeSummary theme = 1;
+  repeated catalog.BannerRef banner_refs = 2;
+}
+
+message BatchGetGuideCardsRequest {
+  repeated string card_ids = 1;
+  optional google.protobuf.FieldMask field_mask = 2;
+}
+
+message BatchGetGuideCardsResponse {
+  repeated catalog.GuideCard cards = 1;
+  repeated string missing_ids = 2;
+}
+
+message ListGuideCardsRequest {
+  optional string theme_id = 1;
+  repeated string tag_ids = 2;
+  optional catalog.GuideCardListSort sort = 3;
+  optional string cursor = 4;
+  optional int32 limit = 5;
+}
+
+message ListGuideCardsResponse {
+  repeated catalog.GuideCardSummary cards = 1;
+  optional catalog.PaginationCursor pagination = 2;
+}
+
+message GetEditorialContentRequest {
+  optional string content_id = 1;
+}
+
+message GetEditorialContentResponse {
+  optional catalog.EditorialContent content = 1;
+  repeated string embedded_card_ids = 2;
+}
+
+message ListEditorialContentsRequest {
+  optional string theme_id = 1;
+  optional string collection_id = 2;
+  optional string cursor = 3;
+  optional int32 limit = 4;
+}
+
+message ListEditorialContentsResponse {
+  repeated catalog.EditorialContentListItem items = 1;
+  optional catalog.PaginationCursor pagination = 2;
+}
+
+message GetTopicRequest {
+  optional string topic_id = 1;
+}
+
+message GetTopicResponse {
+  optional catalog.Topic topic = 1;
+}
+
+message ListTopicsRequest {
+  optional string theme_id = 1;
+  optional catalog.ContentLifecycleStatus content_status = 2;
+}
+
+message ListTopicsResponse {
+  repeated catalog.TopicSummary topics = 1;
+}
+
+message GetRankingListRequest {
+  optional string ranking_id = 1;
+}
+
+message GetRankingListResponse {
+  optional catalog.RankingList ranking = 1;
+}
+
+message ListRankingListsRequest {
+  optional string theme_id = 1;
+}
+
+message ListRankingListsResponse {
+  repeated catalog.RankingListSummary rankings = 1;
+}
+
+message UpsertGuideCardRequest {
+  optional string client_request_id = 1;
+  optional int64 expected_revision = 2;
+  optional catalog.GuideCard guide_card = 3;
+}
+
+message UpsertGuideCardResponse {
+  optional string card_id = 1;
+  optional int64 revision = 2;
+}
+
+message UpsertEditorialContentRequest {
+  optional string client_request_id = 1;
+  optional int64 expected_revision = 2;
+  optional catalog.EditorialContent content = 3;
+}
+
+message UpsertEditorialContentResponse {
+  optional string content_id = 1;
+  optional int64 revision = 2;
+}
+
+message UpsertTopicRequest {
+  optional string client_request_id = 1;
+  optional int64 expected_revision = 2;
+  optional catalog.Topic topic = 3;
+}
+
+message UpsertTopicResponse {
+  optional string topic_id = 1;
+  optional int64 revision = 2;
+}
+
+message UpsertRankingListRequest {
+  optional string client_request_id = 1;
+  optional int64 expected_revision = 2;
+  optional catalog.RankingList ranking = 3;
+}
+
+message UpsertRankingListResponse {
+  optional string ranking_id = 1;
+  optional int64 revision = 2;
+}
+
+message SubmitForReviewRequest {
+  optional string client_request_id = 1;
+  optional catalog.ContentResourceKind resource_kind = 2;
+  optional string resource_id = 3;
+  optional int64 revision = 4;
+}
+
+message SubmitForReviewResponse {
+  optional catalog.ContentLifecycleStatus content_status = 1;
+  optional string governance_queue_item_id = 2;
+}
+
+message PublishRevisionRequest {
+  optional string client_request_id = 1;
+  optional catalog.ContentResourceKind resource_kind = 2;
+  optional string resource_id = 3;
+  optional int64 revision = 4;
+}
+
+message PublishRevisionResponse {
+  optional catalog.ContentLifecycleStatus content_status = 1;
+  optional int64 published_revision = 2;
+}
+
+service ContentService {
+  rpc ListThemes(ListThemesRequest) returns (ListThemesResponse);
+  rpc GetThemeDetail(GetThemeDetailRequest) returns (GetThemeDetailResponse);
+  rpc BatchGetGuideCards(BatchGetGuideCardsRequest) returns (BatchGetGuideCardsResponse);
+  rpc ListGuideCards(ListGuideCardsRequest) returns (ListGuideCardsResponse);
+  rpc GetEditorialContent(GetEditorialContentRequest) returns (GetEditorialContentResponse);
+  rpc ListEditorialContents(ListEditorialContentsRequest) returns (ListEditorialContentsResponse);
+  rpc GetTopic(GetTopicRequest) returns (GetTopicResponse);
+  rpc ListTopics(ListTopicsRequest) returns (ListTopicsResponse);
+  rpc GetRankingList(GetRankingListRequest) returns (GetRankingListResponse);
+  rpc ListRankingLists(ListRankingListsRequest) returns (ListRankingListsResponse);
+  rpc UpsertGuideCard(UpsertGuideCardRequest) returns (UpsertGuideCardResponse);
+  rpc UpsertEditorialContent(UpsertEditorialContentRequest) returns (UpsertEditorialContentResponse);
+  rpc UpsertTopic(UpsertTopicRequest) returns (UpsertTopicResponse);
+  rpc UpsertRankingList(UpsertRankingListRequest) returns (UpsertRankingListResponse);
+  rpc SubmitForReview(SubmitForReviewRequest) returns (SubmitForReviewResponse);
+  rpc PublishRevision(PublishRevisionRequest) returns (PublishRevisionResponse);
+}

@@ -153,13 +153,91 @@ message BackofficeContentItem {
   optional string title = 2;
   optional string theme = 3;
   optional string status = 4;
+  optional string summary = 5;
+  optional string landing_url = 6;
+  optional string external_item_id = 7;
 }
 
 message BackofficeListContentItemsRequest {}
 
+message BackofficeCreateContentItemRequest {
+  optional string title = 1;
+  optional string theme = 2;
+  optional string summary = 3;
+  optional string landing_url = 4;
+  optional string external_item_id = 5;
+  optional string status = 6;
+}
+
 message BackofficeUpdateContentStatusRequest {
   optional string content_id = 1;
   optional string status = 2;
+}
+
+message BackofficeUpdateContentItemRequest {
+  optional string content_id = 1;
+  optional int64 revision = 2;
+  optional string title = 3;
+  optional string subtitle = 4;
+  optional string summary = 5;
+  optional string landing_url = 6;
+  optional string external_item_id = 7;
+  optional string cover_url = 8;
+  optional string theme = 9;
+  optional string change_summary = 10;
+}
+
+message BackofficeContentDetailRequest {
+  optional string content_id = 1;
+}
+
+message BackofficeSubmitReviewRequest {
+  optional string content_id = 1;
+  optional int64 revision = 2;
+  optional string change_summary = 3;
+}
+
+message BackofficeSubmitReviewResponse {
+  optional bool success = 1;
+  optional string review_id = 2;
+  optional string content_status = 3;
+}
+
+message BackofficePublishRequest {
+  optional string content_id = 1;
+  optional int64 revision = 2;
+}
+
+message BackofficePublishResponse {
+  optional bool success = 1;
+  optional string content_id = 2;
+  optional int64 published_revision = 3;
+  optional string visibility_state = 4;
+}
+
+message BackofficeRollbackRequest {
+  optional string content_id = 1;
+  optional int64 target_revision = 2;
+  optional string change_summary = 3;
+}
+
+message BackofficeRollbackResponse {
+  optional bool success = 1;
+  optional int64 new_revision = 2;
+  optional string content_id = 3;
+}
+
+message BackofficeSetVisibilityRequest {
+  optional string content_id = 1;
+  optional string state = 2;
+  optional string reason_code = 3;
+  optional string effective_from = 4;
+}
+
+message BackofficeSetVisibilityResponse {
+  optional bool success = 1;
+  optional string content_id = 2;
+  optional string visibility_state = 3;
 }
 
 message BackofficeContentItemsResponse {
@@ -191,7 +269,14 @@ service GatewayPagesEdgeV2 {
   rpc GetBackofficeAffiliatePartners(BackofficeListPartnersRequest) returns (BackofficePartnersResponse);
   rpc PostBackofficeAffiliatePartner(BackofficeCreatePartnerRequest) returns (BackofficePartnersResponse);
   rpc GetBackofficeContentItems(BackofficeListContentItemsRequest) returns (BackofficeContentItemsResponse);
+  rpc PostBackofficeContentItem(BackofficeCreateContentItemRequest) returns (BackofficeContentItemsResponse);
   rpc PatchBackofficeContentItemStatus(BackofficeUpdateContentStatusRequest) returns (BackofficeContentItemsResponse);
+  rpc PostBackofficeContentItemUpdate(BackofficeUpdateContentItemRequest) returns (BackofficeContentItemsResponse);
+  rpc PostBackofficeContentItemDetail(BackofficeContentDetailRequest) returns (BackofficeContentItemsResponse);
+  rpc PostBackofficeContentItemSubmitReview(BackofficeSubmitReviewRequest) returns (BackofficeSubmitReviewResponse);
+  rpc PostBackofficeContentItemPublish(BackofficePublishRequest) returns (BackofficePublishResponse);
+  rpc PostBackofficeContentItemRollback(BackofficeRollbackRequest) returns (BackofficeRollbackResponse);
   rpc GetBackofficeGovernanceReviews(BackofficeListReviewsRequest) returns (BackofficeReviewsResponse);
   rpc PatchBackofficeGovernanceReviewStatus(BackofficeUpdateReviewStatusRequest) returns (BackofficeReviewsResponse);
+  rpc PostBackofficeGovernanceVisibility(BackofficeSetVisibilityRequest) returns (BackofficeSetVisibilityResponse);
 }

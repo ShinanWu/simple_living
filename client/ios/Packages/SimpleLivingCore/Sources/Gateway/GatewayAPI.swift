@@ -18,6 +18,7 @@ public struct HomeCard: Identifiable, Equatable, Hashable, Sendable {
     public let itemRank: Int
     public let title: String
     public let reason: String
+    public let coverUrl: String?
 
     public var feedContext: FeedItemContext {
         FeedItemContext(
@@ -35,7 +36,8 @@ public struct HomeCard: Identifiable, Equatable, Hashable, Sendable {
         scene: String,
         itemRank: Int,
         title: String,
-        reason: String
+        reason: String,
+        coverUrl: String? = nil
     ) {
         self.id = id
         self.guideCardId = guideCardId
@@ -44,6 +46,7 @@ public struct HomeCard: Identifiable, Equatable, Hashable, Sendable {
         self.itemRank = itemRank
         self.title = title
         self.reason = reason
+        self.coverUrl = coverUrl
     }
 }
 
@@ -61,11 +64,21 @@ public struct GuideDetailResponse: Equatable, Sendable {
     public let guideCardId: String
     public let title: String
     public let summary: String
+    public let subtitle: String?
+    public let coverUrl: String?
+    public let galleryUrls: [String]
+    public let isCommercial: Bool
+    public let disclosureText: String?
 
-    public init(guideCardId: String, title: String, summary: String) {
+    public init(guideCardId: String, title: String, summary: String, subtitle: String? = nil, coverUrl: String? = nil, galleryUrls: [String] = [], isCommercial: Bool = false, disclosureText: String? = nil) {
         self.guideCardId = guideCardId
         self.title = title
         self.summary = summary
+        self.subtitle = subtitle
+        self.coverUrl = coverUrl
+        self.galleryUrls = galleryUrls
+        self.isCommercial = isCommercial
+        self.disclosureText = disclosureText
     }
 }
 
@@ -79,12 +92,16 @@ public struct RedirectPrepareResponse: Equatable, Sendable {
 
 public struct MeSummaryResponse: Equatable, Sendable {
     public let isLoggedIn: Bool
+    public let displayName: String?
+    public let avatarUrl: String?
     public let favoritesCount: Int
     public let historyCount: Int
     public let consentGranted: Bool
 
-    public init(isLoggedIn: Bool, favoritesCount: Int, historyCount: Int, consentGranted: Bool) {
+    public init(isLoggedIn: Bool, favoritesCount: Int, historyCount: Int, consentGranted: Bool, displayName: String? = nil, avatarUrl: String? = nil) {
         self.isLoggedIn = isLoggedIn
+        self.displayName = displayName
+        self.avatarUrl = avatarUrl
         self.favoritesCount = favoritesCount
         self.historyCount = historyCount
         self.consentGranted = consentGranted

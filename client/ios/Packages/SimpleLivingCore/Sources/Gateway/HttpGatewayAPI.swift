@@ -1,5 +1,8 @@
 import Foundation
 
+/// 刷新令牌的单飞任务，防止并发重复刷新
+private var refreshInFlight: Task<AuthTokenPair, Error>? = nil
+
 /// 真实 HTTPS + JSON 网关客户端；字段语义对齐 `services/gateway/docs/api.md`。
 public final class HttpGatewayAPI: GatewayAPI {
     private let settings: HttpGatewaySettings
@@ -35,6 +38,7 @@ public final class HttpGatewayAPI: GatewayAPI {
             let title = item.guideCard?.title ?? item.guideCardId
             let reason = (item.reasonTags ?? []).joined(separator: " / ")
             let id = "\(item.recommendationId)-\(item.rank)"
+            let coverUrl = item.guideCard?.coverUrl ?? item.guideCard?.coverMedia?.url
             return HomeCard(
                 id: id,
                 guideCardId: item.guideCardId,
@@ -42,7 +46,8 @@ public final class HttpGatewayAPI: GatewayAPI {
                 scene: item.scene,
                 itemRank: item.rank,
                 title: title,
-                reason: reason.isEmpty ? "-" : reason
+                reason: reason.isEmpty ? "-" : reason,
+                coverUrl: coverUrl
             )
         }
 
@@ -68,10 +73,18 @@ public final class HttpGatewayAPI: GatewayAPI {
         }
 
         let summary = guide.summary ?? guide.subtitle ?? ""
+        let coverUrl = guide.coverUrl ?? guide.coverMedia?.url
+        let galleryUrls: [String] = (coverUrl != nil) ? [coverUrl!] : []
+        
         return GuideDetailResponse(
             guideCardId: guide.guideCardId,
             title: guide.title,
-            summary: summary.isEmpty ? "暂无摘要" : summary
+            summary: summary.isEmpty ? "暂无摘要" : summary,
+            subtitle: guide.subtitle,
+            coverUrl: coverUrl,
+            galleryUrls: galleryUrls,
+            isCommercial: guide.isCommercial ?? false,
+            disclosureText: guide.disclosureTextKey
         )
     }
 
@@ -114,7 +127,9 @@ public final class HttpGatewayAPI: GatewayAPI {
             isLoggedIn: !isGuest,
             favoritesCount: d.counts.favoritesCount,
             historyCount: d.counts.historyCount,
-            consentGranted: consent
+            consentGranted: consent,
+            displayName: d.profile.displayName,
+            avatarUrl: d.profile.avatarUrl
         )
     }
 
@@ -152,24 +167,42 @@ public final class HttpGatewayAPI: GatewayAPI {
         guard let refresh = settings.refreshToken, !refresh.isEmpty else {
             throw GatewayAPIError.business(code: 20003, message: "no refresh token")
         }
-        let url = settings.baseURL.appendingPathComponent("api/v2/auth/token/refresh")
-        let payload = RefreshTokenBodyDTO(
-            refreshToken: refresh,
-            requestContext: RpcRequestContextDTO(
-                clientPlatform: settings.clientPlatform,
-                appVersion: settings.appVersion,
-                deviceId: settings.deviceId
-            )
-        )
-        let encoded = try encoder.encode(payload)
-        let (data, _) = try await dataTask(url, method: "POST", body: encoded, jsonBody: true, authMode: .none)
-        let envelope = try decode(ApiEnvelopeDTO<TokenPairDataDTO>.self, from: data)
-        if envelope.success, envelope.code == 0, let d = envelope.data {
-            let pair = authPair(from: d)
-            settings.applyTokenPair(pair)
-            return pair
+        
+        if let existing = refreshInFlight {
+            return try await existing.value
         }
-        throw GatewayAPIError.business(code: envelope.code, message: envelope.message)
+        
+        let task = Task<AuthTokenPair, Error> {
+            let url = settings.baseURL.appendingPathComponent("api/v2/auth/token/refresh")
+            let payload = RefreshTokenBodyDTO(
+                refreshToken: refresh,
+                requestContext: RpcRequestContextDTO(
+                    clientPlatform: settings.clientPlatform,
+                    appVersion: settings.appVersion,
+                    deviceId: settings.deviceId
+                )
+            )
+            let encoded = try encoder.encode(payload)
+            let (data, _) = try await dataTask(url, method: "POST", body: encoded, jsonBody: true, authMode: .none)
+            let envelope = try decode(ApiEnvelopeDTO<TokenPairDataDTO>.self, from: data)
+            if envelope.success, envelope.code == 0, let d = envelope.data {
+                let pair = authPair(from: d)
+                settings.applyTokenPair(pair)
+                return pair
+            }
+            throw GatewayAPIError.business(code: envelope.code, message: envelope.message)
+        }
+        
+        refreshInFlight = task
+        
+        do {
+            let pair = try await task.value
+            refreshInFlight = nil
+            return pair
+        } catch {
+            refreshInFlight = nil
+            throw error
+        }
     }
 
     public func logoutSession(revokeAllDevices: Bool) async throws {
@@ -246,7 +279,8 @@ public final class HttpGatewayAPI: GatewayAPI {
         method: String,
         body: Data?,
         jsonBody: Bool,
-        authMode: AuthHeaderMode = .bearerOrGuest
+        authMode: AuthHeaderMode = .bearerOrGuest,
+        retried: Bool = false
     ) async throws -> (Data, URLResponse) {
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -267,9 +301,26 @@ public final class HttpGatewayAPI: GatewayAPI {
         request.httpBody = body
 
         do {
-            return try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
+            
+            if !retried, authMode == .bearerOrGuest, settings.refreshToken != nil {
+                let envelope = try? decoder.decode(ApiEnvelopeDTO<EmptyDataDTO>.self, from: data)
+                if envelope?.code == 20002 {
+                    do {
+                        _ = try await refreshAuthTokens()
+                        return try await dataTask(url, method: method, body: body, jsonBody: jsonBody, authMode: authMode, retried: true)
+                    } catch {
+                        settings.clearAuth()
+                        throw GatewayAPIError.business(code: 20003, "refresh token invalid")
+                    }
+                }
+            }
+            
+            return (data, response)
         } catch let urlError as URLError where urlError.code == .notConnectedToInternet {
             throw urlError
+        } catch let apiError as GatewayAPIError where apiError.localizedDescription.contains("20003") {
+            throw apiError
         } catch {
             throw GatewayAPIError.transport(underlying: error.localizedDescription)
         }
@@ -298,6 +349,8 @@ public final class HttpGatewayAPI: GatewayAPI {
 
 // MARK: - DTOs
 
+private struct EmptyDataDTO: Decodable {}
+
 private struct ApiEnvelopeDTO<T: Decodable>: Decodable {
     let success: Bool
     let code: Int
@@ -323,6 +376,12 @@ private struct GuideCardSnippetDTO: Decodable {
     let title: String?
     let summary: String?
     let subtitle: String?
+    let coverUrl: String?
+    let coverMedia: CoverMediaDTO?
+    
+    struct CoverMediaDTO: Decodable {
+        let url: String?
+    }
 }
 
 private struct PaginationDTO: Decodable {
@@ -340,6 +399,14 @@ private struct GuideCardDetailDTO: Decodable {
     let title: String
     let summary: String?
     let subtitle: String?
+    let coverUrl: String?
+    let coverMedia: CoverMediaDTO?
+    let isCommercial: Bool?
+    let disclosureTextKey: String?
+    
+    struct CoverMediaDTO: Decodable {
+        let url: String?
+    }
 }
 
 private struct RedirectPrepareBodyDTO: Encodable {
@@ -362,6 +429,8 @@ private struct MeSummaryDataDTO: Decodable {
 private struct ProfileDTO: Decodable {
     let userId: String?
     let isGuest: Bool?
+    let displayName: String?
+    let avatarUrl: String?
 }
 
 private struct CountsDTO: Decodable {

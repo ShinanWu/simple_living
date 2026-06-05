@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "跳转准备",
+  "usingComponents": {
+    "state-placeholder": "/components/state-placeholder/state-placeholder"
+  }
+}

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-LAB_DIR="${LAB_DIR:-${ROOT_DIR}/infra/lab}"
-VM_DIR="${LAB_DIR}/vms"
+LOCAL_QEMU_DIR="${LOCAL_QEMU_DIR:-${ROOT_DIR}/environments/local-qemu}"
+VM_DIR="${LOCAL_QEMU_DIR}/vms"
 SEED_HTTP_PID="${VM_DIR}/seed-http.pid"
 [[ -d "${VM_DIR}" ]] || { echo "No VM directory found: ${VM_DIR}"; exit 0; }
 pid_file="${VM_DIR}/build.pid"

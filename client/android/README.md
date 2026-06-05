@@ -1,13 +1,13 @@
 # Android Scaffold (Jetpack Compose)
 
-This directory contains a lightweight Android scaffold for parallel frontend development based on `client/frontend-*.md`.
+This directory contains the Android client implementation based on `client/frontend-*.md` and the real gateway JSON contract.
 
 ## Included
 
 - App shell with bottom navigation: `首页` / `我的`
 - `首页` top tabs: `衣` / `食` / `住` / `行` mapped to `clothing` / `food` / `housing` / `transport`
 - Shared sealed UI state: `loading` / `success` / `empty` / `error` / `offline`
-- Placeholder screens:
+- Page implementations:
   - `GuideDetail`
   - `RedirectPrepare`
   - `MeSummary`
@@ -16,7 +16,7 @@ This directory contains a lightweight Android scaffold for parallel frontend dev
   - `GET /api/v2/pages/guide_detail`
   - `POST /api/v2/pages/redirect_prepare`
   - `GET /api/v2/pages/me_summary`
-- Fake repository implementation for local UI development
+- Real gateway repository is the production runtime target; fake repository code is allowed only for unit tests and preview fixtures.
 
 ## Run
 
@@ -34,5 +34,5 @@ Use Android Studio (open `client/android`) or command line:
 
 ## Notes
 
-- Field names in API models use `snake_case` semantics from docs/contracts.
-- Repository is fake; swap with real network layer under `client/android/app/src/main/java/com/simpleliving/android/data/gateway` when gateway integration starts.
+- Field names in API models use `snake_case` semantics from `.cursor/rules/shared-contracts.mdc`.
+- Runtime repository must call gateway under `client/android/app/src/main/java/com/simpleliving/android/data/gateway`; fake data must stay inside tests/previews and cannot be used for acceptance.

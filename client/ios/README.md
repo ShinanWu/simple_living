@@ -1,6 +1,6 @@
 # iOS Scaffold (SwiftUI)
 
-This directory provides a minimal iOS scaffold aligned with `client/frontend-*.md` for parallel development.
+This directory provides the iOS client implementation aligned with `client/frontend-*.md` and the real gateway contract.
 
 ## Scope
 
@@ -9,8 +9,8 @@ This directory provides a minimal iOS scaffold aligned with `client/frontend-*.m
 - Shared page state enum: `loading`, `success`, `empty`, `error`, `offline`
 - Core flow screens: Home -> GuideDetail -> RedirectPrepare, plus MeSummary
 - Gateway API protocol with:
-  - `MockGatewayAPI`（默认，无环境变量时）
-  - `HttpGatewayAPI`（真实 HTTPS + JSON，对齐 `services/gateway/docs/api.md`）
+  - `HttpGatewayAPI`（运行时默认，真实 HTTPS/HTTP + JSON，对齐 `services/gateway/docs/api.md`）
+  - `MockGatewayAPI`（仅用于 Swift 单元测试和离线 UI fixture，不作为运行时默认）
 - 我的页：`登录` sheet（手机号 + 微信联调字段）、`退出`（`DELETE /api/v2/auth/session`）；令牌落盘 `UserDefaults`，冷启动自动恢复
 - `GatewayRuntime.makeFromEnvironment()` 在 App 入口选择实现
 
@@ -35,13 +35,13 @@ This directory provides a minimal iOS scaffold aligned with `client/frontend-*.m
 
 | 变量 | 说明 |
 |------|------|
-| `GATEWAY_BASE_URL` | 网关根地址，如 `https://api.example.com`（勿带末尾路径 `/api/...`） |
+| `GATEWAY_BASE_URL` | 网关根地址，如 `http://8.152.103.12` 或正式 HTTPS 域名（勿带末尾路径 `/api/...`） |
 | `GATEWAY_ACCESS_TOKEN` | 可选，已登录时 `Bearer` 对应 token（通常不设，改用 App 内登录后的持久化） |
 | `GATEWAY_REFRESH_TOKEN` | 可选，覆盖本地持久化的 refresh token（一般不设） |
 | `GATEWAY_GUEST_SESSION_ID` | 可选，已有访客会话时可注入，否则客户端会对 `POST /api/v2/guest/session` 懒创建 |
 | `GATEWAY_APP_VERSION` | 可选，写入请求体中的 `app_version` / `request_context.app_version`，默认 `0.1.0` |
 
-未设置 `GATEWAY_BASE_URL` 时使用 **Mock**，便于离线跑通 UI。
+未设置 `GATEWAY_BASE_URL` 时，开发 scheme 应注入公网 frp/nginx gateway 地址；Mock 只允许在测试 target 中显式构造。
 
 **说明**：`redirect_prepare` 与 `me_summary` 需要登录态或访客会话；HTTP 客户端会在首次需要时申请访客会话并缓存 `X-Guest-Session-Id`。
 
@@ -64,6 +64,6 @@ swift test --package-path Packages/SimpleLivingCore
 
 ## Notes
 
-- `HttpGatewayAPI` 使用 `JSONEncoder/JSONDecoder` 的 snake_case 转换，与 `docs/contracts/` 字段一致。
+- `HttpGatewayAPI` 使用 `JSONEncoder/JSONDecoder` 的 snake_case 转换，与 `.cursor/rules/shared-contracts.mdc` 字段一致。
 - 首页列表项使用 `guide_card_id` 进入详情；`redirect_prepare` 携带 `FeedItemContext`（含 `recommendation_id` / `scene` / `item_rank`）。
 - Gateway remains the only client entry; no internal `proto` assumptions in iOS.

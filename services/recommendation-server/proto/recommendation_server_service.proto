@@ -1,0 +1,84 @@
+syntax = "proto2";
+
+package simple_living.recommendation_server;
+
+import "recommendation_server_models.proto";
+
+option java_multiple_files = true;
+option java_package = "com.simpleliving.recommendation.domain";
+option go_package = "github.com/simple_living/services/recommendation-server/proto;recommendationpb";
+option cc_generic_services = true;
+
+// Internal gRPC API for recommendation-server using proto2 syntax.
+service RecommendationService {
+  rpc QueryRecommendations(QueryRecommendationsRequest) returns (QueryRecommendationsResponse);
+  rpc GetPopularRecommendations(GetPopularRecommendationsRequest) returns (GetPopularRecommendationsResponse);
+  rpc ExplainRecommendations(ExplainRecommendationsRequest) returns (ExplainRecommendationsResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message QueryRecommendationsRequest {
+  optional RecommendationScene scene = 1;
+  optional RecommendationRequestContext context = 2;
+  optional CursorLimits cursor_limits = 3;
+  optional OffsetLimits offset_limits = 4;
+  optional RecommendationFilters filters = 5;
+  optional bool debug = 6;
+}
+
+message QueryRecommendationsResponse {
+  optional string recommendation_id = 1;
+  optional RecommendationScene scene = 2;
+  optional string generated_at = 3;  // ISO 8601 UTC
+  optional RecommendationStrategy strategy = 4;
+  repeated RecommendationItem items = 5;
+  optional CursorPagination cursor_pagination = 6;
+  optional OffsetPagination offset_pagination = 7;
+  optional RequestContextEcho request_context_echo = 8;
+  optional RecommendationDiagnostics diagnostics = 9;
+}
+
+message GetPopularRecommendationsRequest {
+  optional RecommendationScene scene = 1;  // expected HOME_POPULAR or product-specific hot scene
+  optional RecommendationRequestContext context = 2;
+  optional string window = 3;  // e.g. 24h, 7d, 30d
+  optional CursorLimits cursor_limits = 4;
+  optional OffsetLimits offset_limits = 5;
+  optional RecommendationFilters filters = 6;
+  optional bool debug = 7;
+}
+
+message GetPopularRecommendationsResponse {
+  optional string recommendation_id = 1;
+  optional RecommendationScene scene = 2;
+  optional string generated_at = 3;
+  optional RecommendationStrategy strategy = 4;
+  repeated RecommendationItem items = 5;
+  optional CursorPagination cursor_pagination = 6;
+  optional OffsetPagination offset_pagination = 7;
+  optional RequestContextEcho request_context_echo = 8;
+  optional RecommendationDiagnostics diagnostics = 9;
+}
+
+message ExplainItemRef {
+  optional string guide_card_id = 1;
+  optional int32 rank = 2;  // 1-based, must match original response
+}
+
+message ExplainRecommendationsRequest {
+  optional RecommendationScene scene = 1;
+  optional RecommendationRequestContext context = 2;
+  repeated ExplainItemRef items = 3;
+  optional RecommendationStrategy strategy = 4;
+}
+
+message ExplainRecommendationsResponse {
+  repeated ItemExplanation explanations = 1;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  optional HealthStatus status = 1;
+  optional IndexDependencyStatus index_status = 2;
+}

@@ -1,0 +1,42 @@
+<view class="login">
+  <view class="login__hero">
+    <text class="login__title">登录少糖</text>
+    <text class="login__subtitle sl-muted">微信一键登录为推荐方式；登录后可收藏与同步偏好。</text>
+  </view>
+
+  <button class="sl-btn-primary login__wx" bindtap="onWeChatLogin" loading="{{busy && loginMode === 'wechat'}}" disabled="{{busy}}">
+    微信一键登录
+  </button>
+
+  <view class="login__divider sl-muted">或使用手机号</view>
+
+  <view class="login__form sl-card">
+    <input class="login__input" type="number" maxlength="11" placeholder="手机号" value="{{phone}}" bindinput="onPhoneInput" />
+    <view class="login__otp-row">
+      <input class="login__input login__input--otp" type="number" maxlength="6" placeholder="验证码" value="{{otp}}" bindinput="onOtpInput" />
+      <button class="sl-btn-ghost login__send" bindtap="onSendOtp" disabled="{{otpCooldown > 0 || busy}}">
+        {{otpCooldown > 0 ? otpCooldown + 's' : '获取验证码'}}
+      </button>
+    </view>
+    <input
+      wx:if="{{showAdvanced}}"
+      class="login__input"
+      placeholder="verification_id（联调）"
+      value="{{verificationId}}"
+      bindinput="onVerificationInput"
+    />
+    <button class="sl-btn-ghost login__phone-btn" bindtap="onPhoneLogin" loading="{{busy && loginMode === 'phone'}}" disabled="{{busy}}">
+      手机号登录
+    </button>
+  </view>
+
+  <view class="login__legal sl-muted">
+    <text>登录即表示你已阅读并同意《用户协议》与《隐私政策》。我们仅收集提供服务所必需的信息。</text>
+  </view>
+
+  <view wx:if="{{errorMessage}}" class="login__error">{{errorMessage}}</view>
+
+  <view class="login__advanced" bindtap="toggleAdvanced">
+    <text class="sl-muted">{{showAdvanced ? '收起联调选项' : '高级联调选项'}}</text>
+  </view>
+</view>

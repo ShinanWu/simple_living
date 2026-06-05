@@ -1,0 +1,39 @@
+load("@rules_cc//cc:defs.bzl", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "catalog.proto",
+    "content_service.proto",
+])
+
+proto_library(
+    name = "catalog_proto",
+    srcs = ["catalog.proto"],
+    strip_import_prefix = "/common/proto",
+    deps = [
+        "@com_google_protobuf//:timestamp_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "catalog_cc_proto",
+    deps = [":catalog_proto"],
+)
+
+proto_library(
+    name = "content_service_proto",
+    srcs = ["content_service.proto"],
+    strip_import_prefix = "/common/proto",
+    deps = [
+        ":catalog_proto",
+        "@com_google_protobuf//:field_mask_proto",
+        "@com_google_protobuf//:timestamp_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "content_service_cc_proto",
+    deps = [":content_service_proto"],
+)

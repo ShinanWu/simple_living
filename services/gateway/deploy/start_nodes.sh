@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-LAB_DIR="${LAB_DIR:-${ROOT_DIR}/infra/lab}"
-VM_DIR="${LAB_DIR}/vms"
+LOCAL_QEMU_DIR="${LOCAL_QEMU_DIR:-${ROOT_DIR}/environments/local-qemu}"
+VM_DIR="${LOCAL_QEMU_DIR}/vms"
 BASE_IMAGE="${VM_DIR}/base-jammy-arm64.img"
 SEED_HTTP_DIR="${VM_DIR}/seed-http"
 SEED_HTTP_PORT="${SEED_HTTP_PORT:-8081}"

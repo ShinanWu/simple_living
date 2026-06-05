@@ -1,8 +1,8 @@
-# Mock 数据与验收矩阵
+# 测试夹具与验收矩阵
 
 ## 1. 目标
 
-给 Web/iOS/Android 提供统一联调输入与验收口径，支持并行开发而不依赖口头同步。
+给 Web/iOS/Android/微信小程序提供统一验收口径。运行时与验收必须访问真实 gateway；本文中的 mock ID 和示例响应只可作为单元测试、组件测试和错误态夹具。
 
 ## 2. 验收矩阵（页面 x 状态 x 错误）
 
@@ -28,11 +28,11 @@
 - 卡片交互保持一致：上滑下一条、非第一页下滑上一条、第一页下滑触发二段提示并可松手刷新。
 - 拖拽过程中不得误触卡片跳转详情；拖拽结束后可恢复点击进入详情。
 
-## 4. 登录联调 Mock（Gateway 信封）
+## 4. 登录测试夹具（Gateway 信封）
 
-以下示例遵循 [common-response.md](../docs/contracts/common-response.md) 与 [gateway api.md](../services/gateway/docs/api.md) 顶层形状；字段名均为 `snake_case`。
+以下示例遵循 [共享公共契约](../.cursor/rules/shared-contracts.mdc) 与 [gateway api.md](../services/gateway/docs/api.md) 顶层形状；字段名均为 `snake_case`。
 
-**说明**：`POST /api/v2/auth/token/issue` 的 `phone_otp.verification_id` 依赖「验证码下发」步骤；若网关暂未暴露独立下发路由，联调可使用测试环境提供的固定 `verification_id` / 固定验证码，或 Mock 服务返回下列响应。
+**说明**：`POST /api/v2/auth/token/issue` 的 `phone_otp.verification_id` 依赖「验证码下发」步骤。正式联调必须使用 gateway 测试环境提供的固定 `verification_id` / 固定验证码；下列响应只用于测试夹具。
 
 ### 4.1 访客会话成功
 
@@ -81,10 +81,10 @@
       "verification_id": "verify_01mockyq8y8y2r7a4h7s0x"
     }
   },
-  "client_platform": "ios",
+  "client_platform": "wechat_miniprogram",
   "device_id": "device_mock_9f1b5e18",
   "request_context": {
-    "client_platform": "ios",
+    "client_platform": "wechat_miniprogram",
     "app_version": "1.0.0",
     "device_id": "device_mock_9f1b5e18"
   }
@@ -122,7 +122,7 @@
       "authorization_code": "wx_auth_code_mock_once"
     }
   },
-  "client_platform": "ios",
+  "client_platform": "wechat_miniprogram",
   "device_id": "device_mock_9f1b5e18"
 }
 ```
