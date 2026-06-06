@@ -50,7 +50,11 @@ server {
         proxy_pass http://simple_living_gateway/api/v2/health/check;
     }
 
-    location /backoffice {
+    location = /backoffice {
+        return 301 /backoffice/;
+    }
+
+    location /backoffice/ {
         limit_req zone=ingress_req burst=40 nodelay;
         proxy_pass http://simple_living_backoffice;
         proxy_http_version 1.1;

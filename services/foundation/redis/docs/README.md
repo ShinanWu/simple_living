@@ -32,9 +32,8 @@
 
 | 维度 | 默认值 | 说明 |
 |------|--------|------|
-| 来宾端口 | `6379` | 容器内 Redis 监听端口 |
-| Mac host-forward | `16379` | 本机经 QEMU 转发访问 |
-| 业务来宾访问地址 | `10.0.2.2:16379` | 其他 QEMU 业务节点经 host-forward 访问 |
+| 端口 | `6379` | 来宾、容器、Mac 转发同号（`lab-ports.env`） |
+| 业务来宾访问地址 | `10.0.2.2:6379` | 其他 QEMU 业务节点经 slirp 网关访问 |
 | 镜像 | `redis:7-alpine` | `deploy/deploy_service.sh` / `deploy/docker-compose.yml` |
 | 持久化 | AOF（`--appendonly yes`） | `appendfsync everysec` 默认 |
 | 数据卷 | `simple_living_redis` → `/data` | AOF 文件目录 |
@@ -79,7 +78,7 @@ docker compose -f services/foundation/redis/deploy/docker-compose.yml ps
 
 | 现象 | 排查 |
 |------|------|
-| 连不上 | `health` 子命令；`redis-cli -h <host> -p 16379 ping` 应返回 `PONG`；查 host-forward 端口占用 |
+| 连不上 | `health` 子命令；`redis-cli -h <host> -p 6379 ping` 应返回 `PONG`；查端口占用 |
 | 内存增长异常 | 检查是否有未设 TTL 的 key（裸 key/违反 §2）；`redis-cli --bigkeys` 抽查 |
 | 命中率低 | 核对 TTL 是否过短、失效事件是否过度删除 |
 
@@ -92,7 +91,7 @@ bash services/foundation/scripts/health_check.sh
 # 或：bash services/foundation/redis/deploy/deploy_service.sh health
 ```
 
-优先 `redis-cli -h <host> -p 16379 ping`（期望 `PONG`），无客户端时回退 `nc -z` 端口探测。
+优先 `redis-cli -h <host> -p 6379 ping`（期望 `PONG`），无客户端时回退 `nc -z` 端口探测。
 
 ## 8. 安全与网络边界
 

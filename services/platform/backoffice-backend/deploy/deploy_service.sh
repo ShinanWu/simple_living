@@ -8,7 +8,7 @@ source "${ENV_FILE}"
 : "${NODE_IP_BACKOFFICE:?NODE_IP_BACKOFFICE is required}"
 
 EXPORT_DIR="${EXPORT_DIR:-/var/lib/simple-living/exports}"
-PG_CONNINFO="${PG_CONNINFO:-host=${POSTGRES_HOST:-10.0.2.2} port=${POSTGRES_PORT:-15432} dbname=${POSTGRES_DB:-simple_living} user=${POSTGRES_USER:-simple} password=${POSTGRES_PASSWORD:-simple}}"
+PG_CONNINFO="${PG_CONNINFO:-host=${POSTGRES_HOST:-10.0.2.2} port=${POSTGRES_PORT:-5432} dbname=${POSTGRES_DB:-simple_living} user=${POSTGRES_USER:-simple} password=${POSTGRES_PASSWORD:-simple}}"
 
 export DEPLOY_ROOT_DIR="${ROOT_DIR}"
 export DEPLOY_SERVICE_NAME="backoffice-backend"
@@ -22,6 +22,6 @@ export DEPLOY_CONTAINER_NAME="simple-living-backoffice-backend"
 export DEPLOY_DOCKER_NETWORK="host"
 export DEPLOY_EXTRA_RUN_ARGS="-v ${EXPORT_DIR}:${EXPORT_DIR}"
 export DEPLOY_REMOTE_PREP_CMD="sudo mkdir -p '${EXPORT_DIR}' &&"
-export DEPLOY_SERVER_FLAGS="-pg_conninfo='${PG_CONNINFO}' -export_dir='${EXPORT_DIR}'"
+export DEPLOY_SERVER_FLAGS="-port=${SERVICE_PORT_BACKOFFICE_BACKEND:-9110} -pg_conninfo='${PG_CONNINFO}' -export_dir='${EXPORT_DIR}'"
 
 exec bash "${ROOT_DIR}/tools/deploy_cpp_service.sh"

@@ -60,16 +60,16 @@ bash services/foundation/kafka/scripts/outbox_relay.sh
 | 维度 | 默认值 | 说明 |
 |------|--------|------|
 | 来宾 bootstrap | `127.0.0.1:9092` | 容器内监听 |
-| advertised listener | `10.0.2.2:19092` | 业务来宾经 host-forward 连接地址 |
-| Mac host-forward | `19092` | 本机转发 |
+| 端口 | `9092` | 来宾、容器、Mac 转发同号（`lab-ports.env`） |
+| advertised listener | `10.0.2.2:9092` | 业务来宾经 slirp 网关连接地址 |
 | 镜像（部署形态） | `apache/kafka:3.8.0`（KRaft） | `deploy/deploy_service.sh` |
 | 镜像（compose 兜底） | Redpanda `v24.2.11` | `deploy/docker-compose.yml`（本机单主机，advertise `127.0.0.1:9092`） |
 | 数据卷 | `simple_living_kafka` | 日志段持久化目录 |
 | 复制因子 | 1（单节点） | offsets / txn-state 均为 1 |
 
-业务服务通过 `-kafka_bootstrap`（或 env `KAFKA_BOOTSTRAP_SERVERS`，默认 `10.0.2.2:19092`）接收地址。
+业务服务通过 `-kafka_bootstrap`（或 env `KAFKA_BOOTSTRAP_SERVERS`，默认 `10.0.2.2:9092`）接收地址。
 
-> 注意：deploy 形态（Apache Kafka）advertised 为 `10.0.2.2:19092`，compose 兜底形态（Redpanda）advertised 为 `127.0.0.1:9092`；两者不同时使用，按运行形态取对应地址。
+> 注意：deploy 形态（Apache Kafka）advertised 为 `10.0.2.2:9092`，compose 兜底形态（Redpanda）advertised 为 `127.0.0.1:9092`；两者不同时使用，按运行形态取对应地址。
 
 ## 6. 账号与密钥来源（不写明文）
 
@@ -104,7 +104,7 @@ docker compose -f services/foundation/kafka/deploy/docker-compose.yml ps
 
 | 现象 | 排查 |
 |------|------|
-| 生产/消费连不上 | `health` 子命令探测 `19092`；核对运行形态对应的 advertised 地址（§5） |
+| 生产/消费连不上 | `health` 子命令探测 `9092`；核对运行形态对应的 advertised 地址（§5） |
 | 消费者收不到 | 确认 topic 已创建、消费者组与位移；查 `docker/podman logs simple-living-kafka` |
 | outbox 不投递 | 中继需 `psql` 与 `kcat`/`kafka-console-producer.sh`；缺工具会 WARN 并直接标记 published（见脚本），需补齐客户端 |
 | 积压增长 | 见 §8 容量与积压监控；扩消费实例或提分区 |
@@ -123,7 +123,7 @@ bash services/foundation/scripts/health_check.sh
 # 或：bash services/foundation/kafka/deploy/deploy_service.sh health
 ```
 
-lab 健康检查为 `nc -z <host> 19092` 端口探测；compose 兜底形态另有容器级 `rpk cluster health` healthcheck。
+lab 健康检查为 `nc -z <host> 9092` 端口探测；compose 兜底形态另有容器级 `rpk cluster health` healthcheck。
 
 ## 10. 安全与网络边界
 

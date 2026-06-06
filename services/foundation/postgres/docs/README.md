@@ -15,9 +15,8 @@
 
 | 维度 | 默认值 | 说明 |
 |------|--------|------|
-| 来宾端口 | `5432` | 容器内 PostgreSQL 监听端口 |
-| Mac host-forward | `15432` | 本机经 QEMU 转发访问 |
-| 业务来宾访问地址 | `10.0.2.2:15432` | 其他 QEMU 业务节点经 host-forward 访问 |
+| 端口 | `5432` | 来宾、容器、Mac 转发同号（`lab-ports.env`） |
+| 业务来宾访问地址 | `10.0.2.2:5432` | 其他 QEMU 业务节点经 slirp 网关访问 |
 | Database | `simple_living` | 单库多 schema/表，按域归属 |
 | 账号 | `simple`（lab 默认开发账号，非生产密钥） | 见下「账号与密钥来源」 |
 | 镜像 | `postgres:16-alpine` | `deploy/deploy_service.sh` / `deploy/docker-compose.yml` |
@@ -26,7 +25,7 @@
 各域 `pg_conninfo` 形如（口令不写入文档/Git，由环境注入）：
 
 ```
-host=10.0.2.2 port=15432 dbname=simple_living user=simple password=$POSTGRES_PASSWORD
+host=10.0.2.2 port=5432 dbname=simple_living user=simple password=$POSTGRES_PASSWORD
 ```
 
 业务服务通过 `-pg_conninfo` flag 或等价 env 接收完整连接串（见各域 `development.md` 配置项表）。
@@ -42,8 +41,8 @@ host=10.0.2.2 port=15432 dbname=simple_living user=simple password=$POSTGRES_PAS
 ### 4.1 准备节点
 
 ```bash
-bash services/foundation/postgres/deploy/start_nodes.sh   # 启动 foundation QEMU 节点
-bash services/foundation/postgres/deploy/check_nodes.sh   # 校验 ssh 与转发端口
+bash services/foundation/deploy/start_nodes.sh   # 启动 foundation QEMU 节点
+bash services/foundation/deploy/check_nodes.sh   # 校验 ssh 与转发端口
 ```
 
 ### 4.2 部署 / 停止
@@ -71,7 +70,7 @@ docker compose -f services/foundation/postgres/deploy/docker-compose.yml ps
 
 | 现象 | 排查 |
 |------|------|
-| 业务服务连不上 | 先 `check_nodes.sh` 看 `15432` 是否 reachable；再 `health` 子命令；确认 `nodes.env` 的 `POSTGRES_*` |
+| 业务服务连不上 | 先 `services/foundation/deploy/check_nodes.sh` 看 `5432` 是否 reachable；再 `health` 子命令；确认 `nodes.env` 的 `POSTGRES_*` |
 | 端口未监听 | 容器是否 Running（`docker/podman ps`）；host-forward 端口是否被占用 |
 | 迁移失败 | 见 §6；`run_migrations.sh` 以 `ON_ERROR_STOP=1` 中断，修正 SQL 后重跑（幂等） |
 | 数据疑似丢失 | 检查是否误用 `down-v`；用 §5 恢复最近备份 |
@@ -131,7 +130,7 @@ bash services/foundation/scripts/health_check.sh
 # 或：bash services/foundation/postgres/deploy/deploy_service.sh health
 ```
 
-优先用 `pg_isready -h <host> -p 15432 -U simple -d simple_living`，无客户端时回退 `nc -z` 端口探测。
+优先用 `pg_isready -h <host> -p 5432 -U simple -d simple_living`，无客户端时回退 `nc -z` 端口探测。
 
 ## 10. SLO（v1 lab 目标）
 

@@ -1,5 +1,7 @@
 syntax = "proto2";
 
+import "catalog.proto";
+
 package simple_living.recommendation_server;
 
 option java_multiple_files = true;
@@ -159,4 +161,9 @@ message ExperimentInfo {
 message RecommendationDiagnostics {
   optional string trace_id = 1;
   repeated string recall_lane_stats = 2;
+}
+
+// On-disk catalog.json envelope written by platform/backoffice-backend export.
+message CatalogSnapshotBundle {
+  repeated catalog.GuideCard cards = 1;
 }

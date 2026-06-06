@@ -4,11 +4,17 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 ENV_FILE="${ENV_FILE:-${ROOT_DIR}/environments/local-qemu/nodes.env}"
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/environments/local-qemu/lab-ports.env"
 
 PG_HOST="${POSTGRES_HOST:-127.0.0.1}"
-PG_PORT="${FOUNDATION_POSTGRES_HOST_PORT:-${POSTGRES_PORT:-15432}}"
-REDIS_PORT="${FOUNDATION_REDIS_HOST_PORT:-${REDIS_PORT:-16379}}"
-KAFKA_PORT="${FOUNDATION_KAFKA_HOST_PORT:-19092}"
+# Mac 本机执行时经 host-forward 探测，不走 10.0.2.2（slirp 仅 QEMU 来宾可达）。
+if [[ "${PG_HOST}" == "${LAB_QEMU_GATEWAY_HOST:-10.0.2.2}" ]] && [[ "$(uname -s)" == "Darwin" ]]; then
+  PG_HOST="127.0.0.1"
+fi
+PG_PORT="${POSTGRES_PORT:-${SERVICE_PORT_FOUNDATION_POSTGRES}}"
+REDIS_PORT="${REDIS_PORT:-${SERVICE_PORT_FOUNDATION_REDIS}}"
+KAFKA_PORT="${SERVICE_PORT_FOUNDATION_KAFKA}"
 
 fail=0
 
@@ -45,18 +51,18 @@ elif command -v nc >/dev/null 2>&1; then
     fail=1
   fi
 else
-  echo "SKIP Redis"
+  echo "SKIP Redis (no redis-cli/nc)"
 fi
 
 if command -v nc >/dev/null 2>&1; then
   if nc -z "${PG_HOST}" "${KAFKA_PORT}" 2>/dev/null; then
-    echo "OK  Kafka port ${PG_HOST}:${KAFKA_PORT} (tcp)"
+    echo "OK  Kafka ${PG_HOST}:${KAFKA_PORT} (tcp)"
   else
-    echo "FAIL Kafka port ${PG_HOST}:${KAFKA_PORT}"
+    echo "FAIL Kafka ${PG_HOST}:${KAFKA_PORT}"
     fail=1
   fi
 else
-  echo "SKIP Kafka"
+  echo "SKIP Kafka (no nc)"
 fi
 
 exit "${fail}"

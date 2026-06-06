@@ -185,6 +185,14 @@ simple_living::user_server::ClearHistoryScope ParseClearHistoryScope(const std::
     return simple_living::user_server::CLEAR_HISTORY_SCOPE_ALL;
 }
 
+void MapHttpContentRefToUser(const user::HttpContentRef& href,
+                             simple_living::user_server::ContentRef* out) {
+    if (href.type() == "guide_card" || !href.guide_card_id().empty()) {
+        out->set_type(simple_living::user_server::CONTENT_REF_TYPE_GUIDE_CARD);
+        out->set_content_id(href.guide_card_id());
+    }
+}
+
 simple_living::user_server::FeedbackTargetType ParseFeedbackTargetTypeStr(const std::string& n) {
     if (n == "guide_card") {
         return simple_living::user_server::FEEDBACK_TARGET_TYPE_GUIDE_CARD;
@@ -602,7 +610,8 @@ public:
         }
         simple_living::user_server::AddFavoriteRequest dreq;
         dreq.set_user_id(actor.user_id);
-        dreq.set_guide_card_id(req->guide_card_id());
+        dreq.set_content_id(req->guide_card_id());
+        dreq.set_content_type(simple_living::user_server::CONTENT_REF_TYPE_GUIDE_CARD);
         brpc::Controller cntl;
         user_stub_.AddFavorite(&cntl, &dreq, resp, nullptr);
         if (cntl.Failed()) {
@@ -716,10 +725,7 @@ public:
             }
         }
         if (req->has_content_ref()) {
-            *dreq.mutable_content_ref() = req->content_ref();
-            if (!dreq.content_ref().has_type() && dreq.content_ref().has_guide_card_id()) {
-                dreq.mutable_content_ref()->set_type(simple_living::user_server::CONTENT_REF_TYPE_GUIDE_CARD);
-            }
+            MapHttpContentRefToUser(req->content_ref(), dreq.mutable_content_ref());
         }
         brpc::Controller cntl;
         user_stub_.RecordHistoryEvent(&cntl, &dreq, resp, nullptr);

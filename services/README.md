@@ -113,6 +113,8 @@ flowchart TD
 
 ### 4.2 端口与本地联调
 
+端口唯一配置：`environments/local-qemu/lab-ports.env`（来宾 / host 网络容器 / K8s Service 同号；Mac QEMU 转发亦为 `localhost:<port>→来宾:<port>`）。
+
 | 服务 | 默认端口 | 协议 | Bazel 二进制目标 |
 |------|----------|------|------------------|
 | `gateway` | `8080` | HTTPS+JSON | `//services/gateway:gateway_edge_server` |
@@ -128,7 +130,7 @@ gateway 下游 flags（v1 目标）：
 - `-tracking_server_addr`
 - `-backoffice_backend_addr`
 
-**同节点**：`backoffice-backend` 与 `recommendation-server` 共享 `-export_dir`/`-snapshot_dir`（默认 `/var/lib/simple-living/exports`）。
+**snapshot**：`backoffice-backend` 写入 `-export_dir`；`recommendation-server` 与 `tracking-server` 读取 `-snapshot_dir`（默认 `/var/lib/simple-living/exports`）。生产同 Pod；lab 见 `environments/local-qemu/README.md`。
 
 最小联调启动顺序：foundation → `backoffice-backend` → `recommendation-server` → `user-server` → `tracking-server` → `gateway`。
 

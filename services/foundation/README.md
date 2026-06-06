@@ -2,46 +2,52 @@
 
 商业化联调与生产的共享基础设施：PostgreSQL、Redis、Kafka。
 
+## 目录结构
+
+```
+services/foundation/
+  deploy/                 # QEMU 节点 + 三组件一键部署（入口在这里）
+  postgres/deploy/        # 仅 PostgreSQL 容器
+  redis/deploy/           # 仅 Redis 容器
+  kafka/deploy/           # 仅 Kafka 容器
+  scripts/                # 健康检查、迁移、备份
+  migrations/             # 全局 schema 注册表
+```
+
+端口唯一来源：`environments/local-qemu/lab-ports.env`（`5432` / `6379` / `9092`；Mac 转发与来宾同号）。
+
 ## 组件
 
-| 组件 | 部署脚本 | 默认来宾端口 | Mac host-forward |
-|------|----------|--------------|------------------|
-| PostgreSQL | `postgres/deploy/deploy_service.sh` | 5432 | 15432 |
-| Redis | `redis/deploy/deploy_service.sh` | 6379 | 16379 |
-| Kafka (KRaft) | `kafka/deploy/deploy_service.sh` | 9092 | 19092 |
+| 组件 | 容器部署脚本 | 端口 |
+|------|--------------|------|
+| PostgreSQL | `postgres/deploy/deploy_service.sh` | `5432` |
+| Redis | `redis/deploy/deploy_service.sh` | `6379` |
+| Kafka (KRaft) | `kafka/deploy/deploy_service.sh` | `9092` |
 
-业务 QEMU 来宾通过 `10.0.2.2:<host-forward-port>` 访问（见 `environments/local-qemu/nodes.env`）。
-
-## QEMU 节点脚本
-
-| 组件 | start/check/stop_nodes | 说明 |
-|------|------------------------|------|
-| PostgreSQL | 有 | 独立 `foundation` QEMU 来宾 |
-| Redis / Kafka | 无 | 通过 `deploy_service.sh up` 在同一来宾上起 compose 容器 |
-
-lab 默认只起一台 foundation 来宾（`postgres/deploy/start_nodes.sh`），Redis 与 Kafka 以容器形式叠在同一 VM。
+业务 QEMU 来宾通过 `10.0.2.2:<端口>` 访问（见 `environments/local-qemu/nodes.env`）。
 
 ## 常用命令
 
 ```bash
-# 启动 foundation QEMU 节点
-bash services/foundation/postgres/deploy/start_nodes.sh
-bash services/foundation/postgres/deploy/check_nodes.sh
+# QEMU 节点（整层）
+bash services/foundation/deploy/start_nodes.sh
+bash services/foundation/deploy/check_nodes.sh
+bash services/foundation/deploy/stop_nodes.sh
 
-# 基础组件（在同一 foundation 来宾上）
+# 三个基础组件（同一 foundation 来宾上）
+bash services/foundation/deploy/deploy_service.sh up
+bash services/foundation/deploy/deploy_service.sh health
+
+# 单组件
 bash services/foundation/postgres/deploy/deploy_service.sh up
 bash services/foundation/redis/deploy/deploy_service.sh up
 bash services/foundation/kafka/deploy/deploy_service.sh up
 
-# 健康检查（本机经 host-forward）
+# 运维
 bash services/foundation/scripts/health_check.sh
-
-# 备份 / 恢复 PostgreSQL 卷
+bash services/foundation/scripts/run_migrations.sh
 bash services/foundation/scripts/backup.sh
 bash services/foundation/scripts/restore.sh <backup-archive.tar.gz>
-
-# Schema 迁移（幂等）
-bash services/foundation/scripts/run_migrations.sh
 ```
 
 ## Kafka Topic 规范

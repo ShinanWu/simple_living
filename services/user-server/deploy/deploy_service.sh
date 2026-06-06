@@ -5,6 +5,8 @@ ENV_FILE="${ENV_FILE:-${ROOT_DIR}/environments/local-qemu/nodes.env}"
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 
+PG_CONNINFO="${PG_CONNINFO:-host=${POSTGRES_HOST:-10.0.2.2} port=${POSTGRES_PORT:-5432} dbname=${POSTGRES_DB:-simple_living} user=${POSTGRES_USER:-simple} password=${POSTGRES_PASSWORD:-simple} connect_timeout=5}"
+
 export DEPLOY_ROOT_DIR="${ROOT_DIR}"
 export DEPLOY_SERVICE_NAME="user-server"
 export DEPLOY_BAZEL_TARGET="//services/user-server:user_server"
@@ -15,6 +17,6 @@ export DEPLOY_TARGET_SSH_PORT="${NODE_SSH_PORT_USER:-${SSH_PORT:-22}}"
 export DEPLOY_BUILD_SSH_PORT="${NODE_SSH_PORT_BUILD:-${SSH_PORT:-22}}"
 export DEPLOY_CONTAINER_NAME="simple-living-user-server"
 export DEPLOY_DOCKER_NETWORK="host"
-export DEPLOY_SERVER_FLAGS=""
+export DEPLOY_SERVER_FLAGS="-port=${SERVICE_PORT_USER_SERVER:-9101} -pg_conninfo='${PG_CONNINFO}'"
 
 exec bash "${ROOT_DIR}/tools/deploy_cpp_service.sh"

@@ -4,6 +4,10 @@
 set -euo pipefail
 
 : "${DEPLOY_ROOT_DIR:?DEPLOY_ROOT_DIR is required}"
+if [[ -z "${SERVICE_PORT_USER_SERVER:-}" ]]; then
+  # shellcheck disable=SC1091
+  source "${DEPLOY_ROOT_DIR}/environments/local-qemu/lab-ports.env"
+fi
 : "${DEPLOY_SERVICE_NAME:?DEPLOY_SERVICE_NAME is required}"
 : "${DEPLOY_BAZEL_TARGET:?DEPLOY_BAZEL_TARGET is required}"
 : "${DEPLOY_BAZEL_BIN_REL:?DEPLOY_BAZEL_BIN_REL is required}"

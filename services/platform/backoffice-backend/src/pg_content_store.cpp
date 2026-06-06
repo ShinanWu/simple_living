@@ -8,6 +8,8 @@
 namespace simple_living {
 namespace content_server {
 
+using catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED;
+
 namespace {
 
 void ClearRes(PGresult* r) {

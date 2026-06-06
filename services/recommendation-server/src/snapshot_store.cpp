@@ -2,6 +2,8 @@
 
 #include <google/protobuf/util/json_util.h>
 
+#include "recommendation_server_models.pb.h"
+
 #include <fstream>
 #include <sstream>
 
@@ -24,6 +26,46 @@ void ClearCatalog(std::unordered_map<std::string, catalog::GuideCard>* cards,
                   std::unordered_set<std::string>* visible) {
     cards->clear();
     visible->clear();
+}
+
+bool ParseVisibleIdsArray(const std::string& body, std::unordered_set<std::string>* out) {
+    out->clear();
+    const auto key = body.find("\"visible_ids\"");
+    if (key == std::string::npos) {
+        return false;
+    }
+    const auto arr_start = body.find('[', key);
+    if (arr_start == std::string::npos) {
+        return false;
+    }
+    const auto arr_end = body.find(']', arr_start);
+    if (arr_end == std::string::npos) {
+        return false;
+    }
+    size_t p = arr_start;
+    while ((p = body.find('"', p + 1)) != std::string::npos && p < arr_end) {
+        size_t q = body.find('"', p + 1);
+        if (q == std::string::npos || q > arr_end) {
+            break;
+        }
+        const std::string id = body.substr(p + 1, q - p - 1);
+        if (!id.empty()) {
+            out->insert(id);
+        }
+        p = q;
+    }
+    return !out->empty();
+}
+
+void FillPublishedVisible(const std::unordered_map<std::string, catalog::GuideCard>& cards,
+                        std::unordered_set<std::string>* visible) {
+    visible->clear();
+    for (const auto& kv : cards) {
+        if (!kv.second.has_content_status() ||
+            kv.second.content_status() == catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED) {
+            visible->insert(kv.first);
+        }
+    }
 }
 
 }  // namespace
@@ -52,27 +94,19 @@ bool SnapshotStore::LoadFromDisk() {
     std::unordered_map<std::string, catalog::GuideCard> next_cards;
     std::unordered_set<std::string> next_visible;
 
-    const auto cards_pos = body.find("\"cards\"");
-    if (cards_pos == std::string::npos) {
+    CatalogSnapshotBundle bundle;
+    google::protobuf::util::JsonParseOptions opts;
+    opts.ignore_unknown_fields = true;
+    if (!google::protobuf::util::JsonStringToMessage(body, &bundle, opts).ok()) {
         ClearCatalog(&cards_, &visible_ids_);
         return false;
     }
-    size_t i = cards_pos;
-    while ((i = body.find('{', i)) != std::string::npos) {
-        size_t end = body.find('}', i);
-        if (end == std::string::npos) {
-            break;
+    for (const auto& card : bundle.cards()) {
+        if (card.card_id().empty()) {
+            continue;
         }
-        std::string obj = body.substr(i, end - i + 1);
-        catalog::GuideCard card;
-        google::protobuf::util::JsonParseOptions opts;
-        opts.ignore_unknown_fields = true;
-        if (google::protobuf::util::JsonStringToMessage(obj, &card, opts).ok() &&
-            !card.card_id().empty()) {
-            next_cards[card.card_id()] = card;
-            next_visible.insert(card.card_id());
-        }
-        i = end + 1;
+        next_cards[card.card_id()] = card;
+        next_visible.insert(card.card_id());
     }
 
     const std::string vis_path = JoinPath(snapshot_dir_, "active/visibility.json");
@@ -80,20 +114,13 @@ bool SnapshotStore::LoadFromDisk() {
     if (vin) {
         std::ostringstream vbuf;
         vbuf << vin.rdbuf();
-        const std::string vbody = vbuf.str();
-        next_visible.clear();
-        size_t p = 0;
-        while ((p = vbody.find('"', p)) != std::string::npos) {
-            size_t q = vbody.find('"', p + 1);
-            if (q == std::string::npos) {
-                break;
-            }
-            const std::string id = vbody.substr(p + 1, q - p - 1);
-            if (id.find("guide_card") != std::string::npos || id.find("gc_") == 0) {
-                next_visible.insert(id);
-            }
-            p = q + 1;
+        std::unordered_set<std::string> from_file;
+        if (ParseVisibleIdsArray(vbuf.str(), &from_file)) {
+            next_visible = std::move(from_file);
         }
+    }
+    if (next_visible.empty()) {
+        FillPublishedVisible(next_cards, &next_visible);
     }
 
     if (next_cards.empty()) {
@@ -101,9 +128,7 @@ bool SnapshotStore::LoadFromDisk() {
         return false;
     }
     cards_ = std::move(next_cards);
-    if (!next_visible.empty()) {
-        visible_ids_ = std::move(next_visible);
-    }
+    visible_ids_ = std::move(next_visible);
     ++loaded_version_;
     return true;
 }

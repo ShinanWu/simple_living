@@ -1,71 +1,48 @@
 # local-qemu（Mac 本地 QEMU 联调环境）
 
-节点 IP、SSH 转发端口、foundation 连接与 frp 配置：`nodes.env`（模板 `nodes.example.env`）。  
-QEMU 运行时产物在 `vms/`（已 gitignore）。
+节点 SSH、foundation 连接：`nodes.env`（模板 `nodes.example.env`）。  
+**服务端口唯一来源**：`lab-ports.env`（来宾、容器、Mac 转发三者同号）。
 
-业务服务部署入口在各自目录：`services/<service>/deploy/deploy_service.sh` 与 `services/platform/backoffice-web/deploy/deploy_service.sh`。
+QEMU 磁盘与日志在 `vms/`（已 gitignore）。启动来宾：`services/<service>/deploy/start_nodes.sh`；foundation 来宾见 `services/foundation/deploy/`。
 
-## 脚本清单
+## 服务端口与命名
 
-- 无统一服务编排脚本。
-- 服务部署、镜像构建、镜像分发、容器启动均在服务目录内执行。
-- 节点生命周期入口也下沉到服务目录：
-  - `services/<service>/deploy/start_nodes.sh`
-  - `services/<service>/deploy/check_nodes.sh`
-  - `services/<service>/deploy/stop_nodes.sh`
-  - `services/platform/backoffice-web/deploy/start_nodes.sh`
-  - `services/platform/backoffice-web/deploy/check_nodes.sh`
-  - `services/platform/backoffice-web/deploy/stop_nodes.sh`
+| 服务目录 | QEMU 来宾名 | 容器名 | 端口 | Mac 转发 | SSH |
+|----------|-------------|--------|------|----------|-----|
+| `services/gateway` | `gateway` | `simple-living-gateway` | `8080` | `8080→8080`（公网入口在 `nginx` 来宾） | `2201` |
+| `services/user-server` | `user-server` | `simple-living-user-server` | `9101` | `9101→9101` | `2202` |
+| `services/platform/backoffice-backend` | `backoffice-backend` | `simple-living-backoffice-backend` | `9110` | `9110→9110` | `2203` |
+| `services/recommendation-server` | `recommendation-server` | `simple-living-recommendation-server` | `9103` | `9103→9103` | `2204` |
+| `services/tracking-server` | `tracking-server` | `simple-living-tracking-server` | `9105` | `9105→9105` | `2206` |
+| `services/proxy` + 公网入口 | `nginx` | `simple-living-proxy` 等 | `80` / `8080` / `8088` | 见 `proxy/deploy/start_nodes.sh` | `2208` |
+| 构建 | `build` | — | — | — | `2209` |
+| `services/foundation` | `foundation` | `simple-living-postgres` 等 | `5432`/`6379`/`9092` | 同号转发 | `2211` |
 
-## 强约束
+brpc 服务在来宾上使用 **`--network host`**：容器监听端口与来宾端口相同，无需 `-p 9103:9103` 二次映射。
 
-- 不提供批量全服务编排脚本。
-- 不维护服务清单中心脚本。
-- 每个服务在自身 `deploy/deploy_service.sh` 中定义：
-  - 构建目标（Bazel target 或 Docker build context）
-  - 镜像名
-  - 节点与端口
-  - 运行参数
+`nginx` 来宾上的 gateway 通过 `10.0.2.2:<服务端口>` 访问其它来宾（`lab-ports.env` 中 `LAB_QEMU_GATEWAY_HOST`）；地址由 `tools/lab_gateway_addrs.sh` 生成并注入 gateway 容器环境变量。
 
-## 使用流程
+## 部署顺序（商业化联调）
 
 ```bash
 cp environments/local-qemu/nodes.example.env environments/local-qemu/nodes.env
-bash services/foundation/postgres/deploy/start_nodes.sh
-bash services/foundation/postgres/deploy/check_nodes.sh
-bash services/foundation/postgres/deploy/deploy_service.sh up
-bash services/foundation/redis/deploy/deploy_service.sh up
-bash services/foundation/kafka/deploy/deploy_service.sh up
-bash services/gateway/deploy/start_nodes.sh
-bash services/gateway/deploy/check_nodes.sh
+# foundation（QEMU + 三组件）
+bash services/foundation/deploy/start_nodes.sh
+bash services/foundation/deploy/deploy_service.sh up
+# 业务来宾启动后：
+bash services/platform/backoffice-backend/deploy/deploy_service.sh
+bash services/recommendation-server/deploy/deploy_service.sh   # 需与 backoffice 同步 SNAPSHOT_DIR
+bash services/user-server/deploy/deploy_service.sh
+bash services/tracking-server/deploy/deploy_service.sh
 bash services/gateway/deploy/deploy_service.sh
 ```
 
-## Foundation 节点
+验收：
 
-本地商业化联调用单独的 `foundation` QEMU 节点承载 PostgreSQL、Redis、Kafka / Redpanda，避免基础组件与 Bazel build 节点抢资源。默认本机转发端口：
+```bash
+BASE_URL=http://8.152.103.12 python3 client/tests/gateway_api_smoke.py
+```
 
-| 组件 | 来宾端口 | Mac host-forward |
-|------|----------|------------------|
-| PostgreSQL | `5432` | `15432` |
-| Redis | `6379` | `16379` |
-| Kafka / Redpanda | `9092` | `19092` |
+## Bazel
 
-业务 QEMU 来宾通过 `10.0.2.2:<host-forward-port>` 访问 foundation 组件；配置项见 `environments/local-qemu/nodes.env`。
-
-## 业务节点拓扑（v1 lab）
-
-| 环境变量 | 典型职责 | 端口 |
-|----------|----------|------|
-| `NODE_IP_BUILD` | Bazel 构建 + 镜像 save | SSH `2209` |
-| `NODE_IP_GATEWAY` | gateway BFF | `8080` |
-| `NODE_IP_USER` | user-server | `9101` |
-| `NODE_IP_BACKOFFICE` | backoffice-backend（`9110`）+ recommendation-server（`9103`）同机；共享 `EXPORT_DIR` | SSH `2203` |
-| `NODE_IP_TRACKING` | tracking-server；读取同路径 snapshot | `9105` |
-
-`NODE_IP_BACKOFFICE` 与 `NODE_IP_TRACKING` 在商业化 v1 建议同节点挂载 `/var/lib/simple-living/exports`；lab 可分机，由 `SNAPSHOT_DIR` 卷同步或 NFS 代替。
-
-## Bazel 版本
-
-- `.bazelversion` 是唯一版本源。
-- 优先 `bazelisk`，回退 `bazel`。
+- `.bazelversion` 为唯一版本源；优先 `bazelisk`。

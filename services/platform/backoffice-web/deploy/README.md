@@ -25,7 +25,7 @@ bash services/platform/backoffice-web/deploy/stop_nodes.sh
 验收：
 
 ```bash
-curl -fsS "http://127.0.0.1:18081" | sed -n '1,10p'
+curl -fsS "http://127.0.0.1:8088" | sed -n '1,10p'
 ```
 
 ## 2. 本地 Docker 构建

@@ -154,4 +154,11 @@ start_frp_if_needed() {
 
 start_frp_if_needed
 
+# Bridge-network containers cannot reach sibling services via 127.0.0.1; Podman lab uses
+# host.containers.internal (see nodes.env PROXY_*_UPSTREAM_HOST).
+PROXY_GATEWAY_UPSTREAM_HOST="${PROXY_GATEWAY_UPSTREAM_HOST:-127.0.0.1}"
+PROXY_BACKOFFICE_UPSTREAM_HOST="${PROXY_BACKOFFICE_UPSTREAM_HOST:-127.0.0.1}"
+sed -i "s|127.0.0.1:8080|${PROXY_GATEWAY_UPSTREAM_HOST}:8080|g" /etc/nginx/http.d/default.conf
+sed -i "s|127.0.0.1:8088|${PROXY_BACKOFFICE_UPSTREAM_HOST}:8088|g" /etc/nginx/http.d/default.conf
+
 exec nginx -g "daemon off;"

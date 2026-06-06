@@ -7,9 +7,11 @@ ENV_FILE="${ENV_FILE:-${ROOT_DIR}/environments/local-qemu/nodes.env}"
 source "${ENV_FILE}"
 
 PG_HOST="${POSTGRES_HOST:-127.0.0.1}"
-PG_PORT="${FOUNDATION_POSTGRES_HOST_PORT:-${POSTGRES_PORT:-15432}}"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/environments/local-qemu/lab-ports.env"
+PG_PORT="${POSTGRES_PORT:-${SERVICE_PORT_FOUNDATION_POSTGRES}}"
 export PGPASSWORD="${POSTGRES_PASSWORD:-simple}"
-BOOTSTRAP="${KAFKA_BOOTSTRAP_SERVERS:-${PG_HOST}:19092}"
+BOOTSTRAP="${KAFKA_BOOTSTRAP_SERVERS:-${PG_HOST}:${SERVICE_PORT_FOUNDATION_KAFKA}}"
 BATCH="${BATCH:-50}"
 
 if ! command -v psql >/dev/null 2>&1; then

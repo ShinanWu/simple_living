@@ -37,10 +37,10 @@ bash services/gateway/deploy/stop_nodes.sh
 
 ```bash
 # 内部存活探针（明文 HTTP）
-ssh -p 2201 ubuntu@127.0.0.1 "curl -fsS http://127.0.0.1:18080/healthz"
+ssh -p 2208 ubuntu@127.0.0.1 "curl -fsS http://127.0.0.1:8080/healthz"
 
 # 对外公开健康面（标准信封，经前置 Nginx 时走 HTTPS）
-ssh -p 2201 ubuntu@127.0.0.1 "curl -fsS http://127.0.0.1:18080/api/v2/health"
+curl -fsS http://127.0.0.1:8080/api/v2/health/check -H 'Content-Type: application/json' -d '{}'
 ```
 
 `/api/v2/health` 期望返回 `success:true`、`code:0`，`data.components[]` 反映网关与可探活下游状态（见 [`api.md`](../docs/api.md) §9.19）。
@@ -49,12 +49,12 @@ ssh -p 2201 ubuntu@127.0.0.1 "curl -fsS http://127.0.0.1:18080/api/v2/health"
 
 ```bash
 # 成功路径
-curl -fsS http://127.0.0.1:18080/api/v2/guest/session \
+curl -fsS http://127.0.0.1:8080/api/v2/guest/session \
   -H 'Content-Type: application/json' \
   -d '{"device_id":"device_smoke","client_platform":"ios"}'
 
 # 路由不存在 → 期望 code 10050、HTTP 404
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/v2/__nope__
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/v2/__nope__
 ```
 
 ## 4. 镜像构建与运行说明
@@ -63,19 +63,15 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/v2/__nope__
 
 1. 在 build 节点执行 Bazel 构建：`//services/gateway:gateway_edge_server`
 2. 使用 `services/gateway/deploy/Dockerfile.cpp-service` 构建镜像：`localhost/gateway:${IMAGE_TAG}`
-3. 将镜像从 build 节点分发到 gateway 节点
-4. 在 gateway 节点运行容器：`simple-living-gateway`
+3. 将镜像从 build 节点分发到 `nginx` 来宾（`NODE_IP_NGINX`）
+4. 运行容器：`simple-living-gateway`（`8080:8080`）
 
-默认运行参数（容器内下游地址）：
+下游 brpc 地址由 `tools/lab_gateway_addrs.sh` 根据 `environments/local-qemu/lab-ports.env` 注入，例如：
 
-- `GATEWAY_USER_SERVER_ADDR=10.0.2.2:19101`
-- `GATEWAY_RECOMMENDATION_SERVER_ADDR=10.0.2.2:19103`
-- `GATEWAY_TRACKING_SERVER_ADDR=10.0.2.2:19105`
-- `GATEWAY_BACKOFFICE_BACKEND_ADDR=10.0.2.2:19110`
-
-默认端口映射：
-
-- Host `8080` -> Container `8080`
+- `GATEWAY_USER_SERVER_ADDR=10.0.2.2:9101`
+- `GATEWAY_RECOMMENDATION_SERVER_ADDR=10.0.2.2:9103`
+- `GATEWAY_TRACKING_SERVER_ADDR=10.0.2.2:9105`
+- `GATEWAY_BACKOFFICE_BACKEND_ADDR=10.0.2.2:9110`
 
 ## 5. 跨服务协作原则
 

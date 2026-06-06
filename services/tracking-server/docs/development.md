@@ -41,9 +41,9 @@ bazel test //services/tracking-server/...
 ```bash
 bazel run //services/tracking-server:tracking_server -- \
   -port=9105 \
-  -pg_conninfo="host=127.0.0.1 port=15432 dbname=tracking user=tracking password=$PG_PWD" \
+  -pg_conninfo="host=127.0.0.1 port=5432 dbname=tracking user=tracking password=$PG_PWD" \
   -redis_addr=127.0.0.1:6379 \
-  -kafka_brokers=127.0.0.1:19092 \
+  -kafka_brokers=127.0.0.1:9092 \
   -snapshot_dir=/var/lib/simple-living/exports
 ```
 

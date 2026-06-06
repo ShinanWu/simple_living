@@ -38,7 +38,7 @@ bazel test //services/user-server/...
 ```bash
 bazel run //services/user-server:user_server -- \
   -port=9101 \
-  -pg_conninfo="host=127.0.0.1 port=15432 dbname=user user=user password=$PG_PWD"
+  -pg_conninfo="host=127.0.0.1 port=5432 dbname=user user=user password=$PG_PWD"
 ```
 
 完整配置项（flags / 等价 env；监听默认 `0.0.0.0`，端口 `9101` 与 `services/README.md` §4.2 对齐）：

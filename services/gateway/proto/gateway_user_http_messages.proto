@@ -66,8 +66,14 @@ message ListHistoryHttpRequest {
   optional int32 limit = 2;
 }
 
+// Public JSON uses guide_card_id (see services/gateway/docs/api.md §5.5).
+message HttpContentRef {
+  optional string type = 1;
+  optional string guide_card_id = 2;
+}
+
 message RecordHistoryEventHttpRequest {
-  optional simple_living.user_server.ContentRef content_ref = 1;
+  optional HttpContentRef content_ref = 1;
   optional string occurred_at = 2;
   optional simple_living.user_server.HistorySourceSurface source_surface = 3;
   optional string client_event_id = 4;

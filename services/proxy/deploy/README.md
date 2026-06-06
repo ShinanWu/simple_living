@@ -76,7 +76,7 @@ sudo nginx -t && sudo nginx -s reload
 QEMU 宿主机到 nginx 来宾的端口转发（见 `start_nodes.sh`）：
 
 ```bash
-curl -fsS http://127.0.0.1:18081/healthz
+curl -fsS http://127.0.0.1:80/healthz
 ```
 
 一键检查「来宾本机 + 经远端 frps 公网」与 `frpc` 日志（需已配置 `environments/local-qemu/nodes.env`）：

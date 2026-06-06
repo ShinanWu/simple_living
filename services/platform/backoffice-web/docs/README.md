@@ -119,7 +119,7 @@ bash ../deploy/stop_nodes.sh   # 需要停服时
 - **验收**（静态资源可达 + 至少命中一个 backoffice API）：
 
 ```bash
-curl -fsS "http://127.0.0.1:18081" | sed -n '1,10p'   # 页面可达（QEMU lab 宿主端口）
+curl -fsS "http://127.0.0.1:8088" | sed -n '1,10p'   # 页面可达（nginx 来宾，Mac localhost:8088）
 ```
 
 页面执行「新增伙伴 / 新增内容 / 提交审核」并确认列表更新、记录一次 `request_id` 用于追踪。

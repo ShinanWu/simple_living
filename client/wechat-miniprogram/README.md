@@ -23,7 +23,7 @@
 
 - 仅调用 `gateway` HTTPS JSON；字段 `snake_case`。
 - **默认真实链路**：启动时写入 `gateway_base_url`（默认见 `config/env.ts`，与 `environments/local-qemu/nodes.example.env` 的 `FRP_CUSTOM_DOMAIN` 对齐），即公网 **frp → nginx → gateway**。
-- **本机 QEMU 转发**：仅调试时可覆盖为 `http://127.0.0.1:18080`（`gateway` 节点端口映射）。
+- **本机 QEMU 转发**：仅调试时可覆盖为 `http://127.0.0.1:8080`（`nginx` 来宾上的 `gateway`）。
 - **覆盖地址**：`wx.setStorageSync('gateway_base_url', 'http://你的公网入口')`。现阶段验收不得使用 Mock 或 Mac 本机替身。
 
 鉴权与存储：

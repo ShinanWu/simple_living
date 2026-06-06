@@ -6,7 +6,9 @@ ENV_FILE="${ENV_FILE:-${ROOT_DIR}/environments/local-qemu/nodes.env}"
 source "${ENV_FILE}"
 
 PG_HOST="${POSTGRES_HOST:-127.0.0.1}"
-PG_PORT="${FOUNDATION_POSTGRES_HOST_PORT:-${POSTGRES_PORT:-15432}}"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/environments/local-qemu/lab-ports.env"
+PG_PORT="${POSTGRES_PORT:-${SERVICE_PORT_FOUNDATION_POSTGRES}}"
 PG_USER="${POSTGRES_USER:-simple}"
 PG_DB="${POSTGRES_DB:-simple_living}"
 export PGPASSWORD="${POSTGRES_PASSWORD:-simple}"

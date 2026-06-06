@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 LOCAL_QEMU_DIR="${LOCAL_QEMU_DIR:-${ROOT_DIR}/environments/local-qemu}"
 ENV_FILE="${ENV_FILE:-${LOCAL_QEMU_DIR}/nodes.env}"
 if [[ -f "${ENV_FILE}" ]]; then
   # shellcheck disable=SC1090
   source "${ENV_FILE}"
 fi
+# shellcheck disable=SC1091
+source "${LOCAL_QEMU_DIR}/lab-ports.env"
+
 VM_DIR="${LOCAL_QEMU_DIR}/vms"
 BASE_IMAGE="${VM_DIR}/base-jammy-arm64.img"
 SEED_HTTP_DIR="${VM_DIR}/seed-http"
@@ -31,9 +34,9 @@ KEY_CONTENT="$(<"${SSH_PUBKEY_PATH}")"
 FIRMWARE="${FIRMWARE:-/opt/homebrew/Cellar/qemu/10.2.2/share/qemu/edk2-aarch64-code.fd}"
 name="foundation"
 ssh_port="${NODE_SSH_PORT_FOUNDATION:-2211}"
-pg_host_port="${FOUNDATION_POSTGRES_HOST_PORT:-15432}"
-redis_host_port="${FOUNDATION_REDIS_HOST_PORT:-16379}"
-kafka_host_port="${FOUNDATION_KAFKA_HOST_PORT:-19092}"
+pg_host_port="${SERVICE_PORT_FOUNDATION_POSTGRES}"
+redis_host_port="${SERVICE_PORT_FOUNDATION_REDIS}"
+kafka_host_port="${SERVICE_PORT_FOUNDATION_KAFKA}"
 
 disk="${VM_DIR}/${name}.qcow2"
 seed_dir="${VM_DIR}/seed-${name}"
@@ -89,9 +92,9 @@ cp "${seed_dir}/user-data" "${SEED_HTTP_DIR}/${name}/user-data"
 hdiutil makehybrid -o "${seed_iso}" "${seed_dir}" -hfs -joliet -iso -default-volume-name cidata >/dev/null
 
 netdev_args="user,id=net0,hostfwd=tcp::${ssh_port}-:22"
-netdev_args="${netdev_args},hostfwd=tcp::${pg_host_port}-:5432"
-netdev_args="${netdev_args},hostfwd=tcp::${redis_host_port}-:6379"
-netdev_args="${netdev_args},hostfwd=tcp::${kafka_host_port}-:9092"
+netdev_args="${netdev_args},hostfwd=tcp::${pg_host_port}-:${pg_host_port}"
+netdev_args="${netdev_args},hostfwd=tcp::${redis_host_port}-:${redis_host_port}"
+netdev_args="${netdev_args},hostfwd=tcp::${kafka_host_port}-:${kafka_host_port}"
 
 "${QEMU_BIN}" -name "simple-living-${name}" -machine virt,accel=hvf -cpu host \
   -smp "${CPU_CORES}" -m "${MEMORY_MB}" -bios "${FIRMWARE}" \

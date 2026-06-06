@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
     simple_living::recommendation_server::RecommendationServiceImpl g_svc(&store);
     brpc::Server server;
     if (server.AddService(&g_svc, brpc::SERVER_DOESNT_OWN_SERVICE) != 0 ||
-        !simple_living::recommendation_server::RegisterCatalogReadService(server, catalog_svc)) {
+        !simple_living::recommendation_server::RegisterCatalogReadService(&server, catalog_svc)) {
         LOG(ERROR) << "Fail to add recommendation-server services";
         return 1;
     }

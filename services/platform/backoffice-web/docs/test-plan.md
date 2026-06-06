@@ -103,7 +103,7 @@
 2. 构建并部署
    - `bash services/platform/backoffice-web/deploy/deploy_service.sh`
 3. 基础可达性
-   - `curl -fsS "http://127.0.0.1:18081" | sed -n '1,10p'`
+   - `curl -fsS "http://127.0.0.1:8088" | sed -n '1,10p'`
 4. 网关联通性（至少命中一个 backoffice API）
    - 页面执行"新增伙伴"并确认列表更新
    - 页面执行"新增内容"并确认列表更新

@@ -5,8 +5,8 @@ ENV_FILE="${ENV_FILE:-${ROOT_DIR}/environments/local-qemu/nodes.env}"
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 
-PG_CONNINFO="${PG_CONNINFO:-host=${POSTGRES_HOST:-10.0.2.2} port=${POSTGRES_PORT:-15432} dbname=${POSTGRES_DB:-simple_living} user=${POSTGRES_USER:-simple} password=${POSTGRES_PASSWORD:-simple} connect_timeout=5}"
-KAFKA_BROKERS="${KAFKA_BOOTSTRAP_SERVERS:-10.0.2.2:19092}"
+PG_CONNINFO="${PG_CONNINFO:-host=${POSTGRES_HOST:-10.0.2.2} port=${POSTGRES_PORT:-5432} dbname=${POSTGRES_DB:-simple_living} user=${POSTGRES_USER:-simple} password=${POSTGRES_PASSWORD:-simple} connect_timeout=5}"
+KAFKA_BROKERS="${KAFKA_BOOTSTRAP_SERVERS:-10.0.2.2:9092}"
 SNAPSHOT_DIR="${SNAPSHOT_DIR:-/var/lib/simple-living/exports}"
 
 export DEPLOY_ROOT_DIR="${ROOT_DIR}"
@@ -21,6 +21,6 @@ export DEPLOY_CONTAINER_NAME="simple-living-tracking-server"
 export DEPLOY_DOCKER_NETWORK="host"
 export DEPLOY_EXTRA_RUN_ARGS="-v ${SNAPSHOT_DIR}:${SNAPSHOT_DIR}"
 export DEPLOY_REMOTE_PREP_CMD="sudo mkdir -p '${SNAPSHOT_DIR}' &&"
-export DEPLOY_SERVER_FLAGS="-pg_conninfo='${PG_CONNINFO}' -kafka_brokers='${KAFKA_BROKERS}' -snapshot_dir='${SNAPSHOT_DIR}'"
+export DEPLOY_SERVER_FLAGS="-port=${SERVICE_PORT_TRACKING_SERVER:-9105} -pg_conninfo='${PG_CONNINFO}' -kafka_brokers='${KAFKA_BROKERS}' -snapshot_dir='${SNAPSHOT_DIR}'"
 
 exec bash "${ROOT_DIR}/tools/deploy_cpp_service.sh"

@@ -98,6 +98,10 @@ public:
                                     backoffice_backend::SnapshotExportCoordinator* export_coord)
         : store_(s), export_coord_(export_coord) {}
 
+    void SetExportCoordinator(backoffice_backend::SnapshotExportCoordinator* export_coord) {
+        export_coord_ = export_coord;
+    }
+
     void SetVisibilityVerdict(::google::protobuf::RpcController*,
                               const SetVisibilityVerdictRequest* req,
                               SetVisibilityVerdictResponse* resp,
@@ -178,7 +182,8 @@ public:
             lreq.set_active_only(req->active_only());
             ListRiskFlagsResponse lresp;
             store_->ListRiskFlags(lreq, &lresp);
-            (*resp->mutable_flags_by_subject())[key.subject_id()] = lresp;
+            (*resp->mutable_flags_by_subject())[key.subject_id()].mutable_flags()->CopyFrom(
+                lresp.flags());
         }
     }
 };
@@ -275,7 +280,7 @@ bool RegisterGovernanceModule(brpc::Server* server,
         delete mod;
         return false;
     }
-    mod->vis = governance_server::GovernanceVisibilityServiceImpl(&mod->store, export_coord);
+    mod->vis.SetExportCoordinator(export_coord);
     mod->store.EnsureSeedDisclosureTemplates();
     mod->store.EnsurePublishedVisibilityFromContent();
     if (server->AddService(&mod->review, brpc::SERVER_DOESNT_OWN_SERVICE) != 0 ||

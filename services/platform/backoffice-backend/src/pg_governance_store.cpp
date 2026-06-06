@@ -465,7 +465,8 @@ bool PgGovernanceStore::UpsertCooperationLabel(const UpsertCooperationLabelReque
     const std::string hex = HexEncode(raw);
     std::lock_guard<std::mutex> lock(mu_);
     const std::string st = std::to_string(lbl.subject_type());
-    const char* pv[] = {lbl.id().c_str(), st.c_str(), lbl.subject_id().c_str(), lbl.label_key().c_str(),
+    const char* pv[] = {lbl.id().c_str(), st.c_str(), lbl.subject_id().c_str(),
+                        lbl.cooperation_type().c_str(),
                         hex.c_str()};
     PGresult* r = ExecParams(
         "INSERT INTO governance_cooperation_label (id, subject_type, subject_id, label_key, proto_hex) "

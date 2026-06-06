@@ -4,7 +4,7 @@ import { OperationsConsolePage } from "./pages/OperationsConsolePage";
 
 export default function App() {
   const api = useMemo(
-    () => new HttpGatewayApiClient(import.meta.env.VITE_GATEWAY_BASE_URL ?? "http://8.152.103.12"),
+    () => new HttpGatewayApiClient(import.meta.env.VITE_GATEWAY_BASE_URL ?? ""),
     [],
   );
   return <OperationsConsolePage api={api} />;

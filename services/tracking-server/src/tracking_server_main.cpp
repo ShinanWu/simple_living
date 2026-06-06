@@ -14,10 +14,10 @@
 
 DEFINE_int32(port, 9105, "TCP port for this brpc server");
 DEFINE_string(pg_conninfo,
-              "host=10.0.2.2 port=15432 dbname=simple_living user=simple password=simple connect_timeout=5",
+              "host=10.0.2.2 port=5432 dbname=simple_living user=simple password=simple connect_timeout=5",
               "PostgreSQL connection string for tracking storage");
 DEFINE_string(kafka_brokers,
-              "10.0.2.2:19092",
+              "10.0.2.2:9092",
               "Kafka/Redpanda bootstrap servers; v1 records events in PostgreSQL outbox for this stream");
 DEFINE_string(snapshot_dir,
               "/var/lib/simple-living/exports",

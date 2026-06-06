@@ -18,6 +18,7 @@ proto_library(
     name = "recommendation_server_proto",
     srcs = glob(["proto/*.proto"]),
     strip_import_prefix = "proto",
+    deps = ["//common/proto:catalog_proto"],
 )
 
 cc_proto_library(
@@ -46,6 +47,7 @@ cc_library(
     hdrs = ["src/snapshot_store.h"],
     copts = BRPC_EXAMPLE_COPTS,
     deps = [
+        ":recommendation_server_cc_proto",
         "//common/proto:catalog_cc_proto",
         "@com_google_protobuf//:protobuf",
     ],
