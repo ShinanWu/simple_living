@@ -4,6 +4,13 @@
 set -euo pipefail
 
 : "${DEPLOY_ROOT_DIR:?DEPLOY_ROOT_DIR is required}"
+ENV_FILE="${ENV_FILE:-${DEPLOY_ROOT_DIR}/environments/local-qemu/nodes.env}"
+if [[ -f "${ENV_FILE}" && -z "${SSH_USER:-}" ]]; then
+  # shellcheck disable=SC1090
+  set -a
+  source "${ENV_FILE}"
+  set +a
+fi
 if [[ -z "${SERVICE_PORT_USER_SERVER:-}" ]]; then
   # shellcheck disable=SC1091
   source "${DEPLOY_ROOT_DIR}/environments/local-qemu/lab-ports.env"

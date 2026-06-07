@@ -21,7 +21,15 @@
 
 所有接口走标准信封（`success/code/message/data/meta`），字段 `snake_case`。
 
-## 3. 路由（v3）
+## 3. 路由
+
+### 3.0 运营登录
+
+| 模块 | 方法 + 路径 | 说明 |
+|------|------|------|
+| auth | `POST /api/v2/backoffice/auth/login` | 校验 `access_token`，返回 Bearer `token` 与 `role` |
+
+其余写接口需 `Authorization: Bearer <token>`（gateway `-backoffice_api_token`）。
 
 ### 3.1 联盟管理
 
@@ -291,50 +299,63 @@
 
 ## 5. 状态机
 
-### 5.1 内容生命周期状态机
+`content_status`（内容编辑态）与 `visibility_verdict`（C 端可见性）为**两个独立维度**；产品语义见 `services/platform/docs/product-spec.md` §4。
+
+### 5.1 内容生命周期（`content_status`）
 
 ```
-draft ──submit──> in_review ──approve──> published
-  │                    │                     │
-  │<──reject───────────┘                     ├──offline──> archived
-  │                                          │
-  └──────────────────edit────────────────────┘
+                    submit-review
+         draft ──────────────────> in_review
+           ^                           │
+           │ reject / needs_info       │ 审核 approved（不自动发布）
+           └───────────────────────────┤
+                                       │ publish（显式）
+                                       v
+                                  published ──offline──> offline ──archive──> archived
 ```
 
 | 状态 | 说明 | 可执行操作 |
 |------|------|------------|
-| `draft` | 草稿，不可见 | 编辑、提交审核、删除 |
-| `in_review` | 审核中 | 查看审核状态 |
-| `published` | 已发布，可见 | 下架、提交修订、回滚版本 |
-| `scheduled` | 定时发布 | 取消发布、编辑生效时间 |
+| `draft` | 草稿 | 编辑、提交审核 |
+| `in_review` | 已送审；含「审核已通过、待发布」 | 查看审核状态；待运营显式发布 |
+| `published` | 已执行发布 | 下架、提交修订、回滚版本 |
+| `scheduled` | 定时发布 | 取消定时、编辑生效时间 |
 | `offline` | 已下架 | 重新发布、归档 |
 | `archived` | 已归档 | 仅查看 |
 
-### 5.2 审核状态机
+### 5.2 审核状态机（审核单 `status`）
 
 ```
-pending ──assign──> in_review ──decision──> approved ──publish──> completed
-                                              │
-                                              ├──rejected────────> completed
-                                              │
-                                              └──needs_info──────> completed
+pending ──受理──> in_review ──裁决──> approved ──> completed
+                                      │
+                                      ├── rejected ──> completed
+                                      │
+                                      └── needs_info ─> completed
 ```
 
-### 5.3 可见性裁决规则
+审核 `approved` **不会**将 `content_status` 变为 `published`；发布须调用 `content/items/publish`。
 
-- 审核通过 **不自动发布**
-- 发布可见性最终以 `platform/backoffice-backend` 裁决为准
-- 即使 `content_status = published`，若治理裁决非 `published`，用户侧不可见
-- `SetVisibilityVerdict` 为显式操作，需运营角色
+### 5.3 可见性裁决（`visibility_verdict.state`）
 
-## 6. 领域协作规则
+| 值 | 含义 |
+|----|------|
+| `published` | 允许 C 端展示（仍须 `content_status` 为已发布态） |
+| `restricted` | 限制展示 |
+| `unpublished` | 不可见（紧急下架） |
 
-- 审核通过 **不自动发布**
-- 发布可见性最终以 `platform/backoffice-backend` 裁决为准
-- gateway 不承载跨域事务；跨域一致性通过流程与补偿保证
-- 内容主数据与发布态不保存在 gateway 内存中，必须以 `platform/backoffice-backend` PostgreSQL 为准
+**双门闸（fail-closed）**
 
-## 7. 权限模型（业务级）
+- 审核通过 **不自动发布**，也 **不自动** 将可见性设为 `published`。
+- 即使 `content_status = published`，若 `visibility.state ≠ published`，C 端不可见。
+- `SetVisibilityVerdict` 为显式操作，需 `reviewer` 或 `backoffice_admin` 角色。
+
+### 5.4 领域协作规则
+
+- gateway **不**承载跨域事务；多模块编排由 `backoffice-backend` 进程内完成。
+- 内容主数据、审核态、可见性、联盟配置 **不得** 以 gateway 内存为权威；必须持久化于 `backoffice-backend` PostgreSQL。
+- 联盟伙伴数据权威在 `backoffice-backend.affiliate`；gateway 不得长期以进程内内存替代。
+
+## 6. 权限模型（业务级）
 
 | 角色 | 权限 |
 |------|------|
@@ -343,7 +364,7 @@ pending ──assign──> in_review ──decision──> approved ──publi
 | `reviewer` | 审核裁决、可见性裁决 |
 | `partner_operator` | 伙伴管理 |
 
-## 8. 审计与可观测性
+## 7. 审计与可观测性
 
 建议事件名：
 
@@ -359,9 +380,13 @@ pending ──assign──> in_review ──decision──> approved ──publi
 
 所有写操作必须在响应中回传 `meta.request_id` 与 `meta.trace_id`，用于审计追踪。
 
-## 9. 开发顺序（严格文档先行）
+## 8. 相关文档
 
-1. 锁定路由与字段（本文件 + `api.md`）
-2. 锁定下游 RPC 对应关系（`affiliate/content/governance`）
-3. 锁定错误码与状态机
-4. 再进入 proto 与实现开发
+| 文档 | 说明 |
+|------|------|
+| `services/platform/docs/README.md` | 平台总览、架构与部署 |
+| `services/platform/docs/product-spec.md` | 产品规格 |
+| `services/platform/docs/detail-design.md` | 详细设计 |
+| `services/platform/docs/backend-api.md` | 后端 RPC 契约 |
+| `services/platform/docs/backend-data-model.md` | 后端数据模型 |
+| `services/platform/docs/backend-workflow.md` | 后端写链路与导出 |

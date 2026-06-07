@@ -148,25 +148,109 @@ message BackofficePartnersResponse {
   repeated BackofficePartner items = 1;
 }
 
+message BackofficeLoginRequest {
+  optional string access_token = 1;
+}
+
+message BackofficeLoginResponse {
+  optional bool success = 1;
+  optional string token = 2;
+  optional string role = 3;
+}
+
+message BackofficeMediaRef {
+  optional string media_id = 1;
+  optional string url = 2;
+  optional string type = 3;
+  optional int32 width = 4;
+  optional int32 height = 5;
+}
+
+message BackofficeAffiliateRef {
+  optional string channel = 1;
+  optional string external_item_id = 2;
+  optional string external_shop_id = 3;
+}
+
 message BackofficeContentItem {
   optional string content_id = 1;
-  optional string title = 2;
-  optional string theme = 3;
-  optional string status = 4;
-  optional string summary = 5;
-  optional string landing_url = 6;
-  optional string external_item_id = 7;
+  optional string resource_kind = 2;
+  optional string title = 3;
+  optional string subtitle = 4;
+  repeated string theme_ids = 5;
+  repeated string tag_ids = 6;
+  optional string content_status = 7;
+  optional int64 revision = 8;
+  optional int64 published_revision = 9;
+  optional string summary = 10;
+  optional BackofficeMediaRef cover_media = 11;
+  optional string landing_url = 12;
+  optional string external_item_id = 13;
+  repeated BackofficeAffiliateRef affiliate_refs = 14;
+  repeated string selling_points = 15;
+  optional bool commercial_disclosure_required = 16;
+  optional string effective_from = 17;
+  optional string effective_to = 18;
+  optional string created_at = 19;
+  optional string updated_at = 20;
+  optional string created_by = 21;
+  optional string updated_by = 22;
+  // Legacy single-theme field for backward compatibility.
+  optional string theme = 23;
+  optional string status = 24;
+}
+
+message BackofficeContentRevision {
+  optional int64 revision = 1;
+  optional string created_at = 2;
+  optional string created_by = 3;
+  optional string change_summary = 4;
+}
+
+message BackofficeReviewState {
+  optional string review_id = 1;
+  optional string status = 2;
+  optional string submitted_at = 3;
+  optional string reviewer_id = 4;
+  optional string comment = 5;
+}
+
+message BackofficeVisibilityVerdict {
+  optional string state = 1;
+  optional string reason_code = 2;
+  optional string source = 3;
+  optional string effective_from = 4;
+  optional int64 version = 5;
+}
+
+message BackofficeContentDetailResponse {
+  optional BackofficeContentItem content = 1;
+  repeated BackofficeContentRevision revision_history = 2;
+  optional BackofficeReviewState review_state = 3;
+  optional BackofficeVisibilityVerdict visibility_verdict = 4;
 }
 
 message BackofficeListContentItemsRequest {}
 
 message BackofficeCreateContentItemRequest {
-  optional string title = 1;
-  optional string theme = 2;
-  optional string summary = 3;
-  optional string landing_url = 4;
-  optional string external_item_id = 5;
-  optional string status = 6;
+  optional string resource_kind = 1;
+  optional string title = 2;
+  optional string subtitle = 3;
+  optional string summary = 4;
+  repeated string theme_ids = 5;
+  repeated string tag_ids = 6;
+  optional BackofficeMediaRef cover_media = 7;
+  optional string landing_url = 8;
+  optional string external_item_id = 9;
+  repeated BackofficeAffiliateRef affiliate_refs = 10;
+  repeated string selling_points = 11;
+  optional bool commercial_disclosure_required = 12;
+  optional string effective_from = 13;
+  optional string effective_to = 14;
+  optional string initial_status = 15;
+  // Legacy fields.
+  optional string theme = 16;
+  optional string status = 17;
 }
 
 message BackofficeUpdateContentStatusRequest {
@@ -182,9 +266,18 @@ message BackofficeUpdateContentItemRequest {
   optional string summary = 5;
   optional string landing_url = 6;
   optional string external_item_id = 7;
-  optional string cover_url = 8;
-  optional string theme = 9;
-  optional string change_summary = 10;
+  optional BackofficeMediaRef cover_media = 8;
+  repeated string theme_ids = 9;
+  repeated string tag_ids = 10;
+  repeated BackofficeAffiliateRef affiliate_refs = 11;
+  repeated string selling_points = 12;
+  optional bool commercial_disclosure_required = 13;
+  optional string effective_from = 14;
+  optional string effective_to = 15;
+  optional string change_summary = 16;
+  // Legacy.
+  optional string cover_url = 17;
+  optional string theme = 18;
 }
 
 message BackofficeContentDetailRequest {
@@ -248,6 +341,13 @@ message BackofficeReviewItem {
   optional string review_id = 1;
   optional string subject_id = 2;
   optional string status = 3;
+  optional string resource_kind = 4;
+  optional int32 priority = 5;
+  optional string enqueue_reason = 6;
+  optional string enqueued_at = 7;
+  optional string reviewer_id = 8;
+  optional string comment = 9;
+  optional string decided_at = 10;
 }
 
 message BackofficeListReviewsRequest {}
@@ -266,13 +366,14 @@ service GatewayPagesEdgeV2 {
   rpc GetGuideDetail(GuideDetailRequest) returns (GuideDetailResponse);
   rpc PrepareRedirect(RedirectPrepareRequest) returns (RedirectPrepareResponse);
   rpc GetMeSummary(MeSummaryRequest) returns (MeSummaryResponse);
+  rpc PostBackofficeLogin(BackofficeLoginRequest) returns (BackofficeLoginResponse);
   rpc GetBackofficeAffiliatePartners(BackofficeListPartnersRequest) returns (BackofficePartnersResponse);
   rpc PostBackofficeAffiliatePartner(BackofficeCreatePartnerRequest) returns (BackofficePartnersResponse);
   rpc GetBackofficeContentItems(BackofficeListContentItemsRequest) returns (BackofficeContentItemsResponse);
   rpc PostBackofficeContentItem(BackofficeCreateContentItemRequest) returns (BackofficeContentItemsResponse);
   rpc PatchBackofficeContentItemStatus(BackofficeUpdateContentStatusRequest) returns (BackofficeContentItemsResponse);
   rpc PostBackofficeContentItemUpdate(BackofficeUpdateContentItemRequest) returns (BackofficeContentItemsResponse);
-  rpc PostBackofficeContentItemDetail(BackofficeContentDetailRequest) returns (BackofficeContentItemsResponse);
+  rpc PostBackofficeContentItemDetail(BackofficeContentDetailRequest) returns (BackofficeContentDetailResponse);
   rpc PostBackofficeContentItemSubmitReview(BackofficeSubmitReviewRequest) returns (BackofficeSubmitReviewResponse);
   rpc PostBackofficeContentItemPublish(BackofficePublishRequest) returns (BackofficePublishResponse);
   rpc PostBackofficeContentItemRollback(BackofficeRollbackRequest) returns (BackofficeRollbackResponse);

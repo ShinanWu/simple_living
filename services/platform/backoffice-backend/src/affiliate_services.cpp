@@ -9,6 +9,7 @@
 
 #include "affiliate_server.pb.h"
 #include "pg_affiliate_store.h"
+#include "snapshot_export.h"
 
 
 namespace simple_living {
@@ -22,9 +23,14 @@ std::string GenId(const std::string& prefix) {
 
 class AffiliatePartnerServiceImpl : public AffiliatePartnerService {
     PgAffiliateStore* store_;
+    backoffice_backend::SnapshotExportCoordinator* export_coord_{nullptr};
 
 public:
     explicit AffiliatePartnerServiceImpl(PgAffiliateStore* s) : store_(s) {}
+
+    void SetExportCoordinator(backoffice_backend::SnapshotExportCoordinator* export_coord) {
+        export_coord_ = export_coord;
+    }
 
     void GetPartnerCapabilitySnapshot(::google::protobuf::RpcController*,
                                       const GetPartnerCapabilitySnapshotRequest* req,
@@ -46,6 +52,43 @@ public:
         spec->set_spec_id(GenId("spec"));
         spec->set_partner_id(partner_id);
         spec->set_target_base("https://go.simpleliving.com/r");
+    }
+
+    void ListPartners(::google::protobuf::RpcController*,
+                      const ListPartnersRequest*,
+                      ListPartnersResponse* resp,
+                      ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        std::vector<PartnerCapabilitySnapshot> items;
+        store_->ListPartners(&items);
+        for (const auto& item : items) {
+            *resp->add_items() = item;
+        }
+    }
+
+    void UpsertPartnerBackoffice(::google::protobuf::RpcController*,
+                                 const UpsertPartnerBackofficeRequest* req,
+                                 UpsertPartnerBackofficeResponse* resp,
+                                 ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        if (!req->has_partner() || req->partner().partner_id().empty()) {
+            return;
+        }
+        PartnerCapabilitySnapshot snap = req->partner();
+        if (snap.capability_set_id().empty()) {
+            snap.set_capability_set_id(GenId("cs"));
+        }
+        if (snap.lifecycle_status() == PARTNER_LIFECYCLE_STATUS_UNSPECIFIED) {
+            snap.set_lifecycle_status(PARTNER_LIFECYCLE_STATUS_ACTIVE);
+        }
+        if (snap.flags_size() == 0) {
+            snap.add_flags(CAPABILITY_FLAG_DEEP_LINK);
+        }
+        store_->UpsertPartner(snap);
+        *resp->mutable_partner() = snap;
+        if (export_coord_) {
+            export_coord_->RefreshNow();
+        }
     }
 };
 
@@ -128,13 +171,17 @@ struct AffiliateModule {
 
 bool RegisterAffiliateModule(brpc::Server* server,
                              const std::string& pg_conninfo,
-                             AffiliateModule** out_mod) {
+                             AffiliateModule** out_mod,
+                             SnapshotExportCoordinator* export_coord) {
     auto* mod = new AffiliateModule();
     if (!mod->store.ConnectAndInit(pg_conninfo)) {
         delete mod;
         return false;
     }
     mod->store.EnsureSeedPartners();
+    if (export_coord) {
+        mod->partner.SetExportCoordinator(export_coord);
+    }
     if (server->AddService(&mod->partner, brpc::SERVER_DOESNT_OWN_SERVICE) != 0 ||
         server->AddService(&mod->rule, brpc::SERVER_DOESNT_OWN_SERVICE) != 0 ||
         server->AddService(&mod->intake, brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
@@ -151,6 +198,10 @@ void ShutdownAffiliateModule(AffiliateModule* mod) {
         mod->store.Close();
         delete mod;
     }
+}
+
+affiliate_server::PgAffiliateStore* AffiliateModuleStore(AffiliateModule* mod) {
+    return mod ? &mod->store : nullptr;
 }
 
 }  // namespace backoffice_backend

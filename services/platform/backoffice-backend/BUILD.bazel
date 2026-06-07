@@ -9,11 +9,6 @@ filegroup(
     srcs = glob(["proto/*.proto"]),
 )
 
-filegroup(
-    name = "docs",
-    srcs = glob(["docs/**/*.md"]),
-)
-
 proto_library(
     name = "governance_server_proto",
     srcs = ["proto/governance_server.proto"],
@@ -96,6 +91,7 @@ cc_library(
     hdrs = ["src/export_publisher.h"],
     copts = BRPC_EXAMPLE_COPTS,
     deps = [
+        ":affiliate_server_cc_proto",
         "//common/proto:catalog_cc_proto",
         "@com_google_protobuf//:protobuf",
     ],

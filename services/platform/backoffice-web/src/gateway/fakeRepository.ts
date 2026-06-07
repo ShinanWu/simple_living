@@ -15,6 +15,10 @@ import type {
   BackofficeReviewsData,
   BackofficeUpdateContentStatusBody,
   BackofficeUpdateReviewBody,
+  BackofficeSetVisibilityBody,
+  BackofficeSetVisibilityData,
+  BackofficeLoginData,
+  VisibilityState,
 } from "./types";
 
 const delay = (ms = 280): Promise<void> =>
@@ -29,6 +33,20 @@ let contentSeq = 100;
 const now = () => new Date().toISOString();
 
 export class FakeGatewayRepository implements GatewayApiClient {
+  async loginBackoffice(accessToken: string): Promise<ApiResponse<BackofficeLoginData>> {
+    await delay();
+    if (accessToken !== "test-token") {
+      return { success: false, code: 20004, message: "Invalid credentials" };
+    }
+    return {
+      success: true,
+      code: 0,
+      message: "OK",
+      data: { token: "test-token", role: "backoffice_admin" },
+      meta: makeMeta(),
+    };
+  }
+
   private partners: BackofficePartner[] = [
     {
       partner_id: "pdd",
@@ -82,6 +100,10 @@ export class FakeGatewayRepository implements GatewayApiClient {
       created_by: "ops_admin",
     },
   ];
+
+  private visibilityByContentId = new Map<string, VisibilityState>([
+    ["guide_card_1001", "published"],
+  ]);
 
   private reviews: BackofficeReviewsData["items"] = [
     {
@@ -181,8 +203,15 @@ export class FakeGatewayRepository implements GatewayApiClient {
               comment: reviewState.comment,
             }
           : undefined,
-        visibility_verdict:
-          content.content_status === "published"
+        visibility_verdict: this.visibilityByContentId.has(contentId)
+          ? {
+              state: this.visibilityByContentId.get(contentId)!,
+              source: "manual_ops" as const,
+              reason_code: "manual_ops",
+              effective_from: now(),
+              version: 1,
+            }
+          : content.content_status === "published"
             ? {
                 state: "published" as const,
                 source: "review" as const,
@@ -382,11 +411,8 @@ export class FakeGatewayRepository implements GatewayApiClient {
     this.contents = this.contents.map((item) => {
       const review = this.reviews.find((r) => r.subject_id === item.content_id);
       if (!review || review.review_id !== body.review_id) return item;
-      if (body.status === "approved") {
-        return { ...item, content_status: "published" as const };
-      }
       if (body.status === "rejected") {
-        return { ...item, content_status: "offline" as const };
+        return { ...item, content_status: "draft" as const };
       }
       return item;
     });
@@ -395,6 +421,31 @@ export class FakeGatewayRepository implements GatewayApiClient {
       code: 0,
       message: "ok",
       data: { items: this.reviews },
+      meta: makeMeta(),
+    };
+  }
+
+  async setBackofficeGovernanceVisibility(
+    body: BackofficeSetVisibilityBody,
+  ): Promise<ApiResponse<BackofficeSetVisibilityData>> {
+    await delay(200);
+    if (!this.contents.some((item) => item.content_id === body.content_id)) {
+      return {
+        success: false,
+        code: 10003,
+        message: "content not found",
+        meta: makeMeta(),
+      };
+    }
+    this.visibilityByContentId.set(body.content_id, body.state);
+    return {
+      success: true,
+      code: 0,
+      message: "ok",
+      data: {
+        content_id: body.content_id,
+        visibility_state: body.state,
+      },
       meta: makeMeta(),
     };
   }

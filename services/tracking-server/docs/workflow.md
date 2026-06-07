@@ -39,7 +39,7 @@
 
 ### 1.1 Redirect prepare chain (`AssembleTrackingLink`)
 
-Tracking **owns `landing_url`**; partner-specific URL grammar/signing stays in `platform/backoffice-backend` (see [`../../platform/backoffice-backend/docs/api.md`](../../platform/backoffice-backend/docs/api.md) and api §11.1). One assemble call:
+Tracking **owns `landing_url`**; partner-specific URL grammar/signing stays in `platform/backoffice-backend` (see [`../../platform/docs/backend-api.md`](../../platform/docs/backend-api.md) and api §11.1). One assemble call:
 
 1. **Resolve context →** expand the opaque `affiliate_context_ref` into one canonical affiliate `LinkGenerationInput` (affiliate-owned resolver; tracking does not parse its bytes).
 2. **Get spec →** call affiliate `ValidateLinkGenerationInput` (or a cached equivalent within partner TTL) to obtain `AffiliateLinkSpec`. RPC bounded by `-rpc_timeout_ms` / `-rpc_max_retry`; failure → `TRACKING_ERROR_CODE_AFFILIATE_SPEC_FAILED` (public `50002`).

@@ -401,6 +401,16 @@ bool PgGovernanceStore::GetVisibilityVerdict(const GetVisibilityVerdictRequest& 
     return true;
 }
 
+bool PgGovernanceStore::IsCsideVisible(const std::string& content_id) {
+    GetVisibilityVerdictRequest req;
+    req.set_content_id(content_id);
+    GetVisibilityVerdictResponse resp;
+    if (!GetVisibilityVerdict(req, &resp)) {
+        return false;
+    }
+    return resp.verdict().state() == VISIBILITY_STATE_PUBLISHED;
+}
+
 bool PgGovernanceStore::EvaluateVisibility(const EvaluateVisibilityRequest& req,
                                          EvaluateVisibilityResponse* resp) {
     GetVisibilityVerdictRequest greq;

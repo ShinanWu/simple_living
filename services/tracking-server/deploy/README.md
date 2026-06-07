@@ -62,7 +62,7 @@ ssh -p 2206 ubuntu@127.0.0.1 "curl -fsS http://127.0.0.1:9105/healthz"
 
 ## 6. 跨服务协作原则
 
-- 仅通过契约文档协作：`.cursor/rules/shared-contracts.mdc` 与 `services/*/docs/api.md`（跨域只引用 `../../platform/backoffice-backend/docs/api.md`）。
+- 仅通过契约文档协作：`.cursor/rules/shared-contracts.mdc` 与 `services/*/docs/api.md`（跨域只引用 `../../platform/docs/backend-api.md`）。
 - 不直接依赖其他服务源码与内部实现细节。
 
 ## 7. K8s（服务内部署入口）

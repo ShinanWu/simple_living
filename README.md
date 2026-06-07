@@ -128,8 +128,7 @@ simple_living/
 | 各服务 API / 数据模型 / 部署 | `services/<service>/docs/`（自治维护） |
 | 前端 IA / 页面 / 跨端共识 | [`client/frontend-README.md`](./client/frontend-README.md) 及索引内链接 |
 | 微信小程序（C 端 v1） | [`client/wechat-miniprogram/README.md`](./client/wechat-miniprogram/README.md) |
-| 运营后台 Web | [`services/platform/backoffice-web/docs/README.md`](./services/platform/backoffice-web/docs/README.md) |
-| 运营写面 + snapshot | [`services/platform/backoffice-backend/docs/README.md`](./services/platform/backoffice-backend/docs/README.md) |
+| 运营管理平台 | [`services/platform/docs/README.md`](./services/platform/docs/README.md) |
 | Foundation（PG/Redis/Kafka） | [`services/foundation/README.md`](./services/foundation/README.md) |
 | 公网入口 / frp | [`services/proxy/docs/README.md`](./services/proxy/docs/README.md) |
 | 共享部署脚本 | [`tools/README.md`](./tools/README.md) |

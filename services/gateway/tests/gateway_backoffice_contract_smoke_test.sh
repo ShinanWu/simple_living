@@ -41,9 +41,10 @@ for route in [
         raise SystemExit(f"missing route mapping: {route}")
 
 for anchor in [
-    "MutableBackofficeState()",
-    "state.partners.insert(state.partners.begin(), created)",
-    "item.set_status(req->status())",
+    "bo_affiliate_stub_.ListPartners",
+    "bo::EnsureBackofficeAuth",
+    "PostBackofficeLogin",
+    "BackofficeContentDetailResponse",
 ]:
     if anchor not in src:
         raise SystemExit(f"missing implementation anchor: {anchor}")

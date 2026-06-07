@@ -249,10 +249,10 @@ gateway 对客户端**透传**各业务域返回的领域码，不重映射其�
 
 | 区间 | 来源域 | 典型码（语义见各域 `api.md` + 共享契约） |
 |------|--------|------------------------------------------|
-| `30000`–`30999` | platform/backoffice-backend（见 `../../platform/backoffice-backend/docs/api.md`） | `30001` 不存在、`30002` 已下架/不可见、`30003` 未发布 |
+| `30000`–`30999` | platform/backoffice-backend（见 `../../platform/docs/backend-api.md`） | `30001` 不存在、`30002` 已下架/不可见、`30003` 未发布 |
 | `40000`–`40999` | recommendation-server（见 `../../recommendation-server/docs/api.md`） | `40001` 场景不支持、`40002` 推荐不可用、`40003` 已降级 |
-| `50000`–`50999` | affiliate / tracking（见 `../../tracking-server/docs/api.md`、`../../platform/backoffice-backend/docs/api.md`） | `50001` 渠道不可用、`50002` 转链失败、`50003` 链接失效 |
-| `60000`–`60999` | platform/backoffice-backend（见 `../../platform/backoffice-backend/docs/api.md`） | `60001` 合规拦截、`60002` 地域/策略限制 |
+| `50000`–`50999` | affiliate / tracking（见 `../../tracking-server/docs/api.md`、`../../platform/docs/backend-api.md`） | `50001` 渠道不可用、`50002` 转链失败、`50003` 链接失效 |
+| `60000`–`60999` | platform/backoffice-backend（见 `../../platform/docs/backend-api.md`） | `60001` 合规拦截、`60002` 地域/策略限制 |
 
 透传规则：顶层 `code` 用主因码；字段级细分放 `errors[].code`（仍在区间内）；gateway **不**泄露内部栈、内部服务名与 proto 字段名。
 

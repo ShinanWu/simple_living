@@ -13,9 +13,14 @@ import type {
   BackofficeSubmitReviewBody,
   BackofficePublishContentBody,
   BackofficeRollbackContentBody,
+  BackofficeSetVisibilityBody,
+  BackofficeSetVisibilityData,
+  BackofficeLoginData,
 } from "./types";
+import { getBackofficeRole, getBackofficeToken } from "../services/auth/storage";
 
 export interface GatewayApiClient {
+  loginBackoffice(accessToken: string): Promise<ApiResponse<BackofficeLoginData>>;
   getBackofficePartners(): Promise<ApiResponse<BackofficePartnersData>>;
   postBackofficePartner(
     body: BackofficeCreatePartnerBody,
@@ -46,11 +51,26 @@ export interface GatewayApiClient {
   patchBackofficeReview(
     body: BackofficeUpdateReviewBody,
   ): Promise<ApiResponse<BackofficeReviewsData>>;
+  setBackofficeGovernanceVisibility(
+    body: BackofficeSetVisibilityBody,
+  ): Promise<ApiResponse<BackofficeSetVisibilityData>>;
 }
 
 const jsonHeaders = {
   "Content-Type": "application/json",
 };
+
+function authHeaders(): Record<string, string> {
+  const token = getBackofficeToken();
+  if (!token) {
+    return { ...jsonHeaders };
+  }
+  return {
+    ...jsonHeaders,
+    Authorization: `Bearer ${token}`,
+    "X-Backoffice-Role": getBackofficeRole(),
+  };
+}
 
 function normalizeContentItem(raw: Record<string, unknown>): BackofficeContentItem {
   return {
@@ -86,10 +106,18 @@ function normalizeContentItem(raw: Record<string, unknown>): BackofficeContentIt
 export class HttpGatewayApiClient implements GatewayApiClient {
   constructor(private readonly baseUrl = "") {}
 
+  async loginBackoffice(accessToken: string): Promise<ApiResponse<BackofficeLoginData>> {
+    return this.request<ApiResponse<BackofficeLoginData>>("/api/v2/backoffice/auth/login", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ access_token: accessToken }),
+    });
+  }
+
   async getBackofficePartners(): Promise<ApiResponse<BackofficePartnersData>> {
     return this.request<ApiResponse<BackofficePartnersData>>("/api/v2/backoffice/affiliate/partners", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: "{}",
     });
   }
@@ -99,7 +127,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   ): Promise<ApiResponse<BackofficePartnersData>> {
     return this.request<ApiResponse<BackofficePartnersData>>("/api/v2/backoffice/affiliate/partners/add", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
   }
@@ -107,7 +135,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   async getBackofficeContents(): Promise<ApiResponse<BackofficeContentsData>> {
     const resp = await this.request<ApiResponse<BackofficeContentsData>>("/api/v2/backoffice/content/items", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: "{}",
     });
     if (resp.data?.items) {
@@ -123,7 +151,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   ): Promise<ApiResponse<BackofficeContentsData>> {
     return this.request<ApiResponse<BackofficeContentsData>>("/api/v2/backoffice/content/items/add", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
   }
@@ -133,7 +161,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   ): Promise<ApiResponse<BackofficeContentsData>> {
     return this.request<ApiResponse<BackofficeContentsData>>("/api/v2/backoffice/content/items/status", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
   }
@@ -141,11 +169,17 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   async getBackofficeContentDetail(
     contentId: string,
   ): Promise<ApiResponse<BackofficeContentDetailData>> {
-    return this.request<ApiResponse<BackofficeContentDetailData>>("/api/v2/backoffice/content/items/detail", {
+    const resp = await this.request<ApiResponse<BackofficeContentDetailData>>("/api/v2/backoffice/content/items/detail", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: JSON.stringify({ content_id: contentId }),
     });
+    if (resp.data?.content) {
+      resp.data.content = normalizeContentItem(
+        resp.data.content as unknown as Record<string, unknown>,
+      );
+    }
+    return resp;
   }
 
   async updateBackofficeContent(
@@ -153,7 +187,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   ): Promise<ApiResponse<BackofficeContentsData>> {
     return this.request<ApiResponse<BackofficeContentsData>>("/api/v2/backoffice/content/items/update", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
   }
@@ -163,7 +197,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   ): Promise<ApiResponse<BackofficeContentsData>> {
     return this.request<ApiResponse<BackofficeContentsData>>("/api/v2/backoffice/content/items/submit-review", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
   }
@@ -173,7 +207,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   ): Promise<ApiResponse<BackofficeContentsData>> {
     return this.request<ApiResponse<BackofficeContentsData>>("/api/v2/backoffice/content/items/publish", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
   }
@@ -183,7 +217,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   ): Promise<ApiResponse<BackofficeContentsData>> {
     return this.request<ApiResponse<BackofficeContentsData>>("/api/v2/backoffice/content/items/rollback", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
   }
@@ -191,7 +225,7 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   async getBackofficeReviews(): Promise<ApiResponse<BackofficeReviewsData>> {
     return this.request<ApiResponse<BackofficeReviewsData>>("/api/v2/backoffice/governance/reviews", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
       body: "{}",
     });
   }
@@ -201,7 +235,17 @@ export class HttpGatewayApiClient implements GatewayApiClient {
   ): Promise<ApiResponse<BackofficeReviewsData>> {
     return this.request<ApiResponse<BackofficeReviewsData>>("/api/v2/backoffice/governance/reviews/status", {
       method: "POST",
-      headers: jsonHeaders,
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    });
+  }
+
+  async setBackofficeGovernanceVisibility(
+    body: BackofficeSetVisibilityBody,
+  ): Promise<ApiResponse<BackofficeSetVisibilityData>> {
+    return this.request<ApiResponse<BackofficeSetVisibilityData>>("/api/v2/backoffice/governance/visibility", {
+      method: "POST",
+      headers: authHeaders(),
       body: JSON.stringify(body),
     });
   }

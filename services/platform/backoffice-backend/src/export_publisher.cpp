@@ -97,9 +97,24 @@ bool ExportPublisher::PublishVisibility(const std::vector<std::string>& visible_
 }
 
 bool ExportPublisher::PublishAffiliateSpec() {
-    const std::string body =
-        R"({"partners":[{"partner_id":"tmall","channel_code":"tmall","template":"https://go.simpleliving.com/r"}]})";
-    return WriteManifest("affiliate_link_spec", "affiliate_spec.json", body);
+    return PublishAffiliateSpec({});
+}
+
+bool ExportPublisher::PublishAffiliateSpec(
+    const std::vector<::simple_living::affiliate_server::PartnerCapabilitySnapshot>& partners) {
+    std::ostringstream oss;
+    oss << "{\"partners\":[";
+    for (size_t i = 0; i < partners.size(); ++i) {
+        const auto& p = partners[i];
+        if (i > 0) {
+            oss << ',';
+        }
+        const std::string channel = p.primary_channel_code().empty() ? p.partner_id() : p.primary_channel_code();
+        oss << "{\"partner_id\":\"" << p.partner_id() << "\",\"channel_code\":\"" << channel
+            << "\",\"template\":\"https://go.simpleliving.com/r\"}";
+    }
+    oss << "]}";
+    return WriteManifest("affiliate_link_spec", "affiliate_spec.json", oss.str());
 }
 
 }  // namespace backoffice_backend

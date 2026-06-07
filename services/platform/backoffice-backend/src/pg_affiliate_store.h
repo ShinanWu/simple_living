@@ -23,6 +23,7 @@ public:
 
     bool GetPartnerCapabilitySnapshot(const std::string& partner_id, PartnerCapabilitySnapshot* out);
     bool UpsertPartner(const PartnerCapabilitySnapshot& snapshot);
+    bool ListPartners(std::vector<PartnerCapabilitySnapshot>* out);
     bool CreateCommissionRuleSetVersion(const std::string& partner_id,
                                         std::string* rule_set_id,
                                         int32_t* version);

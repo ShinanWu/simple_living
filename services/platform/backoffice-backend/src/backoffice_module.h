@@ -10,6 +10,12 @@ namespace simple_living {
 namespace content_server {
 class ContentServiceImpl;
 }
+namespace governance_server {
+class PgGovernanceStore;
+}
+namespace affiliate_server {
+class PgAffiliateStore;
+}
 namespace backoffice_backend {
 
 class SnapshotExportCoordinator;
@@ -32,8 +38,12 @@ void ShutdownGovernanceModule(GovernanceModule* mod);
 struct AffiliateModule;
 bool RegisterAffiliateModule(brpc::Server* server,
                              const std::string& pg_conninfo,
-                             AffiliateModule** out_mod);
+                             AffiliateModule** out_mod,
+                             SnapshotExportCoordinator* export_coord = nullptr);
 void ShutdownAffiliateModule(AffiliateModule* mod);
+
+::simple_living::governance_server::PgGovernanceStore* GovernanceModuleStore(GovernanceModule* mod);
+::simple_living::affiliate_server::PgAffiliateStore* AffiliateModuleStore(AffiliateModule* mod);
 
 }  // namespace backoffice_backend
 }  // namespace simple_living

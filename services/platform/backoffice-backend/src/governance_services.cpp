@@ -304,6 +304,10 @@ void ShutdownGovernanceModule(GovernanceModule* mod) {
     }
 }
 
+governance_server::PgGovernanceStore* GovernanceModuleStore(GovernanceModule* mod) {
+    return mod ? &mod->store : nullptr;
+}
+
 }  // namespace backoffice_backend
 }  // namespace simple_living
 

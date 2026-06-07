@@ -1,6 +1,6 @@
 # Gateway API Smoke Tests（C 端）
 
-本目录提供 **C 端**视角的 gateway 路由烟雾测试，覆盖 `services/gateway/docs/api.md` 中用户与页面路由。运营后台 API 验收见 `services/platform/backoffice-web/docs/test-plan.md`。
+本目录提供 **C 端**视角的 gateway 路由烟雾测试，覆盖 `services/gateway/docs/api.md` 中用户与页面路由。运营后台验收见 `services/platform/docs/detail-design.md`。
 
 ## 脚本与清单
 

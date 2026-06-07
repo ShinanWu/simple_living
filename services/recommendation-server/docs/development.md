@@ -17,7 +17,7 @@
 |------|------|
 | [共享契约规则](../../../.cursor/rules/shared-contracts.mdc) | 推荐结果、导购卡、scene、错误码 |
 | [业务服务总览](../../README.md) | 端口、拓扑 |
-| [backoffice-backend 导出](../../platform/backoffice-backend/docs/workflow.md) | manifest 与 bundle 格式 |
+| [backoffice-backend 导出](../../platform/docs/backend-workflow.md) | manifest 与 bundle 格式 |
 | [user-server api.md](../../user-server/docs/api.md) | signal bundle |
 
 ## 3. Bazel

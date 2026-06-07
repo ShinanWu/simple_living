@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_proto_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//build_defs:brpc_copts.bzl", "BRPC_EXAMPLE_COPTS")
 
@@ -44,15 +44,34 @@ cc_proto_library(
     deps = [":gateway_pages_proto"],
 )
 
+cc_library(
+    name = "gateway_backoffice_helpers",
+    srcs = ["src/gateway_backoffice_helpers.cpp"],
+    hdrs = ["src/gateway_backoffice_helpers.h"],
+    copts = BRPC_EXAMPLE_COPTS,
+    includes = ["src"],
+    deps = [
+        ":gateway_pages_cc_proto",
+        "//common/proto:catalog_cc_proto",
+        "//common/proto:content_service_cc_proto",
+        "//services/platform/backoffice-backend:affiliate_server_cc_proto",
+        "//services/platform/backoffice-backend:governance_server_cc_proto",
+        "@brpc//:brpc",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
 cc_binary(
     name = "gateway_edge_server",
     srcs = ["src/gateway_edge_server_main.cpp"],
     copts = BRPC_EXAMPLE_COPTS,
     deps = [
+        ":gateway_backoffice_helpers",
         ":gateway_pages_cc_proto",
         ":gateway_user_cc_proto",
         "//common/proto:catalog_cc_proto",
         "//common/proto:content_service_cc_proto",
+        "//services/platform/backoffice-backend:affiliate_server_cc_proto",
         "//services/platform/backoffice-backend:governance_server_cc_proto",
         "//services/recommendation-server:recommendation_server_cc_proto",
         "//services/tracking-server:tracking_server_cc_proto",

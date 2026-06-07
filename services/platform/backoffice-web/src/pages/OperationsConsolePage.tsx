@@ -11,6 +11,7 @@ import type {
   ResourceKind,
   ReviewState,
   VisibilityVerdict,
+  VisibilityState,
 } from "../gateway/types";
 import "./OperationsConsolePage.css";
 
@@ -35,6 +36,12 @@ const STATUS_LABELS: Record<BackofficeContentStatus, string> = {
   scheduled: "定时发布",
   offline: "已下架",
   archived: "已归档",
+};
+
+const VISIBILITY_STATE_LABELS: Record<VisibilityVerdict["state"], string> = {
+  published: "允许展示",
+  restricted: "限制展示",
+  unpublished: "不可见",
 };
 
 function getActionsForStatus(status: BackofficeContentStatus) {
@@ -107,9 +114,10 @@ interface ContentDetailState {
 
 interface OperationsConsolePageProps {
   api: GatewayApiClient;
+  onLogout?: () => void;
 }
 
-export function OperationsConsolePage({ api }: OperationsConsolePageProps) {
+export function OperationsConsolePage({ api, onLogout }: OperationsConsolePageProps) {
   const [tab, setTab] = useState<BackofficeTab>("content");
   const [partners, setPartners] = useState<BackofficePartner[]>([]);
   const [contents, setContents] = useState<BackofficeContentItem[]>([]);
@@ -134,6 +142,9 @@ export function OperationsConsolePage({ api }: OperationsConsolePageProps) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [rollbackTargetRevision, setRollbackTargetRevision] = useState<number | null>(null);
   const [rollbackSummary, setRollbackSummary] = useState("");
+  const [visibilityContentId, setVisibilityContentId] = useState("");
+  const [visibilityState, setVisibilityState] = useState<VisibilityState>("published");
+  const [visibilityReasonCode, setVisibilityReasonCode] = useState("");
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
@@ -585,6 +596,58 @@ export function OperationsConsolePage({ api }: OperationsConsolePageProps) {
     setReviews(resp.data?.items ?? []);
     setReviewState((resp.data?.items?.length ?? 0) > 0 ? "success" : "empty");
     setBanner({ type: "success", text: `审核单 ${reviewId} 已更新为 ${status}` });
+    await loadContents();
+  };
+
+  const refreshContentDetail = async (contentId: string) => {
+    const resp = await api.getBackofficeContentDetail(contentId);
+    if (resp.success && resp.data) {
+      setDetailData(resp.data);
+    }
+  };
+
+  const handleSetVisibility = async (
+    contentId: string,
+    state: VisibilityState,
+    reasonCode?: string,
+    options?: { confirmMessage?: string; refreshDetail?: boolean },
+  ) => {
+    if (options?.confirmMessage && !window.confirm(options.confirmMessage)) {
+      return;
+    }
+    const resp = await api.setBackofficeGovernanceVisibility({
+      content_id: contentId,
+      state,
+      reason_code: reasonCode?.trim() || undefined,
+    });
+    appendLog("visibility.set", contentId, resp, "visibility_set");
+    if (!resp.success) {
+      setBanner({ type: "error", text: `可见性裁决失败：${resp.message}` });
+      return;
+    }
+    setBanner({
+      type: "success",
+      text: `内容 ${contentId} 可见性已设为 ${VISIBILITY_STATE_LABELS[state]}`,
+    });
+    if (options?.refreshDetail) {
+      await refreshContentDetail(contentId);
+    }
+    await loadContents();
+  };
+
+  const submitGovernanceVisibility = async () => {
+    const contentId = visibilityContentId.trim();
+    if (!contentId) {
+      setBanner({ type: "error", text: "请填写内容 ID" });
+      return;
+    }
+    const confirmMessage =
+      visibilityState === "published"
+        ? undefined
+        : `确认将 ${contentId} 设为「${VISIBILITY_STATE_LABELS[visibilityState]}」？该操作会影响 C 端可见性。`;
+    await handleSetVisibility(contentId, visibilityState, visibilityReasonCode, { confirmMessage });
+    setVisibilityContentId("");
+    setVisibilityReasonCode("");
   };
 
   const filteredContents = contents.filter((item) => {
@@ -618,9 +681,25 @@ export function OperationsConsolePage({ api }: OperationsConsolePageProps) {
             通过真实 gateway 管理内容生命周期、联盟伙伴和审核动作；内容主数据写入 backoffice-backend PostgreSQL。
           </p>
         </div>
-        <button className="secondary-button" onClick={() => void Promise.all([loadPartners(), loadContents(), loadReviews()])}>
-          刷新全部
-        </button>
+        <div className="ops-hero-actions">
+          <button className="secondary-button" onClick={() => void Promise.all([loadPartners(), loadContents(), loadReviews()])}>
+            刷新全部
+          </button>
+          {onLogout ? (
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                void import("../services/auth/storage").then(({ clearBackofficeSession }) => {
+                  clearBackofficeSession();
+                  onLogout();
+                });
+              }}
+            >
+              退出登录
+            </button>
+          ) : null}
+        </div>
       </section>
 
       {banner && (
@@ -1220,6 +1299,47 @@ export function OperationsConsolePage({ api }: OperationsConsolePageProps) {
                   </table>
                 </div>
               )}
+              <div className="visibility-panel">
+                <div className="panel-heading visibility-panel-heading">
+                  <div>
+                    <h3>可见性裁决</h3>
+                    <p>C 端可见须同时满足「内容已发布」且裁决为「允许展示」。</p>
+                  </div>
+                </div>
+                <div className="visibility-form">
+                  <label className="form-field">
+                    内容 ID
+                    <input
+                      value={visibilityContentId}
+                      onChange={(event) => setVisibilityContentId(event.target.value)}
+                      placeholder="guide_card_1001"
+                    />
+                  </label>
+                  <label className="form-field">
+                    裁决状态
+                    <select
+                      value={visibilityState}
+                      onChange={(event) => setVisibilityState(event.target.value as VisibilityState)}
+                      aria-label="可见性裁决状态"
+                    >
+                      <option value="published">允许展示 (published)</option>
+                      <option value="restricted">限制展示 (restricted)</option>
+                      <option value="unpublished">不可见 (unpublished)</option>
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    原因码（可选）
+                    <input
+                      value={visibilityReasonCode}
+                      onChange={(event) => setVisibilityReasonCode(event.target.value)}
+                      placeholder="manual_ops / policy_violation"
+                    />
+                  </label>
+                  <button className="primary-button" type="button" onClick={() => void submitGovernanceVisibility()}>
+                    提交可见性裁决
+                  </button>
+                </div>
+              </div>
             </section>
           )}
         </div>
@@ -1309,6 +1429,67 @@ export function OperationsConsolePage({ api }: OperationsConsolePageProps) {
                   )}
                 </div>
 
+                <div className="detail-section">
+                  <h3>可见性裁决</h3>
+                  {detailData.visibility_verdict ? (
+                    <dl className="detail-dl">
+                      <dt>裁决状态</dt><dd><StatusBadge status={detailData.visibility_verdict.state} /></dd>
+                      <dt>来源</dt><dd>{detailData.visibility_verdict.source}</dd>
+                      <dt>原因码</dt><dd>{detailData.visibility_verdict.reason_code || "-"}</dd>
+                      <dt>生效时间</dt><dd>{detailData.visibility_verdict.effective_from ? new Date(detailData.visibility_verdict.effective_from).toLocaleString() : "-"}</dd>
+                    </dl>
+                  ) : (
+                    <p className="empty-copy">暂无可见性裁决记录</p>
+                  )}
+                  <div className="action-group visibility-actions">
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() =>
+                        void handleSetVisibility(detailData.content.content_id, "published", undefined, {
+                          refreshDetail: true,
+                        })
+                      }
+                    >
+                      允许展示
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() =>
+                        void handleSetVisibility(
+                          detailData.content.content_id,
+                          "restricted",
+                          "manual_ops",
+                          {
+                            refreshDetail: true,
+                            confirmMessage: `确认限制展示 ${detailData.content.content_id}？`,
+                          },
+                        )
+                      }
+                    >
+                      限制展示
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() =>
+                        void handleSetVisibility(
+                          detailData.content.content_id,
+                          "unpublished",
+                          "manual_ops",
+                          {
+                            refreshDetail: true,
+                            confirmMessage: `确认将 ${detailData.content.content_id} 设为不可见？`,
+                          },
+                        )
+                      }
+                    >
+                      紧急不可见
+                    </button>
+                  </div>
+                </div>
+
                 {detailData.review_state && (
                   <div className="detail-section">
                     <h3>审核状态</h3>
@@ -1318,18 +1499,6 @@ export function OperationsConsolePage({ api }: OperationsConsolePageProps) {
                       <dt>提交时间</dt><dd>{new Date(detailData.review_state.submitted_at).toLocaleString()}</dd>
                       <dt>审核员</dt><dd>{detailData.review_state.reviewer_id || "-"}</dd>
                       <dt>审核意见</dt><dd>{detailData.review_state.comment || "-"}</dd>
-                    </dl>
-                  </div>
-                )}
-
-                {detailData.visibility_verdict && (
-                  <div className="detail-section">
-                    <h3>可见性裁决</h3>
-                    <dl className="detail-dl">
-                      <dt>裁决状态</dt><dd><StatusBadge status={detailData.visibility_verdict.state} /></dd>
-                      <dt>来源</dt><dd>{detailData.visibility_verdict.source}</dd>
-                      <dt>原因码</dt><dd>{detailData.visibility_verdict.reason_code || "-"}</dd>
-                      <dt>生效时间</dt><dd>{detailData.visibility_verdict.effective_from ? new Date(detailData.visibility_verdict.effective_from).toLocaleString() : "-"}</dd>
                     </dl>
                   </div>
                 )}

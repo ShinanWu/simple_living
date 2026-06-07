@@ -34,6 +34,7 @@ public:
                                    BatchSetVisibilityVerdictResponse* resp);
     bool GetVisibilityVerdict(const GetVisibilityVerdictRequest& req, GetVisibilityVerdictResponse* resp);
     bool EvaluateVisibility(const EvaluateVisibilityRequest& req, EvaluateVisibilityResponse* resp);
+    bool IsCsideVisible(const std::string& content_id);
 
     bool UpsertCooperationLabel(const UpsertCooperationLabelRequest& req, UpsertCooperationLabelResponse* resp);
     bool BatchGetCooperationLabels(const BatchGetCooperationLabelsRequest& req,

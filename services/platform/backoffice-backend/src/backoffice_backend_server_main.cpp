@@ -30,12 +30,14 @@ int main(int argc, char* argv[]) {
         !simple_living::backoffice_backend::RegisterGovernanceModule(
             &server, FLAGS_pg_conninfo, &governance_mod, &export_coord) ||
         !simple_living::backoffice_backend::RegisterAffiliateModule(
-            &server, FLAGS_pg_conninfo, &affiliate_mod)) {
+            &server, FLAGS_pg_conninfo, &affiliate_mod, &export_coord)) {
         LOG(ERROR) << "backoffice-backend module registration failed";
         return 1;
     }
 
-    export_coord.Bind(&exporter, content_svc);
+    export_coord.Bind(&exporter, content_svc,
+                      simple_living::backoffice_backend::GovernanceModuleStore(governance_mod),
+                      simple_living::backoffice_backend::AffiliateModuleStore(affiliate_mod));
     export_coord.RefreshNow();
 
     brpc::ServerOptions options;

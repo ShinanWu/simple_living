@@ -21,6 +21,11 @@ export interface BackofficePartner {
   primary_channel_code: string;
 }
 
+export interface BackofficeLoginData {
+  token: string;
+  role: string;
+}
+
 export interface BackofficePartnersData {
   items: BackofficePartner[];
 }
@@ -204,4 +209,18 @@ export interface BackofficeUpdateReviewBody {
   review_id: string;
   status: Exclude<BackofficeReviewStatus, "pending" | "in_review" | "completed">;
   comment?: string;
+}
+
+export type VisibilityState = VisibilityVerdict["state"];
+
+export interface BackofficeSetVisibilityBody {
+  content_id: string;
+  state: VisibilityState;
+  reason_code?: string;
+  effective_from?: string;
+}
+
+export interface BackofficeSetVisibilityData {
+  content_id: string;
+  visibility_state: VisibilityState;
 }

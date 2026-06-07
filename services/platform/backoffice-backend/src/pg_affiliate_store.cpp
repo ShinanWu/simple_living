@@ -151,6 +151,28 @@ bool PgAffiliateStore::UpsertPartner(const PartnerCapabilitySnapshot& snapshot) 
     return ok;
 }
 
+bool PgAffiliateStore::ListPartners(std::vector<PartnerCapabilitySnapshot>* out) {
+    out->clear();
+    std::lock_guard<std::mutex> lock(mu_);
+    PGresult* r = PQexec(conn_, "SELECT partner_id, proto_hex FROM affiliate_partner ORDER BY partner_id");
+    if (!r || PQresultStatus(r) != PGRES_TUPLES_OK) {
+        ClearRes(r);
+        return false;
+    }
+    for (int i = 0; i < PQntuples(r); ++i) {
+        PartnerCapabilitySnapshot snap;
+        std::string raw;
+        if (HexDecode(PQgetvalue(r, i, 1), &raw) && snap.ParseFromString(raw)) {
+            if (snap.partner_id().empty()) {
+                snap.set_partner_id(PQgetvalue(r, i, 0));
+            }
+            out->push_back(snap);
+        }
+    }
+    ClearRes(r);
+    return true;
+}
+
 bool PgAffiliateStore::EnsureSeedPartners() {
     for (const char* pid : {"partner_taobao", "partner_jd", "partner_pinduoduo", "tmall"}) {
         PartnerCapabilitySnapshot s;

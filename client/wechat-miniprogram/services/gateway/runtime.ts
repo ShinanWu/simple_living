@@ -1,6 +1,6 @@
 import { readGatewayBaseUrl } from '../../config/env';
 import { HttpGatewayAPI } from './http';
-import type { GatewayAPI } from './types';
+import { GatewayAPI } from './types';
 
 let singleton: GatewayAPI | null = null;
 

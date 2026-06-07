@@ -26,7 +26,7 @@
 - [iOS 交互实现说明](./ios/interaction-notes.md)
 - [Android 交互实现说明](./android/interaction-notes.md)
 - [微信小程序](./wechat-miniprogram/README.md) · [分端交互说明](./wechat-miniprogram/interaction-notes.md)
-- Web C 端实现：当前无开发计划（与运营后台 `backoffice-web` 无关，后者见 `services/platform/backoffice-web/docs/`）
+- Web C 端实现：当前无开发计划（与运营后台 `backoffice-web` 无关，后者见 `services/platform/docs/`）
 - [前端与 Gateway 交互设计](./frontend-gateway-interaction.md)
 - [三端实现映射](./frontend-platform-mapping.md)
 - [测试夹具与验收矩阵](./frontend-mock-and-acceptance.md)

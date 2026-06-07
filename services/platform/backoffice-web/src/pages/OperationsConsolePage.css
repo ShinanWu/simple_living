@@ -21,6 +21,12 @@
   margin-bottom: 24px;
 }
 
+.ops-hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .ops-kicker {
   margin: 0 0 8px;
   color: #8a5b2d;
@@ -800,4 +806,26 @@ textarea {
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
+}
+
+.visibility-panel {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-subtle, #e8e8e8);
+}
+
+.visibility-panel-heading {
+  margin-bottom: 12px;
+}
+
+.visibility-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+}
+
+.visibility-actions {
+  margin-top: 12px;
+  flex-wrap: wrap;
 }

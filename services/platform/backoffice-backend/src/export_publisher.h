@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "catalog.pb.h"
+#include "affiliate_server.pb.h"
 
 namespace simple_living {
 namespace backoffice_backend {
@@ -17,6 +18,7 @@ public:
     bool PublishCatalog(const std::vector<catalog::GuideCard>& cards);
     bool PublishVisibility(const std::vector<std::string>& visible_card_ids);
     bool PublishAffiliateSpec();
+    bool PublishAffiliateSpec(const std::vector<::simple_living::affiliate_server::PartnerCapabilitySnapshot>& partners);
 
     uint64_t version() const { return version_; }
 

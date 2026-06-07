@@ -8,7 +8,7 @@ option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/platform/backoffice-backend/proto;affiliatepb";
 
 // Internal gRPC API for platform/backoffice-backend.
-// Human-maintained contract: services/platform/backoffice-backend/docs/api.md
+// Human-maintained contract: services/platform/docs/backend-api.md
 
 // --- Enums ---
 
@@ -85,6 +85,22 @@ message PartnerCapabilitySnapshot {
   repeated CapabilityFlag flags = 4;
   optional LinkConstraints link_constraints = 5;
   optional ReportingProfile reporting = 6;
+  optional string display_name = 7;
+  optional string primary_channel_code = 8;
+}
+
+message ListPartnersRequest {}
+
+message ListPartnersResponse {
+  repeated PartnerCapabilitySnapshot items = 1;
+}
+
+message UpsertPartnerBackofficeRequest {
+  optional PartnerCapabilitySnapshot partner = 1;
+}
+
+message UpsertPartnerBackofficeResponse {
+  optional PartnerCapabilitySnapshot partner = 1;
 }
 
 message ComplianceContext {
@@ -246,6 +262,11 @@ service AffiliatePartnerService {
 
   rpc ValidateLinkGenerationInput(ValidateLinkGenerationInputRequest)
       returns (ValidateLinkGenerationInputResponse);
+
+  rpc ListPartners(ListPartnersRequest) returns (ListPartnersResponse);
+
+  rpc UpsertPartnerBackoffice(UpsertPartnerBackofficeRequest)
+      returns (UpsertPartnerBackofficeResponse);
 }
 
 service AffiliateCommissionRuleService {

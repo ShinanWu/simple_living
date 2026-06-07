@@ -68,4 +68,4 @@
 - `services/recommendation-server/`（已重命名本目录）
 - C 端读路径原 content / governance 域在线 RPC（现为 snapshot + `CatalogReadService`）
 
-写路径请阅 `services/platform/backoffice-backend/docs/`。
+写路径请阅 `services/platform/docs/`（[backend-workflow.md](../../platform/docs/backend-workflow.md)）。
