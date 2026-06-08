@@ -2,7 +2,8 @@ import type { ThemeKey } from '../../utils/theme';
 
 export interface Pagination {
   cursor?: string | null;
-  limit: number;
+  /** 不传则由 gateway 默认 limit 决定当页条数 */
+  limit?: number;
 }
 
 export interface FeedItemContext {
@@ -26,6 +27,7 @@ export interface HomeCard {
 export interface HomeFeedResponse {
   cards: HomeCard[];
   nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export interface GuideDetailResponse {
@@ -82,8 +84,10 @@ export interface GatewayAPI {
   logoutSession(revokeAllDevices: boolean): Promise<void>;
   listFavorites(pagination: Pagination): Promise<{ items: FavoriteItem[]; nextCursor: string | null }>;
   addFavorite(guideCardId: string): Promise<{ favoriteId: string; alreadyFavorited: boolean }>;
+  removeFavorite(favoriteId: string): Promise<void>;
   listHistory(pagination: Pagination): Promise<{ items: HistoryItem[]; nextCursor: string | null }>;
   recordHistoryEvent(guideCardId: string, sourceSurface: string): Promise<void>;
+  clearHistory(): Promise<void>;
 }
 
 export interface ApiEnvelope<T> {

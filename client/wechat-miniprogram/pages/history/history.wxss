@@ -2,6 +2,21 @@
   padding: 24rpx;
   min-height: 100vh;
   box-sizing: border-box;
+  background: linear-gradient(180deg, #fafafa 0%, #f0f0f2 55%, #e8e8ea 100%);
+}
+
+.list-page__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16rpx;
+}
+
+.list-page__clear {
+  height: 64rpx;
+  line-height: 64rpx;
+  font-size: 24rpx;
+  padding: 0 28rpx;
+  margin: 0;
 }
 
 .list-page__center {

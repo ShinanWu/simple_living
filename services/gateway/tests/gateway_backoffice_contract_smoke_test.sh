@@ -36,6 +36,8 @@ for route in [
     "/api/v2/backoffice/content/items/status => PatchBackofficeContentItemStatus",
     "/api/v2/backoffice/governance/reviews => GetBackofficeGovernanceReviews",
     "/api/v2/backoffice/governance/reviews/status => PatchBackofficeGovernanceReviewStatus",
+    "/api/v2/backoffice/media/upload => PostBackofficeMediaUpload",
+    "/media/backoffice/* => GetBackofficeMediaAsset",
 ]:
     if route not in src:
         raise SystemExit(f"missing route mapping: {route}")

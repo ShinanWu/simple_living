@@ -59,7 +59,7 @@ sudo nginx -t && sudo nginx -s reload
 
 ## 2.2 故障排查与日志
 
-日志位置（详见 `../docs/README.md` 可观测性章节）：Nginx `/var/log/nginx/{access,error}.log`，frpc/frps `容器内 /var/log/frp/*.log`，容器整体 `docker/podman logs simple-living-proxy`。
+日志位置（详见 `../README.md` 可观测性章节）：Nginx `/var/log/nginx/{access,error}.log`，frpc/frps `容器内 /var/log/frp/*.log`，容器整体 `docker/podman logs simple-living-proxy`。
 
 | 现象 | 可能原因 | 排查 |
 |------|----------|------|
@@ -69,7 +69,7 @@ sudo nginx -t && sudo nginx -s reload
 | 公网不通但本机通 | frpc 未连上 frps / token 不一致 | 查 frpc 日志鉴权；核对 `FRP_AUTH_TOKEN` 与 frps `auth.token`、`7000`/`FRP_REMOTE_PORT` 放行 |
 | 回源协议/来源 IP 异常 | 转发头缺失 | 确认 `X-Forwarded-For`/`X-Forwarded-Proto`/`Host` 透传（见示例配置） |
 
-详细的 frp/nginx 故障树与公网链路 `frps → frpc → nginx → gateway` 验收说明见 `../docs/README.md` §4–§5。
+详细的 frp/nginx 故障树与公网链路 `frps → frpc → nginx → gateway` 验收说明见 `../README.md` §4–§5。
 
 ## 3. 验收
 
@@ -87,7 +87,7 @@ bash services/proxy/deploy/verify_proxy.sh
 
 ## 4. 跨服务协作原则
 
-- 仅通过契约文档协作：`.cursor/rules/shared-contracts.mdc` 与 `services/*/docs/api.md`。
+- 仅通过契约文档协作：`services/gateway/api.md` 与 `各服务 `api.md``。
 - 不直接依赖其他服务源码与内部实现细节。
 
 ## 5. frp 开关（同镜像内）
@@ -154,4 +154,4 @@ ENABLE_FRP=0 bash services/proxy/deploy/deploy_service.sh
 - `services/proxy/src/nginx/gateway.conf.example`（HTTP 联调入口）
 - `services/proxy/src/nginx/gateway.https.conf.example`（HTTPS + HSTS 生产入口）
 
-完整配置项表（Nginx upstream/TLS/HSTS/限流、FRP 环境变量与密钥注入方式）、SLO、安全基线见 `../docs/README.md`。回滚脚本：`services/proxy/deploy/rollback.sh`；公网链路验收：`services/proxy/deploy/verify_proxy.sh`。
+完整配置项表（Nginx upstream/TLS/HSTS/限流、FRP 环境变量与密钥注入方式）、SLO、安全基线见 `../README.md`。回滚脚本：`services/proxy/deploy/rollback.sh`；公网链路验收：`services/proxy/deploy/verify_proxy.sh`。

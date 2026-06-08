@@ -18,7 +18,7 @@ DEFINE_string(pg_conninfo,
               "PostgreSQL connection string for tracking storage");
 DEFINE_string(kafka_brokers,
               "10.0.2.2:9092",
-              "Kafka/Redpanda bootstrap servers; v1 records events in PostgreSQL outbox for this stream");
+              "Kafka/Redpanda bootstrap servers; records events in PostgreSQL outbox for this stream");
 DEFINE_string(snapshot_dir,
               "/var/lib/simple-living/exports",
               "Shared snapshot root written by backoffice-backend");
@@ -34,7 +34,7 @@ std::string GenId(const std::string& p) {
     return p + "_" + std::to_string(ts) + "_" + std::to_string(g_counter.fetch_add(1));
 }
 
-// Opaque short token for public redirect paths (non-guessable enough for lab/commercial v1).
+// Opaque short token for public redirect paths (non-guessable enough for lab/production).
 std::string GenShortToken() {
     const uint64_t mix = g_counter.fetch_add(1) ^
                          static_cast<uint64_t>(

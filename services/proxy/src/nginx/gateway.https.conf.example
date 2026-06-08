@@ -44,6 +44,17 @@ server {
         proxy_set_header Connection "";
     }
 
+    location /media/ {
+        limit_req zone=ingress_req burst=40 nodelay;
+        proxy_pass http://simple_living_gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Connection "";
+    }
+
     # Health check is never rate-limited so monitoring stays reliable.
     location /healthz {
         access_log off;

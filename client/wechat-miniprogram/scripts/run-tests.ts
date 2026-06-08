@@ -7,6 +7,8 @@ import { loginErrorCopy, GatewayBusinessError } from '../utils/errors';
 import { THEMES, nextTheme, themeByKey } from '../utils/theme';
 import { parseEnvelope, assertEnvelopeSuccess } from '../services/gateway/parse-envelope';
 import { MockGatewayAPI } from '../services/gateway/mock';
+import { formatDisplayTime } from '../utils/datetime';
+import { guideDetailPath } from '../utils/guide-route';
 
 let passed = 0;
 
@@ -70,7 +72,7 @@ async function main(): Promise<void> {
 
   await test('MockGateway home feed per theme', async () => {
     const api = new MockGatewayAPI();
-    const res = await api.getHomeFeed('transport', { limit: 20 });
+    const res = await api.getHomeFeed('transport', {});
     assert.equal(res.cards.length, 2);
     assert.match(res.cards[0].guideCardId, /transport/);
   });
@@ -106,6 +108,38 @@ async function main(): Promise<void> {
       itemRank: 1,
     });
     assert.match(res.landingUrl, /^https:\/\//);
+  });
+
+  await test('MockGateway remove favorite', async () => {
+    const api = new MockGatewayAPI();
+    await api.issueTokenWithWeChat('u1', 'code1');
+    const fav = await api.addFavorite('guide_food_001');
+    await api.removeFavorite(fav.favoriteId);
+    const list = await api.listFavorites({ limit: 10 });
+    assert.equal(list.items.length, 0);
+  });
+
+  await test('MockGateway clear history', async () => {
+    const api = new MockGatewayAPI();
+    await api.recordHistoryEvent('guide_x', 'detail');
+    await api.clearHistory();
+    const list = await api.listHistory({ limit: 10 });
+    assert.equal(list.items.length, 0);
+  });
+
+  await test('formatDisplayTime parses ISO', () => {
+    const label = formatDisplayTime('2026-03-28T12:00:00Z');
+    assert.match(label, /\d/);
+  });
+
+  await test('guideDetailPath encodes params', () => {
+    const path = guideDetailPath({
+      guideCardId: 'guide_card_1001',
+      title: '测试标题',
+      action: 'favorite',
+    });
+    assert.match(path, /guide_card_id=guide_card_1001/);
+    assert.match(path, /action=favorite/);
   });
 
   console.log(`\n${passed} tests passed`);

@@ -15,7 +15,7 @@ message RefreshTokenHttpRequest {
   optional simple_living.user_server.RpcRequestContext request_context = 2;
 }
 
-// Public JSON uses lowercase platform strings (see services/gateway/docs/api.md).
+// Public JSON uses lowercase platform strings (see services/gateway/api.md).
 message GuestSessionHttpRequest {
   optional string device_id = 1;
   optional string client_platform = 2;
@@ -66,7 +66,7 @@ message ListHistoryHttpRequest {
   optional int32 limit = 2;
 }
 
-// Public JSON uses guide_card_id (see services/gateway/docs/api.md §5.5).
+// Public JSON uses guide_card_id (see services/gateway/api.md §5.5).
 message HttpContentRef {
   optional string type = 1;
   optional string guide_card_id = 2;

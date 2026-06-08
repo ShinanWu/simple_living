@@ -3,7 +3,7 @@ import Foundation
 /// 刷新令牌的单飞任务，防止并发重复刷新
 private var refreshInFlight: Task<AuthTokenPair, Error>? = nil
 
-/// 真实 HTTPS + JSON 网关客户端；字段语义对齐 `services/gateway/docs/api.md`。
+/// 真实 HTTPS + JSON 网关客户端；字段语义对齐 `services/gateway/api.md`。
 public final class HttpGatewayAPI: GatewayAPI {
     private let settings: HttpGatewaySettings
     private let session: URLSession

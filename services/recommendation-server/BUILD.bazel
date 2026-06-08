@@ -6,7 +6,10 @@ package(default_visibility = ["//visibility:public"])
 
 filegroup(
     name = "docs",
-    srcs = glob(["docs/**/*.md"]),
+    srcs = [
+        "README.md",
+        "api.md",
+    ],
 )
 
 filegroup(

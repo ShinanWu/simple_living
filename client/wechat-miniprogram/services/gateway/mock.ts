@@ -52,6 +52,7 @@ export class MockGatewayAPI implements GatewayAPI {
         },
       ],
       nextCursor: null,
+      hasMore: false,
     };
   }
 
@@ -154,6 +155,12 @@ export class MockGatewayAPI implements GatewayAPI {
     return { favoriteId, alreadyFavorited: false };
   }
 
+  async removeFavorite(favoriteId: string): Promise<void> {
+    await delay(80);
+    if (!this.loggedIn) throw new GatewayBusinessError(20001, 'auth required');
+    this.favorites = this.favorites.filter((f) => f.favoriteId !== favoriteId);
+  }
+
   async listHistory(_pagination: Pagination): Promise<{ items: HistoryItem[]; nextCursor: string | null }> {
     await delay(100);
     return { items: this.history, nextCursor: null };
@@ -166,6 +173,11 @@ export class MockGatewayAPI implements GatewayAPI {
     } else {
       this.history.unshift({ guideCardId, lastSeenAt: new Date().toISOString() });
     }
+  }
+
+  async clearHistory(): Promise<void> {
+    await delay(80);
+    this.history = [];
   }
 
   private pair(): AuthTokenPair {

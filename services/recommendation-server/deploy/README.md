@@ -1,6 +1,6 @@
 # recommendation-server 独立部署说明（QEMU）
 
-## 1. 同节点约束（v1）
+## 1. 同节点约束
 
 **与 `platform/backoffice-backend` 共享 snapshot 目录**（生产同 Pod；lab 为独立 QEMU 来宾 `recommendation-server`，需同步 `EXPORT_DIR`）：
 

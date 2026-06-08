@@ -12,15 +12,18 @@ import type {
   BackofficeContentDetailData,
   BackofficeSubmitReviewBody,
   BackofficePublishContentBody,
+  BackofficePublishResult,
   BackofficeRollbackContentBody,
   BackofficeSetVisibilityBody,
   BackofficeSetVisibilityData,
   BackofficeLoginData,
+  BackofficeMediaUploadResult,
 } from "./types";
 import { getBackofficeRole, getBackofficeToken } from "../services/auth/storage";
 
 export interface GatewayApiClient {
   loginBackoffice(accessToken: string): Promise<ApiResponse<BackofficeLoginData>>;
+  uploadBackofficeMedia(file: File): Promise<ApiResponse<BackofficeMediaUploadResult>>;
   getBackofficePartners(): Promise<ApiResponse<BackofficePartnersData>>;
   postBackofficePartner(
     body: BackofficeCreatePartnerBody,
@@ -43,7 +46,7 @@ export interface GatewayApiClient {
   ): Promise<ApiResponse<BackofficeContentsData>>;
   publishBackofficeContent(
     body: BackofficePublishContentBody,
-  ): Promise<ApiResponse<BackofficeContentsData>>;
+  ): Promise<ApiResponse<BackofficePublishResult>>;
   rollbackBackofficeContent(
     body: BackofficeRollbackContentBody,
   ): Promise<ApiResponse<BackofficeContentsData>>;
@@ -111,6 +114,19 @@ export class HttpGatewayApiClient implements GatewayApiClient {
       method: "POST",
       headers: jsonHeaders,
       body: JSON.stringify({ access_token: accessToken }),
+    });
+  }
+
+  async uploadBackofficeMedia(file: File): Promise<ApiResponse<BackofficeMediaUploadResult>> {
+    const dataUrl = await readFileAsDataUrl(file);
+    return this.request<ApiResponse<BackofficeMediaUploadResult>>("/api/v2/backoffice/media/upload", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        data_url: dataUrl,
+        content_type: file.type,
+        filename: file.name,
+      }),
     });
   }
 
@@ -204,8 +220,8 @@ export class HttpGatewayApiClient implements GatewayApiClient {
 
   async publishBackofficeContent(
     body: BackofficePublishContentBody,
-  ): Promise<ApiResponse<BackofficeContentsData>> {
-    return this.request<ApiResponse<BackofficeContentsData>>("/api/v2/backoffice/content/items/publish", {
+  ): Promise<ApiResponse<BackofficePublishResult>> {
+    return this.request<ApiResponse<BackofficePublishResult>>("/api/v2/backoffice/content/items/publish", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(body),
@@ -265,4 +281,13 @@ export class HttpGatewayApiClient implements GatewayApiClient {
       return { success: false, code: -1, message: "网络请求失败" } as T;
     }
   }
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
 }

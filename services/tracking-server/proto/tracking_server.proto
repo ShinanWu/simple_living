@@ -8,7 +8,7 @@ option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/tracking-server/proto;trackingpb";
 
 // Internal gRPC API for tracking-server.
-// Human-maintained contract: services/tracking-server/docs/api.md
+// Human-maintained contract: services/tracking-server/api.md
 
 // --- Enums ---
 
@@ -151,7 +151,7 @@ message AssembleTrackingLinkRequest {
   optional string idempotency_key = 5;
   optional string user_id = 6;
   optional string device_id = 7;
-  // v1 CMS bridge: gateway passes provider-owned landing URL from platform/backoffice-backend.
+  // CMS bridge: gateway passes provider-owned landing URL from platform/backoffice-backend.
   // Replace with affiliate_context_ref once platform/backoffice-backend URL generation is stable.
   optional string landing_url = 8;
 }

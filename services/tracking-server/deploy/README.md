@@ -10,7 +10,7 @@ bash services/tracking-server/deploy/deploy_service.sh
 
 仅处理 `tracking-server`，不会构建或发布其他服务。
 
-部署前确认依赖就绪：PostgreSQL（已应用 `NNNN_tracking_*.sql` 迁移）、Redis（可选）、Kafka（outbox relay）、与 `backoffice-backend` 同节点共享 `-snapshot_dir`。配置：`-pg_conninfo`、`-redis_addr`、`-kafka_brokers`、token 签名密钥（见 docs/development.md §4）。
+部署前确认依赖就绪：PostgreSQL（已应用 `NNNN_tracking_*.sql` 迁移）、Redis（可选）、Kafka（outbox relay）、与 `backoffice-backend` 同节点共享 `-snapshot_dir`。配置见 [README.md](../README.md)。
 
 ## 2. 回滚
 
@@ -27,7 +27,7 @@ bash services/tracking-server/deploy/stop_nodes.sh
 
 回滚要点：
 - **优雅退出**：先发 SIGTERM 让在途 `ResolveRedirect`/`IngestConversion` 完成并关闭 PostgreSQL/Redis/Kafka 连接，再切流量（见 graceful-shutdown 约定）。
-- **数据兼容**：仅回滚二进制；不回滚已应用的 PostgreSQL 迁移（迁移向后兼容，旧版本可读新表）。如回滚跨越破坏性迁移，先评估 `changelog.md` 标注。
+- **数据兼容**：仅回滚二进制；不回滚已应用的 PostgreSQL 迁移（迁移向后兼容，旧版本可读新表）。如回滚跨越破坏性迁移，先评估 Git 提交/PR 说明。
 - **outbox 不丢**：回滚不清空 `tracking_outbox`；relay 重启后继续投递未发布行（消费方按 `event_id` 幂等，重复无害）。
 
 ## 3. 验收
@@ -62,7 +62,7 @@ ssh -p 2206 ubuntu@127.0.0.1 "curl -fsS http://127.0.0.1:9105/healthz"
 
 ## 6. 跨服务协作原则
 
-- 仅通过契约文档协作：`.cursor/rules/shared-contracts.mdc` 与 `services/*/docs/api.md`（跨域只引用 `../../platform/docs/backend-api.md`）。
+- 仅通过契约文档协作：`services/gateway/api.md` 与 `各服务 `api.md``（跨域只引用 `../../platform/api.md`）。
 - 不直接依赖其他服务源码与内部实现细节。
 
 ## 7. K8s（服务内部署入口）

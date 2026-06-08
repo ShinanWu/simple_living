@@ -1,4 +1,4 @@
-<view class="detail">
+<view class="detail" style="{{pageStyle}}">
   <block wx:if="{{loadState === 'loading'}}">
     <view class="detail__center"><text class="sl-muted">加载详情中…</text></view>
   </block>

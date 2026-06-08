@@ -1,9 +1,9 @@
 # 前端详细设计总览
 
-## 0. 商业化交付优先级（2026-05）
+## 0. 多端交付
 
-- **主交付**：微信小程序（[wechat-miniprogram/README.md](./wechat-miniprogram/README.md)）。
-- **第二阶段**：iOS / Android 原生 App 按同一 gateway 契约补齐真实网络层、登录、收藏、历史与跳转。
+- **主交付端**：微信小程序（[wechat-miniprogram/README.md](./wechat-miniprogram/README.md)）。
+- **原生端**：iOS / Android 与小程序共享 gateway 契约，补齐真实网络层、登录、收藏、历史与跳转。
 - **Web C 端**：不与运营后台混淆，若启动则作为独立 C 端渠道接入同一 gateway。
 
 ## 1. 目标
@@ -26,7 +26,7 @@
 - [iOS 交互实现说明](./ios/interaction-notes.md)
 - [Android 交互实现说明](./android/interaction-notes.md)
 - [微信小程序](./wechat-miniprogram/README.md) · [分端交互说明](./wechat-miniprogram/interaction-notes.md)
-- Web C 端实现：当前无开发计划（与运营后台 `backoffice-web` 无关，后者见 `services/platform/docs/`）
+- Web C 端实现：当前无开发计划（与运营后台 `backoffice-web` 无关，后者见 `services/platform/`）
 - [前端与 Gateway 交互设计](./frontend-gateway-interaction.md)
 - [三端实现映射](./frontend-platform-mapping.md)
 - [测试夹具与验收矩阵](./frontend-mock-and-acceptance.md)
@@ -38,7 +38,7 @@
 |----------|----------|
 | 页面 IA / 流程 | `frontend-information-architecture.md`、`frontend-page-specs.md`、各端 `interaction-notes.md` |
 | 登录 / 错误文案 | `frontend-login-interaction.md`、`frontend-login-error-copy.md` |
-| Gateway JSON 字段 | `.cursor/rules/shared-contracts.mdc`、`frontend-gateway-interaction.md`、`services/gateway/docs/api.md` |
+| Gateway JSON 字段 | `services/gateway/api.md`、`frontend-gateway-interaction.md` |
 | 三端差异 | `frontend-platform-mapping.md`、`cross-platform-interaction-consensus.md` |
 | C 端 API 烟雾 / E2E | `client/tests/gateway_api_smoke.py`、`tests/gateway-e2e-checklist.md` |
 | 验收 / mock（UI 五态） | `frontend-mock-and-acceptance.md` |
@@ -47,13 +47,12 @@
 
 - 对外品牌名：`README.md`（品牌与命名章节）
 - 顶层设计与架构：`README.md` 与 `services/README.md`
-- 公共 JSON 契约：`.cursor/rules/shared-contracts.mdc`
-- Gateway 对外 API：`services/gateway/docs/api.md`
+- Gateway 对外 API / 终端 JSON：`services/gateway/api.md`
 
 ## 5. 单一事实来源
 
 - 前端页面交互、状态与体验规则以本目录文档为准
-- JSON 字段语义以 `.cursor/rules/shared-contracts.mdc` 和 `services/gateway/docs/api.md` 为准
+- JSON 字段语义以 `services/gateway/api.md` 为准
 - 若文档冲突，先修正文档再修正实现
 
 ## 6. 品牌与公共资源

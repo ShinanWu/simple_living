@@ -1,7 +1,10 @@
-<view class="redirect">
+<view class="redirect" style="{{pageStyle}}">
   <block wx:if="{{loadState === 'loading'}}">
     <view class="redirect__center">
-      <text class="sl-muted">生成跳转链接中…</text>
+      <view class="redirect__spinner sl-card">
+        <text class="redirect__loading-title">正在准备跳转</text>
+        <text class="sl-muted">请稍候…</text>
+      </view>
     </view>
   </block>
   <block wx:elif="{{loadState === 'offline'}}">
@@ -12,15 +15,14 @@
   </block>
   <block wx:else>
     <view class="redirect__panel sl-card">
-      <text class="redirect__headline">即将跳转</text>
-      <text class="redirect__meta sl-muted">guide_card_id: {{guideCardId}}</text>
-      <text class="redirect__label sl-muted">landing_url</text>
-      <text class="redirect__url" selectable>{{landingUrl}}</text>
+      <text class="redirect__headline">即将前往购买</text>
+      <text class="redirect__product">{{displayTitle}}</text>
+      <text class="redirect__desc sl-muted">你将在合作平台完成选购，少糖仅提供导购与跳转服务。</text>
       <view class="redirect__actions">
+        <button class="sl-btn-primary redirect__btn redirect__btn--main" bindtap="onOpen">打开购买页</button>
         <button class="sl-btn-ghost redirect__btn" bindtap="onCopy">复制链接</button>
-        <button class="sl-btn-primary redirect__btn" bindtap="onOpen">打开链接</button>
       </view>
-      <text class="redirect__hint sl-muted">外链需在小程序后台配置业务域名；否则请使用复制链接。</text>
+      <text class="redirect__hint sl-muted">若无法直接打开，请复制链接到浏览器；外链需在小程序后台配置业务域名。</text>
     </view>
   </block>
 </view>

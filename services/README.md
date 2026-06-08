@@ -1,6 +1,6 @@
 # 业务服务总览
 
-本文件是**跨服务事实中枢**：服务清单与职责、跨服务依赖拓扑与请求链路、跨服务工程约定（Bazel/proto 依赖、端口、持久化、gateway 分层）、测试策略。各服务的实现与交付细节在 `services/<service>/docs/development.md`；跨服务/跨端公共 JSON 契约在 `.cursor/rules/shared-contracts.mdc`。
+本文件是**跨服务事实中枢**：服务清单与职责、跨服务依赖拓扑与请求链路、跨服务工程约定（Bazel/proto 依赖、端口、持久化、gateway 分层）、测试策略。终端 JSON 契约在 `services/gateway/api.md`；域服务 RPC 契约在各服务根目录 `api.md`。
 
 ## 1. 服务划分原则
 
@@ -91,7 +91,7 @@ flowchart TD
 
 | 改动类型 | 必看 |
 |----------|------|
-| 对外 JSON / 页面聚合 | `gateway` + 相关服务 + 共享契约规则 |
+| 对外 JSON / 页面聚合 | `gateway` + 相关服务 + |
 | 导购卡片/可见性/披露（C 端） | `recommendation-server` + `platform/backoffice-backend` 导出 + `gateway` |
 | 运营写/审核/伙伴配置 | `platform/backoffice-backend` + `gateway` backoffice 路由 + `backoffice-web` |
 | 推荐策略/解释 | `recommendation-server` + `gateway` |
@@ -123,7 +123,7 @@ flowchart TD
 | `tracking-server` | `9105` | brpc | `//services/tracking-server:tracking_server` |
 | `platform/backoffice-backend` | `9110` | brpc | `//services/platform/backoffice-backend:backoffice_backend_server` |
 
-gateway 下游 flags（v1 目标）：
+gateway 下游 flags：
 
 - `-user_server_addr`
 - `-recommendation_server_addr`
@@ -145,7 +145,7 @@ gateway 下游 flags（v1 目标）：
 
 ### 4.4 gateway 协议分层
 
-终端 → Nginx → gateway（HTTPS+JSON）→ 业务服务 brpc + proto。详见各服务 `development.md`。
+终端 → Nginx → gateway（HTTPS+JSON）→ 业务服务 brpc + proto。详见各服务 `README.md`。
 
 ## 5. 测试策略
 
@@ -153,18 +153,18 @@ gateway 下游 flags（v1 目标）：
 
 ## 6. 目录结构
 
-**C++ 业务服务**（`gateway`、`*-server`、`platform/backoffice-backend`）须具备 `docs/`、`proto/`、`src/`、`tests/`、`deploy/`、`BUILD.bazel`。
+**C++ 业务服务**须具备 `proto/`、`src/`、`tests/`、`deploy/`、`BUILD.bazel`，文档为根目录 `README.md` + `api.md`（有 RPC 的服务）。
 
 **例外**：
 
 | 路径 | 说明 |
 |------|------|
-| `platform/backoffice-web` | 前端 SPA（npm/Vite），无 `BUILD.bazel`/`proto/`；文档在 `docs/`，部署在 `deploy/` |
+| `platform/backoffice-web` | 前端 SPA（npm/Vite），无 `BUILD.bazel`/`proto/`；`README.md` + `deploy/` |
 | `foundation/*`、`proxy` | 基础设施/入口模板，无完整 `src/` 服务二进制 |
-| `platform/backoffice-backend`、`proxy`、`backoffice-web` | v1 **无** `deploy/k8s/`；集群基座见 `environments/kubernetes/`，业务 Deployment 待补或仅用 QEMU |
+| `platform/backoffice-backend`、`proxy`、`backoffice-web` | 当前**无** `deploy/k8s/`；集群基座见 `environments/kubernetes/`，业务 Deployment 待补或仅用 QEMU |
 
 `platform/` 组说明见 `services/platform/README.md`。
 
 ## 7–9. 文档与交付
 
-实现与交付：各服务 `docs/development.md`；公共 JSON：`.cursor/rules/shared-contracts.mdc`。
+实现与交付：各服务 `README.md` + `deploy/`；终端 JSON：`gateway/api.md`。

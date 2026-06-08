@@ -24,6 +24,7 @@
 #include "governance_server.pb.h"
 #include "affiliate_server.pb.h"
 #include "gateway_backoffice_helpers.h"
+#include "gateway_backoffice_media.h"
 
 namespace {
 constexpr const char* kDefaultUserServerAddr =
@@ -862,6 +863,17 @@ public:
 namespace pages {
 
 namespace bo = backoffice_helpers;
+namespace bo_media = backoffice_media;
+
+bool ValidatePersistableCoverUrl(const std::string& url, brpc::Controller* outer) {
+    if (url.empty() || bo_media::IsPersistableMediaUrl(url)) {
+        return true;
+    }
+    FinishBizError(outer, 10002,
+                   "cover_media.url must be an absolute http(s) media URL from POST /api/v2/backoffice/media/upload",
+                   brpc::HTTP_STATUS_BAD_REQUEST);
+    return false;
+}
 
 class GatewayPagesEdgeV2Impl : public GatewayPagesEdgeV2 {
     brpc::Channel rec_ch_;
@@ -983,7 +995,8 @@ public:
                 gs->set_subtitle(card.subtitle());
                 gs->set_summary(card.subtitle());
                 if (card.has_cover_media() && !card.cover_media().url().empty()) {
-                    gs->set_cover_url(card.cover_media().url());
+                    gs->set_cover_url(
+                        bo_media::NormalizeMediaUrlForClient(card.cover_media().url()));
                 }
                 gs->set_theme(theme);
                 fi->add_reason_tags("cms_published");
@@ -1059,7 +1072,7 @@ public:
                 gs->set_summary(card.selling_points(0));
             }
             if (card.has_cover_media() && !card.cover_media().url().empty()) {
-                gs->set_cover_url(card.cover_media().url());
+                gs->set_cover_url(bo_media::NormalizeMediaUrlForClient(card.cover_media().url()));
             }
             gs->set_theme(parsed.theme());
             fi->add_reason_tags("clothing_pick");
@@ -1127,7 +1140,8 @@ public:
         }
         detail->set_is_commercial(card.commercial_disclosure_required());
         if (card.has_cover_media()) {
-            detail->set_cover_url(card.cover_media().url());
+            detail->set_cover_url(
+                bo_media::NormalizeMediaUrlForClient(card.cover_media().url()));
         }
         FinishOk(outer, *resp);
     }
@@ -1224,6 +1238,38 @@ public:
         FinishOk(outer, *resp);
     }
 
+    void PostBackofficeMediaUpload(::google::protobuf::RpcController* controller_base,
+                                   const BackofficeMediaUploadRequest* req,
+                                   BackofficeMediaUploadResponse* resp,
+                                   ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        auto* outer = static_cast<brpc::Controller*>(controller_base);
+        if (!EnsurePost(outer) || !bo::EnsureBackofficeAuth(outer)) return;
+        if (!bo_media::SaveBackofficeMediaUpload(*req, resp)) {
+            FinishBizError(outer, 10002,
+                           "invalid media upload or gateway_backoffice_media_public_base_url not configured",
+                           brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
+        FinishOk(outer, *resp);
+    }
+
+    void GetBackofficeMediaAsset(::google::protobuf::RpcController* controller_base,
+                                 const ::google::protobuf::Empty*,
+                                 ::google::protobuf::Empty*,
+                                 ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        auto* outer = static_cast<brpc::Controller*>(controller_base);
+        if (!EnsureReadHttp(outer)) return;
+        const std::string unresolved = outer->http_request().unresolved_path();
+        const auto slash = unresolved.rfind('/');
+        const std::string filename =
+            slash == std::string::npos ? unresolved : unresolved.substr(slash + 1);
+        if (!bo_media::ServeBackofficeMediaAsset(filename, outer)) {
+            FinishBizError(outer, 10003, "media not found", brpc::HTTP_STATUS_NOT_FOUND);
+        }
+    }
+
     void GetBackofficeAffiliatePartners(::google::protobuf::RpcController* controller_base,
                                  const BackofficeListPartnersRequest*,
                                  BackofficePartnersResponse* resp,
@@ -1303,10 +1349,24 @@ public:
             FinishBizError(outer, 10002, "title and landing_url required", brpc::HTTP_STATUS_BAD_REQUEST);
             return;
         }
+        if (req->has_resource_kind() && !req->resource_kind().empty() &&
+            req->resource_kind() != "guide_card") {
+            FinishBizError(outer, 10002, "only guide_card is supported", brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
+        if (req->has_cover_media() && !req->cover_media().url().empty() &&
+            !ValidatePersistableCoverUrl(req->cover_media().url(), outer)) {
+            return;
+        }
 
         simple_living::catalog::GuideCard card = bo::BuildGuideCardFromCreate(*req);
         const std::string initial = !req->initial_status().empty() ? req->initial_status()
             : (!req->status().empty() ? req->status() : "draft");
+        if (initial == "published") {
+            FinishBizError(outer, 10002, "submit for review and publish after approval",
+                           brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
 
         brpc::Controller cntl;
         simple_living::content_server::UpsertGuideCardRequest creq;
@@ -1318,21 +1378,6 @@ public:
             return;
         }
         SyncVisibilityForContent(cresp.card_id(), false);
-
-        if (initial == "published") {
-            brpc::Controller pcntl;
-            simple_living::content_server::PublishRevisionRequest preq;
-            preq.set_resource_kind(simple_living::catalog::CONTENT_RESOURCE_KIND_GUIDE_CARD);
-            preq.set_resource_id(cresp.card_id());
-            preq.set_revision(cresp.revision());
-            simple_living::content_server::PublishRevisionResponse presp;
-            bo_content_stub_.PublishRevision(&pcntl, &preq, &presp, nullptr);
-            if (pcntl.Failed()) {
-                FinishDownstreamBrpcFailure(outer, pcntl);
-                return;
-            }
-            SyncVisibilityForContent(cresp.card_id(), true);
-        }
 
         if (!LoadBackofficeContentItems(resp, outer)) {
             return;
@@ -1385,6 +1430,14 @@ public:
         simple_living::catalog::GuideCard card = gresp.cards(0);
         if (req->has_revision() && card.revision() != req->revision()) {
             FinishBizError(outer, 10007, "revision mismatch", brpc::HTTP_STATUS_CONFLICT);
+            return;
+        }
+        if (req->has_cover_media() && !req->cover_media().url().empty() &&
+            !ValidatePersistableCoverUrl(req->cover_media().url(), outer)) {
+            return;
+        }
+        if (req->has_cover_url() && !req->cover_url().empty() &&
+            !ValidatePersistableCoverUrl(req->cover_url(), outer)) {
             return;
         }
         bo::ApplyContentUpdate(*req, &card);
@@ -1477,6 +1530,19 @@ public:
             return;
         }
 
+        brpc::Controller gcntl;
+        simple_living::content_server::BatchGetGuideCardsRequest greq;
+        greq.add_card_ids(req->content_id());
+        simple_living::content_server::BatchGetGuideCardsResponse gresp;
+        bo_content_stub_.BatchGetGuideCards(&gcntl, &greq, &gresp, nullptr);
+        if (gcntl.Failed() || gresp.cards_size() == 0) {
+            FinishBizError(outer, 10003, "content not found", brpc::HTTP_STATUS_NOT_FOUND);
+            return;
+        }
+        if (!EnsurePublishAllowed(req->content_id(), gresp.cards(0), outer)) {
+            return;
+        }
+
         brpc::Controller pcntl;
         simple_living::content_server::PublishRevisionRequest preq;
         preq.set_resource_kind(simple_living::catalog::CONTENT_RESOURCE_KIND_GUIDE_CARD);
@@ -1486,6 +1552,10 @@ public:
         bo_content_stub_.PublishRevision(&pcntl, &preq, &presp, nullptr);
         if (pcntl.Failed()) {
             FinishDownstreamBrpcFailure(outer, pcntl);
+            return;
+        }
+        if (presp.content_status() != simple_living::catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED) {
+            FinishBizError(outer, 10003, "publish failed", brpc::HTTP_STATUS_BAD_REQUEST);
             return;
         }
 
@@ -1510,32 +1580,19 @@ public:
             return;
         }
 
-        brpc::Controller gcntl;
-        simple_living::content_server::BatchGetGuideCardsRequest greq;
-        greq.add_card_ids(req->content_id());
-        simple_living::content_server::BatchGetGuideCardsResponse gresp;
-        bo_content_stub_.BatchGetGuideCards(&gcntl, &greq, &gresp, nullptr);
-        if (gcntl.Failed() || gresp.cards_size() == 0) {
-            FinishBizError(outer, 10003, "content not found", brpc::HTTP_STATUS_NOT_FOUND);
-            return;
-        }
-
-        simple_living::catalog::GuideCard card = gresp.cards(0);
-        card.set_revision(card.revision());
-
         brpc::Controller cntl;
-        simple_living::content_server::UpsertGuideCardRequest ureq;
-        ureq.set_expected_revision(card.revision());
-        *ureq.mutable_guide_card() = card;
-        simple_living::content_server::UpsertGuideCardResponse uresp;
-        bo_content_stub_.UpsertGuideCard(&cntl, &ureq, &uresp, nullptr);
-        if (cntl.Failed()) {
-            FinishDownstreamBrpcFailure(outer, cntl);
+        simple_living::content_server::RollbackGuideCardRevisionRequest rreq;
+        rreq.set_card_id(req->content_id());
+        rreq.set_target_revision(req->target_revision());
+        simple_living::content_server::RollbackGuideCardRevisionResponse rresp;
+        bo_content_stub_.RollbackGuideCardRevision(&cntl, &rreq, &rresp, nullptr);
+        if (cntl.Failed() || !rresp.has_new_revision()) {
+            FinishBizError(outer, 10003, "rollback failed", brpc::HTTP_STATUS_BAD_REQUEST);
             return;
         }
 
         resp->set_success(true);
-        resp->set_new_revision(uresp.revision());
+        resp->set_new_revision(rresp.new_revision());
         resp->set_content_id(req->content_id());
         FinishOk(outer, *resp);
     }
@@ -1606,19 +1663,33 @@ public:
             FinishBizError(outer, 10002, "Validation failed", brpc::HTTP_STATUS_BAD_REQUEST);
             return;
         }
-        if (req->status() == "approved" || req->status() == "rejected") {
-            brpc::Controller cntl;
-            simple_living::governance_server::SubmitReviewDecisionRequest sreq;
-            sreq.set_queue_item_id(req->review_id());
-            sreq.set_outcome(req->status() == "approved"
-                                 ? simple_living::governance_server::REVIEW_OUTCOME_APPROVED
-                                 : simple_living::governance_server::REVIEW_OUTCOME_REJECTED);
-            sreq.set_reviewer_id("backoffice_ops");
-            simple_living::governance_server::SubmitReviewDecisionResponse sresp;
-            bo_review_stub_.SubmitReviewDecision(&cntl, &sreq, &sresp, nullptr);
-            if (cntl.Failed()) {
-                FinishDownstreamBrpcFailure(outer, cntl);
-                return;
+        const auto outcome = bo::ReviewOutcomeFromString(req->status());
+        if (outcome == simple_living::governance_server::REVIEW_OUTCOME_UNSPECIFIED) {
+            FinishBizError(outer, 10002, "status must be approved, rejected, or needs_info",
+                           brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
+        brpc::Controller cntl;
+        simple_living::governance_server::SubmitReviewDecisionRequest sreq;
+        sreq.set_queue_item_id(req->review_id());
+        sreq.set_outcome(outcome);
+        sreq.set_reviewer_id("backoffice_ops");
+        simple_living::governance_server::SubmitReviewDecisionResponse sresp;
+        bo_review_stub_.SubmitReviewDecision(&cntl, &sreq, &sresp, nullptr);
+        if (cntl.Failed()) {
+            FinishDownstreamBrpcFailure(outer, cntl);
+            return;
+        }
+        if (sresp.has_decision()) {
+            if (outcome == simple_living::governance_server::REVIEW_OUTCOME_APPROVED) {
+                if (!UpdateContentStatus(sresp.decision().content_id(), "approved", outer)) {
+                    return;
+                }
+            } else if (outcome == simple_living::governance_server::REVIEW_OUTCOME_REJECTED ||
+                       outcome == simple_living::governance_server::REVIEW_OUTCOME_NEEDS_INFO) {
+                if (!UpdateContentStatus(sresp.decision().content_id(), "draft", outer)) {
+                    return;
+                }
             }
         }
         if (!LoadBackofficeReviews(resp, outer)) {
@@ -1642,7 +1713,21 @@ private:
             item->set_review_id(qi.id());
             item->set_subject_id(qi.content_id());
             item->set_resource_kind("guide_card");
-            item->set_status(bo::ReviewQueueStatusToString(qi.status()));
+            std::string status = bo::ReviewQueueStatusToString(qi.status());
+            if (qi.status() == simple_living::governance_server::REVIEW_QUEUE_ITEM_STATUS_COMPLETED) {
+                brpc::Controller rcntl;
+                simple_living::governance_server::GetReviewStateRequest rreq;
+                rreq.set_content_id(qi.content_id());
+                simple_living::governance_server::GetReviewStateResponse rresp;
+                bo_review_stub_.GetReviewState(&rcntl, &rreq, &rresp, nullptr);
+                if (!rcntl.Failed() && rresp.has_state() && rresp.state().has_latest_decision()) {
+                    const auto& decision = rresp.state().latest_decision();
+                    if (decision.queue_item_id() == qi.id()) {
+                        status = bo::ReviewOutcomeToString(decision.outcome());
+                    }
+                }
+            }
+            item->set_status(status);
             item->set_enqueue_reason(qi.enqueue_reason());
         }
         return true;
@@ -1660,11 +1745,28 @@ private:
             FinishBizError(outer, 10003, "content not found", brpc::HTTP_STATUS_NOT_FOUND);
             return false;
         }
-        bo::FillBackofficeContentItem(gresp.cards(0), resp->mutable_content());
-        auto* rev = resp->add_revision_history();
-        rev->set_revision(gresp.cards(0).revision());
-        rev->set_created_by("backoffice_ops");
-        rev->set_change_summary("current");
+        auto card = gresp.cards(0);
+        MaybePromoteInReviewToApproved(&card);
+        bo::FillBackofficeContentItem(card, resp->mutable_content());
+
+        brpc::Controller revcntl;
+        simple_living::content_server::ListGuideCardRevisionsRequest revreq;
+        revreq.set_card_id(content_id);
+        simple_living::content_server::ListGuideCardRevisionsResponse revresp;
+        bo_content_stub_.ListGuideCardRevisions(&revcntl, &revreq, &revresp, nullptr);
+        if (!revcntl.Failed()) {
+            for (const auto& rev : revresp.revisions()) {
+                auto* out = resp->add_revision_history();
+                out->set_revision(rev.revision());
+                out->set_change_summary(rev.change_summary());
+                out->set_created_by(rev.created_by());
+            }
+        } else {
+            auto* rev = resp->add_revision_history();
+            rev->set_revision(gresp.cards(0).revision());
+            rev->set_created_by("backoffice_ops");
+            rev->set_change_summary("current");
+        }
 
         brpc::Controller rcntl;
         simple_living::governance_server::GetReviewStateRequest rreq;
@@ -1679,6 +1781,8 @@ private:
                 rs->set_status("approved");
             } else if (decision.outcome() == simple_living::governance_server::REVIEW_OUTCOME_REJECTED) {
                 rs->set_status("rejected");
+            } else if (decision.outcome() == simple_living::governance_server::REVIEW_OUTCOME_NEEDS_INFO) {
+                rs->set_status("needs_info");
             } else {
                 rs->set_status("in_review");
             }
@@ -1715,6 +1819,31 @@ private:
         return true;
     }
 
+    bool MaybePromoteInReviewToApproved(simple_living::catalog::GuideCard* card) {
+        using simple_living::catalog::CONTENT_LIFECYCLE_STATUS_APPROVED;
+        using simple_living::catalog::CONTENT_LIFECYCLE_STATUS_IN_REVIEW;
+        if (card->content_status() != CONTENT_LIFECYCLE_STATUS_IN_REVIEW) {
+            return false;
+        }
+        brpc::Controller rcntl;
+        simple_living::governance_server::GetReviewStateRequest rreq;
+        rreq.set_content_id(card->card_id());
+        simple_living::governance_server::GetReviewStateResponse rresp;
+        bo_review_stub_.GetReviewState(&rcntl, &rreq, &rresp, nullptr);
+        if (rcntl.Failed() || !rresp.has_state() || !rresp.state().has_latest_decision() ||
+            rresp.state().latest_decision().outcome() !=
+                simple_living::governance_server::REVIEW_OUTCOME_APPROVED) {
+            return false;
+        }
+        card->set_content_status(CONTENT_LIFECYCLE_STATUS_APPROVED);
+        brpc::Controller ucntl;
+        simple_living::content_server::UpsertGuideCardRequest ureq;
+        *ureq.mutable_guide_card() = *card;
+        simple_living::content_server::UpsertGuideCardResponse uresp;
+        bo_content_stub_.UpsertGuideCard(&ucntl, &ureq, &uresp, nullptr);
+        return !ucntl.Failed();
+    }
+
     bool LoadBackofficeContentItems(BackofficeContentItemsResponse* resp, brpc::Controller* outer, const std::string& filter_content_id = "") {
         brpc::Controller cntl;
         simple_living::content_server::ListGuideCardsRequest req;
@@ -1737,7 +1866,35 @@ private:
             if (bcntl.Failed() || bresp.cards_size() == 0) {
                 continue;
             }
-            bo::FillBackofficeContentItem(bresp.cards(0), resp->add_items());
+            auto card = bresp.cards(0);
+            MaybePromoteInReviewToApproved(&card);
+            bo::FillBackofficeContentItem(card, resp->add_items());
+        }
+        return true;
+    }
+
+    bool EnsurePublishAllowed(const std::string& content_id,
+                              const simple_living::catalog::GuideCard& card,
+                              brpc::Controller* outer) {
+        using simple_living::catalog::CONTENT_LIFECYCLE_STATUS_APPROVED;
+        using simple_living::catalog::CONTENT_LIFECYCLE_STATUS_OFFLINE;
+        using simple_living::catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED;
+        if (card.content_status() == CONTENT_LIFECYCLE_STATUS_PUBLISHED ||
+            card.content_status() == CONTENT_LIFECYCLE_STATUS_OFFLINE ||
+            card.content_status() == CONTENT_LIFECYCLE_STATUS_APPROVED) {
+            return true;
+        }
+        brpc::Controller rcntl;
+        simple_living::governance_server::GetReviewStateRequest rreq;
+        rreq.set_content_id(content_id);
+        simple_living::governance_server::GetReviewStateResponse rresp;
+        bo_review_stub_.GetReviewState(&rcntl, &rreq, &rresp, nullptr);
+        if (rcntl.Failed() || !rresp.has_state() || !rresp.state().has_latest_decision() ||
+            rresp.state().latest_decision().outcome() !=
+                simple_living::governance_server::REVIEW_OUTCOME_APPROVED) {
+            FinishBizError(outer, 10002, "review approval required before publish",
+                           brpc::HTTP_STATUS_BAD_REQUEST);
+            return false;
         }
         return true;
     }
@@ -1761,6 +1918,9 @@ private:
 
         auto card = bresp.cards(0);
         if (status == "published") {
+            if (!EnsurePublishAllowed(content_id, card, outer)) {
+                return false;
+            }
             brpc::Controller pcntl;
             simple_living::content_server::PublishRevisionRequest preq;
             preq.set_resource_kind(simple_living::catalog::CONTENT_RESOURCE_KIND_GUIDE_CARD);
@@ -1852,6 +2012,8 @@ int main(int argc, char* argv[]) {
         "/api/v2/pages/redirect_prepare => PrepareRedirect,"
         "/api/v2/pages/me_summary      => GetMeSummary,"
         "/api/v2/backoffice/auth/login => PostBackofficeLogin,"
+        "/api/v2/backoffice/media/upload => PostBackofficeMediaUpload,"
+        "/media/backoffice/* => GetBackofficeMediaAsset,"
         "/api/v2/backoffice/affiliate/partners => GetBackofficeAffiliatePartners,"
         "/api/v2/backoffice/affiliate/partners/add => PostBackofficeAffiliatePartner,"
         "/api/v2/backoffice/content/items => GetBackofficeContentItems,"

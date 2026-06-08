@@ -2,6 +2,8 @@
 
 #include <gflags/gflags.h>
 
+#include "gateway_backoffice_media.h"
+
 #include <chrono>
 #include <cctype>
 #include <iomanip>
@@ -102,6 +104,8 @@ std::string StatusFromContentStatus(catalog::ContentLifecycleStatus status) {
     switch (status) {
         case catalog::CONTENT_LIFECYCLE_STATUS_IN_REVIEW:
             return "in_review";
+        case catalog::CONTENT_LIFECYCLE_STATUS_APPROVED:
+            return "approved";
         case catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED:
             return "published";
         case catalog::CONTENT_LIFECYCLE_STATUS_SCHEDULED:
@@ -118,6 +122,7 @@ std::string StatusFromContentStatus(catalog::ContentLifecycleStatus status) {
 
 catalog::ContentLifecycleStatus ContentStatusFromString(const std::string& status) {
     if (status == "in_review") return catalog::CONTENT_LIFECYCLE_STATUS_IN_REVIEW;
+    if (status == "approved") return catalog::CONTENT_LIFECYCLE_STATUS_APPROVED;
     if (status == "published") return catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED;
     if (status == "scheduled") return catalog::CONTENT_LIFECYCLE_STATUS_SCHEDULED;
     if (status == "offline") return catalog::CONTENT_LIFECYCLE_STATUS_OFFLINE;
@@ -165,7 +170,7 @@ void FillBackofficeContentItem(const catalog::GuideCard& card, BackofficeContent
     }
     if (card.has_cover_media()) {
         auto* media = out->mutable_cover_media();
-        media->set_url(card.cover_media().url());
+        media->set_url(backoffice_media::NormalizeMediaUrlForClient(card.cover_media().url()));
         media->set_type("image");
     }
     if (!card.affiliate_refs().empty()) {
@@ -233,7 +238,8 @@ catalog::GuideCard BuildGuideCardFromCreate(const BackofficeCreateContentItemReq
     card.set_revision(1);
     card.set_published_revision(initial == "published" ? 1 : 0);
     if (req.has_cover_media() && !req.cover_media().url().empty()) {
-        card.mutable_cover_media()->set_url(req.cover_media().url());
+        card.mutable_cover_media()->set_url(
+            backoffice_media::NormalizeMediaUrlForStore(req.cover_media().url()));
         card.mutable_cover_media()->set_type(catalog::MEDIA_TYPE_IMAGE);
     }
     auto* aff = card.add_affiliate_refs();
@@ -272,10 +278,12 @@ void ApplyContentUpdate(const BackofficeUpdateContentItemRequest& req, catalog::
         }
     }
     if (req.has_cover_media() && !req.cover_media().url().empty()) {
-        card->mutable_cover_media()->set_url(req.cover_media().url());
+        card->mutable_cover_media()->set_url(
+            backoffice_media::NormalizeMediaUrlForStore(req.cover_media().url()));
         card->mutable_cover_media()->set_type(catalog::MEDIA_TYPE_IMAGE);
     } else if (req.has_cover_url() && !req.cover_url().empty()) {
-        card->mutable_cover_media()->set_url(req.cover_url());
+        card->mutable_cover_media()->set_url(
+            backoffice_media::NormalizeMediaUrlForStore(req.cover_url()));
         card->mutable_cover_media()->set_type(catalog::MEDIA_TYPE_IMAGE);
     }
     if (req.theme_ids_size() > 0) {
@@ -373,6 +381,26 @@ std::string ReviewQueueStatusToString(governance_server::ReviewQueueItemStatus s
         default:
             return "pending";
     }
+}
+
+std::string ReviewOutcomeToString(governance_server::ReviewOutcome outcome) {
+    switch (outcome) {
+        case governance_server::REVIEW_OUTCOME_APPROVED:
+            return "approved";
+        case governance_server::REVIEW_OUTCOME_REJECTED:
+            return "rejected";
+        case governance_server::REVIEW_OUTCOME_NEEDS_INFO:
+            return "needs_info";
+        default:
+            return "completed";
+    }
+}
+
+governance_server::ReviewOutcome ReviewOutcomeFromString(const std::string& status) {
+    if (status == "approved") return governance_server::REVIEW_OUTCOME_APPROVED;
+    if (status == "rejected") return governance_server::REVIEW_OUTCOME_REJECTED;
+    if (status == "needs_info") return governance_server::REVIEW_OUTCOME_NEEDS_INFO;
+    return governance_server::REVIEW_OUTCOME_UNSPECIFIED;
 }
 
 governance_server::VisibilityState VisibilityStateFromString(const std::string& state) {

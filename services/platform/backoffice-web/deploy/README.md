@@ -43,7 +43,7 @@ docker run --rm -p 8088:8088 simple-living-backoffice-web:latest
 
 运行时默认 `HttpGatewayApiClient`；`VITE_GATEWAY_BASE_URL` 构建期注入。生产推荐留空（同源），由前置 nginx 反代 `/api/v2/backoffice/*` → gateway。`FakeGatewayRepository` 仅组件测试夹具。
 
-契约权威：`../../gateway/docs/backoffice-backend.md` §3、`../../gateway/docs/api.md` §13.6。
+契约权威：`../../backoffice-gateway-api.md` §3、`../../../gateway/api.md` §13.6。
 
 ## 4. QEMU Lab 镜像分发（可选）
 
@@ -58,5 +58,5 @@ ssh -p 2209 ubuntu@127.0.0.1 \
 
 ## 5. 协作原则
 
-- 仅通过契约协作：`.cursor/rules/shared-contracts.mdc` 与 `services/gateway/docs/backoffice-backend.md`。
+- 仅通过契约协作：`services/gateway/api.md` 与 `services/platform/backoffice-gateway-api.md`。
 - 不依赖 C 端 `client/` 文档或实现；与 `backoffice-web` 无代码共享关系。

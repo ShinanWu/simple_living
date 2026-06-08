@@ -11,19 +11,24 @@
 |------|------|
 | 首页 → 我的 | 首页顶栏右侧图标 → `navigateTo` `/pages/me/me` |
 | 详情 / 跳转 | `navigateTo` 子页面；返回使用 `navigateBack` |
-| 登录 | 独立页 `/pages/login/login`；支持 `redirect` 回跳参数 |
+| 登录 | 独立页 `/pages/login/login`；支持 `return_url` 回跳 |
 
 ## 3. 首页手势（对齐 iOS 阈值）
 
 | 手势 | 行为 |
 |------|------|
 | 左右滑（主题栏或卡片区） | 切换 `clothing` → `food` → `housing` → `transport` |
-| 上滑 | 下一条推荐 |
-| 下滑（非首卡） | 上一条 |
-| 下滑（首卡） | 二段提示；松手超过阈值触发刷新 |
-| 拖拽中 | `isCardDragging` 为 true 时不触发进入详情 |
+| 上滑 / 下滑 | 下一条 / 上一条；拖拽时露出相邻卡片预览层 |
+| 下滑（首卡） | 二段提示；松手时仍 ≥ 刷新阈值才刷新（中途回弹低于阈值不刷新） |
+| 拖拽中 | `isCardDragging` 为 true 时不触发进入详情 / 去购买 |
+| 主题空态 | 展示主题 slogan +「刷新」「看看其他主题」 |
+| 数据刷新 | **冷启动**（`App.onLaunch`）并行拉取四主题首屏并缓存；**切换主题 / 热启动回前台**不请求；首卡下拉刷新、空态/错误「重试」仅刷新当前主题 |
+| 卡片条数 | 以 gateway `items.length` 为准（首屏不传 `limit`）；`has_more` + `next_cursor` 控制翻页追加 |
+| 回到顶部 | `cardIndex > 0` 时显示悬浮按钮，回到当前主题第 1 张卡 |
 
 阈值（px，与 iOS 逻辑同量级）：下一条 90、刷新提示 28、刷新触发 92、主题横滑 54。
+
+主题 Tab 选中态使用对应 `--tab-accent` 微光晕胶囊。
 
 ## 4. 登录
 
@@ -39,8 +44,8 @@
 
 | 步骤 | 实现 |
 |------|------|
-| 准备 | `POST /api/v2/pages/redirect_prepare` |
-| 复制链接 | `wx.setClipboardData` |
+| 准备 | `POST /api/v2/pages/redirect_prepare`；`landing_url` 为空时展示可重试错误态，不展示技术字段 |
+| 展示 | 商品标题 +「打开购买页」主按钮 +「复制链接」次按钮 |
 | 打开 | 优先 `navigateTo` `web-outbound`（`web-view`）；失败则提示配置业务域名 |
 
 ## 6. 收藏与历史
@@ -48,7 +53,7 @@
 - 详情页「收藏」：未登录 `navigateTo` 登录页并带 `action=favorite` 回跳参数。
 - 我的页入口：收藏 / 历史列表页，分别调用 `GET /api/v2/me/favorites`、`GET /api/v2/me/history`。
 
-## 7. 埋点（v1 最小）
+## 7. 埋点（最小）
 
 使用 `console` 结构化日志 + 预留 `reportAnalytics` 封装（未接第三方时 no-op），事件名风格：`page_action_result`，字段 `snake_case`。
 

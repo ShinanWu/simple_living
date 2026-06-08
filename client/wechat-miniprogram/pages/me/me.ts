@@ -2,6 +2,8 @@ import { BRAND_DEFAULT_USER } from '../../config/brand';
 import { getGateway } from '../../services/gateway/runtime';
 import { GatewayBusinessError } from '../../utils/errors';
 import { trackEvent } from '../../utils/analytics';
+import { pageBackgroundStyle } from '../../utils/theme-surface';
+import { themeByKey } from '../../utils/theme';
 
 type LoadState = 'loading' | 'success' | 'error' | 'offline';
 
@@ -17,6 +19,7 @@ Page({
     historyCount: 0,
     consentText: '未同意',
     loggingOut: false,
+    pageStyle: pageBackgroundStyle(themeByKey('clothing').accent),
   },
 
   onShow() {
@@ -53,7 +56,8 @@ Page({
   },
 
   goLogin() {
-    wx.navigateTo({ url: '/pages/login/login' });
+    const returnUrl = encodeURIComponent('/pages/me/me');
+    wx.navigateTo({ url: `/pages/login/login?return_url=${returnUrl}` });
   },
 
   async onLogout() {
@@ -72,7 +76,8 @@ Page({
 
   goFavorites() {
     if (!this.data.isLoggedIn) {
-      wx.navigateTo({ url: '/pages/login/login?redirect=favorites' });
+      const returnUrl = encodeURIComponent('/pages/favorites/favorites');
+      wx.navigateTo({ url: `/pages/login/login?return_url=${returnUrl}` });
       return;
     }
     wx.navigateTo({ url: '/pages/favorites/favorites' });

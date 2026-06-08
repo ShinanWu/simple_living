@@ -4,7 +4,7 @@
 
 - 前端只调用 `gateway` 对外 HTTP/JSON 接口
 - 前端不依赖内部服务 `proto`
-- 字段语义遵循 `.cursor/rules/shared-contracts.mdc` 与 `services/gateway/docs/api.md`
+- 字段语义遵循 `services/gateway/api.md`
 
 ## 2. 页面到接口映射
 

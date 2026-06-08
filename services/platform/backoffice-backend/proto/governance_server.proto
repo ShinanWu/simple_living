@@ -7,7 +7,7 @@ import "google/protobuf/timestamp.proto";
 option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/platform/backoffice-backend/proto;governancepb";
 
-// Internal RPC contract for platform/backoffice-backend. Aligns with services/platform/docs/backend-api.md.
+// Internal RPC contract for platform/backoffice-backend. Aligns with services/platform/api.md.
 
 enum ReviewQueueItemStatus {
   REVIEW_QUEUE_ITEM_STATUS_UNSPECIFIED = 0;

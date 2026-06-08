@@ -3,8 +3,10 @@ import { loadTokenPair } from '../../services/auth/storage';
 import { getGateway } from '../../services/gateway/runtime';
 import type { FeedItemContext } from '../../services/gateway/types';
 import { galleryForTheme, themeByKey, type ThemeKey } from '../../utils/theme';
+import { pageBackgroundStyle } from '../../utils/theme-surface';
 import { GatewayBusinessError } from '../../utils/errors';
 import { trackEvent } from '../../utils/analytics';
+import { guideDetailPath, redirectPreparePath } from '../../utils/guide-route';
 
 type LoadState = 'loading' | 'success' | 'error' | 'offline';
 
@@ -23,10 +25,12 @@ Page({
     galleryIndex: 0,
     favoriteLabel: '收藏',
     favorited: false,
+    pageStyle: '',
   },
 
   context: null as FeedItemContext | null,
   theme: 'clothing' as ThemeKey,
+  _pendingFavorite: false,
 
   onLoad(query: Record<string, string | undefined>) {
     const guideCardId = query.guide_card_id ?? '';
@@ -37,13 +41,25 @@ Page({
       itemRank: Number(query.item_rank ?? '1'),
     };
     this.theme = (query.theme as ThemeKey) || 'clothing';
+    this._pendingFavorite = query.action === 'favorite';
+    const meta = themeByKey(this.theme);
     const reason = decodeURIComponent(query.reason ?? '-');
     this.setData({
       previewTitle: decodeURIComponent(query.title ?? ''),
       previewReasonDisplay: reason === '-' ? '为你精选的轻量推荐' : reason,
+      pageStyle: pageBackgroundStyle(meta.accent),
     });
     this.buildGalleryFallback();
     this.loadDetail(guideCardId);
+  },
+
+  onShow() {
+    void this.syncFavoriteState().then(() => {
+      if (this._pendingFavorite && loadTokenPair()?.accessToken) {
+        this._pendingFavorite = false;
+        void this.onFavorite();
+      }
+    });
   },
 
   buildGalleryFallback() {
@@ -77,6 +93,7 @@ Page({
         detail,
         gallerySlides: slides,
       });
+      void this.syncFavoriteState();
     } catch (err) {
       if (this.isOffline(err)) {
         this.setData({ loadState: 'offline' });
@@ -88,6 +105,19 @@ Page({
     }
   },
 
+  async syncFavoriteState() {
+    if (!this.context || !loadTokenPair()?.accessToken) return;
+    try {
+      const res = await getGateway().listFavorites({ limit: 100 });
+      const hit = res.items.find((item) => item.guideCardId === this.context!.guideCardId);
+      if (hit) {
+        this.setData({ favorited: true, favoriteLabel: '已收藏' });
+      }
+    } catch {
+      /* 收藏态非关键路径 */
+    }
+  },
+
   onRetry() {
     if (this.context) this.loadDetail(this.context.guideCardId);
   },
@@ -96,13 +126,28 @@ Page({
     this.setData({ galleryIndex: e.detail.current });
   },
 
+  loginReturnPath(): string {
+    if (!this.context) return '/pages/guide-detail/guide-detail';
+    return guideDetailPath({
+      guideCardId: this.context.guideCardId,
+      recommendationId: this.context.recommendationId,
+      scene: this.context.scene,
+      itemRank: this.context.itemRank,
+      title: this.data.detail.title || this.data.previewTitle,
+      reason: this.data.previewReasonDisplay,
+      theme: this.theme,
+      action: 'favorite',
+    });
+  },
+
   async onFavorite() {
     if (!this.context) return;
     if (!loadTokenPair()?.accessToken) {
       const app = getApp<IAppOption>();
       app.globalData.pendingLoginAction = `favorite:${this.context.guideCardId}`;
+      const returnUrl = encodeURIComponent(this.loginReturnPath());
       wx.navigateTo({
-        url: `/pages/login/login?redirect=favorite&guide_card_id=${encodeURIComponent(this.context.guideCardId)}`,
+        url: `/pages/login/login?return_url=${returnUrl}`,
       });
       return;
     }
@@ -117,7 +162,8 @@ Page({
       wx.showToast({ title: this.data.favoriteLabel, icon: 'none' });
     } catch (err) {
       if (err instanceof GatewayBusinessError && err.code === 20001) {
-        wx.navigateTo({ url: '/pages/login/login' });
+        const returnUrl = encodeURIComponent(this.loginReturnPath());
+        wx.navigateTo({ url: `/pages/login/login?return_url=${returnUrl}` });
         return;
       }
       wx.showToast({ title: '收藏失败', icon: 'none' });
@@ -126,14 +172,8 @@ Page({
 
   goBuy() {
     if (!this.context) return;
-    const c = this.context;
-    const q = [
-      `guide_card_id=${encodeURIComponent(c.guideCardId)}`,
-      `recommendation_id=${encodeURIComponent(c.recommendationId)}`,
-      `scene=${encodeURIComponent(c.scene)}`,
-      `item_rank=${c.itemRank}`,
-    ].join('&');
-    wx.navigateTo({ url: `/pages/redirect-prepare/redirect-prepare?${q}` });
+    const title = this.data.detail.title || this.data.previewTitle;
+    wx.navigateTo({ url: redirectPreparePath(this.context, title) });
   },
 
   isOffline(err: unknown): boolean {

@@ -5,13 +5,13 @@
 ## 0. 商业化交付说明
 
 - **主发布端**：微信小程序（`client/wechat-miniprogram/`），必须接真实公网 gateway。
-- **原生端**：iOS / Android 保留同一页面与契约模型，按商业化计划分阶段补齐真实网络层、登录、收藏、历史与跳转。
+- **原生端**：iOS / Android 保留同一页面与契约模型，补齐真实网络层、登录、收藏、历史与跳转。
 
 ## 1. 必须一致项（不可分叉）
 
 - 页面结构：`首页(衣食住行 Tab)`、`导购详情`、`跳转准备`、`我的`
 - 登录能力：`微信登录`、`手机号注册/登录`
-- 主题值：`clothing`、`food`、`housing`、`transport`（见 `.cursor/rules/shared-contracts.mdc`）
+- 主题值：`clothing`、`food`、`housing`、`transport`（见 `services/gateway/api.md`）
 - 状态模型：`loading` / `success` / `empty` / `error` / `offline`
 - 错误码处理分级与重试策略（见 `./frontend-gateway-interaction.md`）
 - 网关 `client_platform`：小程序固定 `wechat_miniprogram`
@@ -39,4 +39,4 @@
 ## 4. 微信小程序补充
 
 - 详见 [wechat-miniprogram/interaction-notes.md](./wechat-miniprogram/interaction-notes.md)
-- 收藏 / 历史列表为 v1 已实现扩展页，语义与 gateway `me/*` 路由一致
+- 收藏 / 历史列表为已实现扩展页，语义与 gateway `me/*` 路由一致

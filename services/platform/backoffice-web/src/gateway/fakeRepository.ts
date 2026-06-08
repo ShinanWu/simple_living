@@ -8,6 +8,7 @@ import type {
   BackofficeUpdateContentBody,
   BackofficeSubmitReviewBody,
   BackofficePublishContentBody,
+  BackofficePublishResult,
   BackofficeRollbackContentBody,
   BackofficeCreatePartnerBody,
   BackofficePartner,
@@ -43,6 +44,23 @@ export class FakeGatewayRepository implements GatewayApiClient {
       code: 0,
       message: "OK",
       data: { token: "test-token", role: "backoffice_admin" },
+      meta: makeMeta(),
+    };
+  }
+
+  async uploadBackofficeMedia(file: File): Promise<ApiResponse<import("./types").BackofficeMediaUploadResult>> {
+    await delay();
+    const ext = file.type.includes("png") ? "png" : "jpg";
+    const assetId = `media_fake_${Date.now()}`;
+    return {
+      success: true,
+      code: 0,
+      message: "OK",
+      data: {
+        asset_id: assetId,
+        url: `http://cdn.example.com/media/backoffice/${assetId}.${ext}`,
+        content_type: file.type || "image/jpeg",
+      },
       meta: makeMeta(),
     };
   }
@@ -328,7 +346,7 @@ export class FakeGatewayRepository implements GatewayApiClient {
 
   async publishBackofficeContent(
     body: BackofficePublishContentBody,
-  ): Promise<ApiResponse<BackofficeContentsData>> {
+  ): Promise<ApiResponse<BackofficePublishResult>> {
     await delay(220);
     this.contents = this.contents.map((item) => {
       if (item.content_id !== body.content_id) return item;
@@ -343,7 +361,12 @@ export class FakeGatewayRepository implements GatewayApiClient {
       success: true,
       code: 0,
       message: "ok",
-      data: { items: this.contents },
+      data: {
+        success: true,
+        content_id: body.content_id,
+        published_revision: body.revision,
+        visibility_state: "published",
+      },
       meta: makeMeta(),
     };
   }

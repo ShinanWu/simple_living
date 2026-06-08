@@ -4,9 +4,11 @@ import { setWxOpenId, getWxOpenId } from '../../services/auth/storage';
 import { GatewayBusinessError, loginErrorCopy } from '../../utils/errors';
 import { normalizePhoneToE164 } from '../../utils/phone';
 import { trackEvent } from '../../utils/analytics';
+import { BRAND_LOGIN_TITLE } from '../../config/brand';
 
 Page({
   data: {
+    loginTitle: BRAND_LOGIN_TITLE,
     phone: '',
     otp: '',
     verificationId: '',
@@ -17,13 +19,14 @@ Page({
     errorMessage: '',
   },
 
-  redirect: '',
-  guideCardId: '',
+  returnUrl: '',
   _cooldownTimer: 0 as ReturnType<typeof setInterval> | 0,
 
   onLoad(query: Record<string, string | undefined>) {
-    this.redirect = query.redirect ?? '';
-    this.guideCardId = query.guide_card_id ?? '';
+    this.returnUrl = query.return_url ? decodeURIComponent(query.return_url) : '';
+    if (!this.returnUrl && query.redirect === 'favorites') {
+      this.returnUrl = '/pages/favorites/favorites';
+    }
     trackEvent('login_panel_show');
   },
 
@@ -57,7 +60,7 @@ Page({
     wx.showModal({
       title: '验证码说明',
       content:
-        '网关 v1 暂未提供独立下发验证码接口。请使用测试环境提供的 verification_id 与固定验证码，或在 Mock 模式下任意填写后登录。',
+        '网关暂未提供独立下发验证码接口。请使用测试环境提供的 verification_id 与固定验证码，或在 Mock 模式下任意填写后登录。',
       showCancel: false,
       success: () => {
         this.startCooldown(60);
@@ -151,16 +154,13 @@ Page({
     const app = getApp<IAppOption>();
     app.globalData.pendingLoginAction = null;
 
-    if (this.redirect === 'favorite' && this.guideCardId) {
+    if (this.returnUrl) {
       wx.redirectTo({
-        url: `/pages/guide-detail/guide-detail?guide_card_id=${encodeURIComponent(this.guideCardId)}&recommendation_id=&scene=home_feed&item_rank=1&title=&reason=-&theme=clothing`,
+        url: this.returnUrl,
+        fail: () => wx.reLaunch({ url: '/pages/home/home' }),
       });
       return;
     }
-    if (this.redirect === 'favorites') {
-      wx.redirectTo({ url: '/pages/favorites/favorites' });
-      return;
-    }
-    wx.navigateBack({ fail: () => wx.switchTab({ fail: () => wx.reLaunch({ url: '/pages/home/home' }) }) });
+    wx.navigateBack({ fail: () => wx.reLaunch({ url: '/pages/home/home' }) });
   },
 });

@@ -1,6 +1,6 @@
 <view class="login">
   <view class="login__hero">
-    <text class="login__title">登录少糖</text>
+    <text class="login__title">{{loginTitle}}</text>
     <text class="login__subtitle sl-muted">微信一键登录为推荐方式；登录后可收藏与同步偏好。</text>
   </view>
 

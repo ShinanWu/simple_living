@@ -162,6 +162,16 @@ bool PgContentStore::ConnectAndInit(const std::string& conninfo) {
         "to_status INT NOT NULL,"
         "revision BIGINT,"
         "created_at TIMESTAMPTZ NOT NULL DEFAULT now())",
+        "CREATE TABLE IF NOT EXISTS content_guide_card_revision ("
+        "card_id TEXT NOT NULL,"
+        "revision BIGINT NOT NULL,"
+        "change_summary TEXT,"
+        "created_by TEXT NOT NULL DEFAULT 'backoffice_ops',"
+        "proto_hex TEXT NOT NULL,"
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
+        "PRIMARY KEY (card_id, revision))",
+        "CREATE INDEX IF NOT EXISTS idx_content_guide_card_revision_card "
+        "ON content_guide_card_revision (card_id, revision DESC)",
     };
     for (auto* ddl : kDdl) {
         if (!ExecSql(ddl)) {
@@ -216,7 +226,33 @@ bool PgContentStore::EnsureSeedGuideCards(const std::vector<GuideCard>& seeds) {
     return true;
 }
 
-bool PgContentStore::UpsertGuideCardLocked(const GuideCard& card) {
+bool PgContentStore::RecordGuideCardRevisionLocked(const GuideCard& card,
+                                                   const std::string& change_summary) {
+    std::string raw;
+    if (!card.SerializeToString(&raw)) {
+        return false;
+    }
+    const std::string proto_hex = HexEncode(raw);
+    const std::string revision = std::to_string(card.revision());
+    const char* pv[] = {card.card_id().c_str(), revision.c_str(), change_summary.c_str(), proto_hex.c_str()};
+    PGresult* r = ExecParams(
+        "INSERT INTO content_guide_card_revision (card_id, revision, change_summary, proto_hex) "
+        "VALUES ($1, $2::bigint, $3, $4) "
+        "ON CONFLICT (card_id, revision) DO NOTHING",
+        4, pv, nullptr, nullptr);
+    const bool ok = r && PQresultStatus(r) == PGRES_COMMAND_OK;
+    ClearRes(r);
+    return ok;
+}
+
+bool PgContentStore::UpsertGuideCardLocked(const GuideCard& card, bool record_revision_snapshot) {
+    GuideCard existing;
+    const bool had_existing = LoadGuideCardLocked(card.card_id(), &existing);
+    if (record_revision_snapshot && had_existing) {
+        if (!RecordGuideCardRevisionLocked(existing, "snapshot")) {
+            return false;
+        }
+    }
     std::string raw;
     if (!card.SerializeToString(&raw)) {
         return false;
@@ -265,6 +301,9 @@ bool PgContentStore::UpsertGuideCardLocked(const GuideCard& card) {
         LOG(ERROR) << "UpsertGuideCard: " << PQresultErrorMessage(r);
     }
     ClearRes(r);
+    if (ok && !had_existing) {
+        return RecordGuideCardRevisionLocked(card, "created");
+    }
     return ok;
 }
 
@@ -382,7 +421,7 @@ bool PgContentStore::UpdateGuideCardStatus(const std::string& card_id,
     if (published_revision > 0) {
         card.set_published_revision(published_revision);
     }
-    if (!UpsertGuideCardLocked(card)) {
+    if (!UpsertGuideCardLocked(card, false)) {
         return false;
     }
     const std::string from_status_str = std::to_string(from_status);
@@ -396,6 +435,92 @@ bool PgContentStore::UpdateGuideCardStatus(const std::string& card_id,
     ClearRes(r);
     if (updated) {
         *updated = card;
+    }
+    return true;
+}
+
+bool PgContentStore::LoadGuideCard(const std::string& card_id, GuideCard* card) {
+    std::lock_guard<std::mutex> lock(mu_);
+    return conn_ && LoadGuideCardLocked(card_id, card);
+}
+
+bool PgContentStore::ListGuideCardRevisions(const std::string& card_id,
+                                            std::vector<GuideCardRevisionMeta>* revisions) {
+    std::lock_guard<std::mutex> lock(mu_);
+    revisions->clear();
+    if (!conn_) {
+        return false;
+    }
+    const char* pv[] = {card_id.c_str()};
+    PGresult* r = ExecParams(
+        "SELECT revision, change_summary, created_by, created_at FROM content_guide_card_revision "
+        "WHERE card_id = $1 ORDER BY revision DESC LIMIT 50",
+        1, pv, nullptr, nullptr);
+    if (!r || PQresultStatus(r) != PGRES_TUPLES_OK) {
+        ClearRes(r);
+        return false;
+    }
+    for (int i = 0; i < PQntuples(r); ++i) {
+        GuideCardRevisionMeta summary;
+        summary.revision = std::atoll(PQgetvalue(r, i, 0));
+        summary.change_summary = PQgetvalue(r, i, 1);
+        summary.created_by = PQgetvalue(r, i, 2);
+        revisions->push_back(summary);
+    }
+    ClearRes(r);
+    return true;
+}
+
+bool PgContentStore::LoadGuideCardRevision(const std::string& card_id,
+                                           int64_t revision,
+                                           GuideCard* card) {
+    std::lock_guard<std::mutex> lock(mu_);
+    return conn_ && LoadGuideCardRevisionLocked(card_id, revision, card);
+}
+
+bool PgContentStore::LoadGuideCardRevisionLocked(const std::string& card_id,
+                                                 int64_t revision,
+                                                 GuideCard* card) {
+    if (!conn_) {
+        return false;
+    }
+    const std::string revision_str = std::to_string(revision);
+    const char* pv[] = {card_id.c_str(), revision_str.c_str()};
+    PGresult* r = ExecParams(
+        "SELECT proto_hex FROM content_guide_card_revision WHERE card_id = $1 AND revision = $2::bigint",
+        2, pv, nullptr, nullptr);
+    if (!r || PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) < 1) {
+        ClearRes(r);
+        return false;
+    }
+    const bool ok = CardFromRow(r, 0, card);
+    ClearRes(r);
+    return ok;
+}
+
+bool PgContentStore::RollbackGuideCardRevision(const std::string& card_id,
+                                               int64_t target_revision,
+                                               GuideCard* updated) {
+    std::lock_guard<std::mutex> lock(mu_);
+    if (!conn_) {
+        return false;
+    }
+    GuideCard current;
+    GuideCard target;
+    if (!LoadGuideCardLocked(card_id, &current) ||
+        !LoadGuideCardRevisionLocked(card_id, target_revision, &target)) {
+        return false;
+    }
+    target.set_card_id(current.card_id());
+    target.set_revision(current.revision() + 1);
+    target.set_content_status(current.content_status());
+    target.set_published_revision(current.published_revision());
+    if (!UpsertGuideCardLocked(target)) {
+        return false;
+    }
+    RecordGuideCardRevisionLocked(target, "rollback to " + std::to_string(target_revision));
+    if (updated) {
+        *updated = target;
     }
     return true;
 }

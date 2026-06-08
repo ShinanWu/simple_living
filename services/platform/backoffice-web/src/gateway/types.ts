@@ -26,6 +26,12 @@ export interface BackofficeLoginData {
   role: string;
 }
 
+export interface BackofficeMediaUploadResult {
+  asset_id: string;
+  url: string;
+  content_type?: string;
+}
+
 export interface BackofficePartnersData {
   items: BackofficePartner[];
 }
@@ -42,6 +48,7 @@ export type ResourceKind = "guide_card" | "editorial_content" | "topic" | "ranki
 export type BackofficeContentStatus =
   | "draft"
   | "in_review"
+  | "approved"
   | "published"
   | "scheduled"
   | "offline"
@@ -172,6 +179,13 @@ export interface BackofficeSubmitReviewBody {
 export interface BackofficePublishContentBody {
   content_id: string;
   revision: number;
+}
+
+export interface BackofficePublishResult {
+  success?: boolean;
+  content_id?: string;
+  published_revision?: number;
+  visibility_state?: string;
 }
 
 export interface BackofficeRollbackContentBody {

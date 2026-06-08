@@ -1,17 +1,26 @@
 <view class="list-page">
+  <view wx:if="{{loadState === 'success' && items.length}}" class="list-page__toolbar">
+    <button class="sl-btn-ghost list-page__clear" bindtap="onClear" loading="{{clearing}}" disabled="{{clearing}}">
+      清空历史
+    </button>
+  </view>
+
   <block wx:if="{{loadState === 'loading'}}">
     <view class="list-page__center"><text class="sl-muted">加载中…</text></view>
+  </block>
+  <block wx:elif="{{loadState === 'offline'}}">
+    <state-placeholder title="网络不可用" bind:action="onRetry" />
   </block>
   <block wx:elif="{{loadState === 'error'}}">
     <state-placeholder title="{{errorMessage}}" bind:action="onRetry" />
   </block>
-  <block wx:elif="{{!items.length}}">
+  <block wx:elif="{{loadState === 'empty'}}">
     <state-placeholder title="暂无浏览记录" actionTitle="" />
   </block>
   <block wx:else>
     <view wx:for="{{items}}" wx:key="guideCardId" class="list-page__item sl-card" data-id="{{item.guideCardId}}" bindtap="openDetail">
       <text class="list-page__title">{{item.guideCardId}}</text>
-      <text class="list-page__meta sl-muted">{{item.lastSeenAt}}</text>
+      <text class="list-page__meta sl-muted">最近浏览 {{item.displayTime}}</text>
     </view>
   </block>
 </view>

@@ -8,7 +8,7 @@ option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/platform/backoffice-backend/proto;affiliatepb";
 
 // Internal gRPC API for platform/backoffice-backend.
-// Human-maintained contract: services/platform/docs/backend-api.md
+// Human-maintained contract: services/platform/api.md
 
 // --- Enums ---
 

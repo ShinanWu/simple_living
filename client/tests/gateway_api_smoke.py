@@ -2,7 +2,7 @@
 """
 Gateway API smoke test runner.
 
-Covers the user v2 routes and pages routes listed in services/gateway/docs/api.md.
+Covers the user v2 routes and pages routes listed in services/gateway/api.md.
 This script is tolerant to auth/business-state differences and focuses on:
 1) endpoint reachability
 2) JSON envelope shape

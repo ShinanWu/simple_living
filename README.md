@@ -18,7 +18,7 @@
 - **纯导购**：平台只提供推荐与跳转，不介入站内交易闭环
 - **文档先行**：产品、接口、字段、页面、依赖关系先写清楚，再进入开发
 - **业务优先**：服务按业务域拆分，文档、代码、接口围绕业务能力组织
-- **多端一致**：各端共享同一套业务定义与交互规则；**v1 C 端以微信小程序为主交付**
+- **多端一致**：各端共享同一套业务定义与交互规则；**C 端以微信小程序为主交付端**
 - **并行开发**：各端和各服务通过文档契约协作，允许多人或多 agent 同时推进
 
 ## 目标用户
@@ -75,8 +75,8 @@
 simple_living/
 ├── README.md                 # 本文件：产品事实、文档地图、目录约束
 ├── client/                   # 多端客户端与前端契约（布局因端而异，见 client/frontend-README.md）
-│   ├── wechat-miniprogram/   # v1 C 端主交付
-│   ├── ios/ · android/       # 第二阶段原生端
+│   ├── wechat-miniprogram/   # C 端主交付
+│   ├── ios/ · android/       # 原生端（与小程序共享契约）
 │   └── frontend-*.md         # 跨端 IA / 页面 / Gateway 交互
 ├── common/                   # 跨服务共享：proto / util / 配置（见 common/README.md）
 ├── services/                 # 业务服务（准独立仓库，见 services/README.md）
@@ -106,7 +106,7 @@ simple_living/
 - **构建系统**：Bazel
 - **容器与编排**：Docker + Kubernetes
 - **K8s 使用范围**：容器编排、服务发现、Ingress、NetworkPolicy、灰度与回滚
-- **服务治理**：本地 Phase 1 由 `gateway` 与各域 `brpc` 承载限流、超时、重试；生产集群阶段补齐 Ingress / NetworkPolicy / 证书 / 灰度发布
+- **服务治理**：本地 本地联调由 由 `gateway` 与各域 `brpc` 承载限流、超时、重试；生产集群补齐 Ingress / NetworkPolicy / 证书 / 灰度发布
 - **可观测性**：Prometheus + Grafana + ELK + Jaeger
 - **交付链路**：GitLab CI + ArgoCD + Terraform
 
@@ -119,22 +119,22 @@ simple_living/
 | 产品定位 / 品牌 / 合规基线 | 本文件上文各章节 |
 | 跨服务架构 / 端口 / 依赖 | [`services/README.md`](./services/README.md) |
 | 共享 proto / util / 配置 | [`common/README.md`](./common/README.md) |
-| 对外 JSON 契约（字段语义） | [`.cursor/rules/shared-contracts.mdc`](./.cursor/rules/shared-contracts.mdc) |
+| 对外 JSON 契约（字段语义） | [`services/gateway/api.md`](./services/gateway/api.md) |
 | 文档先行与变更顺序 | [`.cursor/rules/docs-first-delivery.mdc`](./.cursor/rules/docs-first-delivery.mdc) |
-| 架构边界（gateway/BFF/域归属） | [`.cursor/rules/architecture-boundaries.mdc`](./.cursor/rules/architecture-boundaries.mdc) · [`.cursor/rules/domain-ownership.mdc`](./.cursor/rules/domain-ownership.mdc) |
+| 架构边界（gateway/BFF/域归属） | [`.cursor/rules/architecture-boundaries.mdc`](./.cursor/rules/architecture-boundaries.mdc) · [`services/README.md`](./services/README.md) |
 | 本地 QEMU 联调 | [`environments/local-qemu/README.md`](./environments/local-qemu/README.md) · `environments/local-qemu/nodes.example.env` |
 | K8s 集群基座 | [`environments/kubernetes/README.md`](./environments/kubernetes/README.md) |
-| Gateway 对外 API | [`services/gateway/docs/api.md`](./services/gateway/docs/api.md) |
-| 各服务 API / 数据模型 / 部署 | `services/<service>/docs/`（自治维护） |
+| Gateway 说明与对外 API | [`services/gateway/README.md`](./services/gateway/README.md) · [`services/gateway/api.md`](./services/gateway/api.md) |
+| 各服务说明与 RPC | `services/<service>/README.md` · `api.md`（见各服务根目录） |
 | 前端 IA / 页面 / 跨端共识 | [`client/frontend-README.md`](./client/frontend-README.md) 及索引内链接 |
-| 微信小程序（C 端 v1） | [`client/wechat-miniprogram/README.md`](./client/wechat-miniprogram/README.md) |
-| 运营管理平台 | [`services/platform/docs/README.md`](./services/platform/docs/README.md) |
+| 微信小程序（C 端） | [`client/wechat-miniprogram/README.md`](./client/wechat-miniprogram/README.md) |
+| 运营管理平台 | [`services/platform/README.md`](./services/platform/README.md) |
 | Foundation（PG/Redis/Kafka） | [`services/foundation/README.md`](./services/foundation/README.md) |
-| 公网入口 / frp | [`services/proxy/docs/README.md`](./services/proxy/docs/README.md) |
+| 公网入口 / frp | [`services/proxy/README.md`](./services/proxy/README.md) |
 | 共享部署脚本 | [`tools/README.md`](./tools/README.md) |
 
 ## 服务自治规则（硬约束）
 
-- 每个服务目录必须自包含：`docs/`、`proto/`、`src/`、`tests/`、`deploy/`、`BUILD.bazel`。
+- 每个服务目录必须自包含：`proto/`、`src/`、`tests/`、`deploy/`、`BUILD.bazel`；文档为根目录 `README.md` + `api.md`（有 RPC 时）。
 - 服务迭代、发布、回滚默认在各自目录完成，不通过“全服务统一脚本”触发批量构建。
-- 跨服务通信只依赖共享契约规则 `.cursor/rules/shared-contracts.mdc` 与各服务 `docs/api.md`，禁止依赖他域实现路径。
+- 跨服务通信只依赖各服务 `api.md`；终端 JSON 以 `services/gateway/api.md` 为准，禁止依赖他域实现路径。

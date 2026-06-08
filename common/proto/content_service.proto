@@ -176,6 +176,31 @@ message PublishRevisionResponse {
   optional int64 published_revision = 2;
 }
 
+message GuideCardRevisionSummary {
+  optional int64 revision = 1;
+  optional string change_summary = 2;
+  optional string created_by = 3;
+  optional google.protobuf.Timestamp created_at = 4;
+}
+
+message ListGuideCardRevisionsRequest {
+  optional string card_id = 1;
+}
+
+message ListGuideCardRevisionsResponse {
+  repeated GuideCardRevisionSummary revisions = 1;
+}
+
+message RollbackGuideCardRevisionRequest {
+  optional string card_id = 1;
+  optional int64 target_revision = 2;
+}
+
+message RollbackGuideCardRevisionResponse {
+  optional string card_id = 1;
+  optional int64 new_revision = 2;
+}
+
 service ContentService {
   rpc ListThemes(ListThemesRequest) returns (ListThemesResponse);
   rpc GetThemeDetail(GetThemeDetailRequest) returns (GetThemeDetailResponse);
@@ -193,4 +218,6 @@ service ContentService {
   rpc UpsertRankingList(UpsertRankingListRequest) returns (UpsertRankingListResponse);
   rpc SubmitForReview(SubmitForReviewRequest) returns (SubmitForReviewResponse);
   rpc PublishRevision(PublishRevisionRequest) returns (PublishRevisionResponse);
+  rpc ListGuideCardRevisions(ListGuideCardRevisionsRequest) returns (ListGuideCardRevisionsResponse);
+  rpc RollbackGuideCardRevision(RollbackGuideCardRevisionRequest) returns (RollbackGuideCardRevisionResponse);
 }

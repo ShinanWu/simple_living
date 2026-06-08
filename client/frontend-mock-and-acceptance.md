@@ -30,7 +30,7 @@
 
 ## 4. 登录测试夹具（Gateway 信封）
 
-以下示例遵循 [共享公共契约](../.cursor/rules/shared-contracts.mdc) 与 [gateway api.md](../services/gateway/docs/api.md) 顶层形状；字段名均为 `snake_case`。
+以下示例遵循 [gateway api.md](../services/gateway/api.md) 顶层形状；字段名均为 `snake_case`。
 
 **说明**：`POST /api/v2/auth/token/issue` 的 `phone_otp.verification_id` 依赖「验证码下发」步骤。正式联调必须使用 gateway 测试环境提供的固定 `verification_id` / 固定验证码；下列响应只用于测试夹具。
 

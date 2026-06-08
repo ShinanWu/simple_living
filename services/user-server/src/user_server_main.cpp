@@ -212,7 +212,7 @@ int main(int argc, char* argv[]) {
     simple_living::user_server::PgUserStore store;
     if (!store.ConnectAndInit(FLAGS_pg_conninfo)) {
         LOG(ERROR) << "PostgreSQL ConnectAndInit failed; check -pg_conninfo and that the server is running "
-                        "(see services/foundation/postgres/docs/README.md)";
+                        "(see services/foundation/postgres/README.md)";
         return 1;
     }
 

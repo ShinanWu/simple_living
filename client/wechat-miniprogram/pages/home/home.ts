@@ -1,18 +1,28 @@
 import { BRAND_NAME, BRAND_FEED_END_HINT } from '../../config/brand';
-import type { HomeCard } from '../../services/gateway/types';
-import { getGateway } from '../../services/gateway/runtime';
 import { setLastTheme } from '../../services/auth/storage';
 import { THEMES, nextTheme, themeByKey, type ThemeKey } from '../../utils/theme';
-import { GatewayBusinessError } from '../../utils/errors';
 import { trackEvent } from '../../utils/analytics';
 import { setBrandNavigationTitle } from '../../utils/navigation';
+import {
+  feedContextFromCard,
+  guideDetailPath,
+  redirectPreparePath,
+} from '../../utils/guide-route';
+import {
+  appendThemeFeedPage,
+  getCachedThemeFeed,
+  hasCachedThemeFeed,
+  refreshThemeFeed,
+  waitForColdPrefetch,
+  type DisplayCard,
+  type ThemeFeedLoadState,
+  type ThemeFeedSnapshot,
+} from '../../services/feed/theme-feed-cache';
 
 const NEXT_THRESHOLD = 90;
 const REFRESH_HINT = 28;
 const REFRESH_TRIGGER = 92;
 const THEME_SWIPE = 54;
-
-type LoadState = 'loading' | 'success' | 'empty' | 'error' | 'offline';
 
 Page({
   data: {
@@ -21,34 +31,79 @@ Page({
     themes: THEMES,
     selectedTheme: 'clothing' as ThemeKey,
     themeMeta: themeByKey('clothing'),
-    loadState: 'loading' as LoadState,
+    loadState: 'loading' as ThemeFeedLoadState | 'loading',
     errorMessage: '',
-    cards: [] as Array<HomeCard & { reasonDisplay: string }>,
+    cards: [] as DisplayCard[],
     cardIndex: 0,
-    currentCard: {} as HomeCard & { reasonDisplay: string },
+    currentCard: {} as DisplayCard,
     cardOffset: 0,
     pullHint: '',
     endHint: false,
+    nextCursor: null as string | null,
+    hasMore: false,
+    loadingMore: false,
+    peekCard: null as DisplayCard | null,
+    peekOffset: 0,
+    showBackToTop: false,
   },
 
-  _loadToken: 0,
+  _loadingMore: false,
   _isCardDragging: false,
   _touchStartY: 0,
   _touchStartX: 0,
   _themeTouchX: 0,
   _themeTouchY: 0,
   _isRefreshing: false,
+  _refreshArmed: false,
 
   onLoad() {
     const app = getApp<IAppOption>();
     const theme = (app.globalData.lastTheme || 'clothing') as ThemeKey;
     this.setData({ selectedTheme: theme, themeMeta: themeByKey(theme) });
-    this.loadFeed(theme);
+    void this.bootstrapTheme(theme);
   },
 
   onShow() {
     setBrandNavigationTitle();
     trackEvent('home_page_show');
+  },
+
+  async bootstrapTheme(theme: ThemeKey) {
+    if (hasCachedThemeFeed(theme)) {
+      this.applySnapshot(theme, getCachedThemeFeed(theme)!);
+      return;
+    }
+    this.setData({ loadState: 'loading' });
+    await waitForColdPrefetch();
+    const cached = getCachedThemeFeed(theme);
+    if (cached) {
+      this.applySnapshot(theme, cached);
+      return;
+    }
+    const snapshot = await refreshThemeFeed(theme);
+    this.applySnapshot(theme, snapshot);
+  },
+
+  applySnapshot(theme: ThemeKey, snapshot: ThemeFeedSnapshot) {
+    const cardIndex = 0;
+    const cards = snapshot.cards;
+    this.setData({
+      selectedTheme: theme,
+      themeMeta: themeByKey(theme),
+      loadState: snapshot.loadState,
+      errorMessage: snapshot.errorMessage,
+      cards,
+      cardIndex,
+      currentCard: cards[0] ?? ({} as DisplayCard),
+      cardOffset: 0,
+      pullHint: '',
+      endHint: cards.length > 0 && cardIndex >= cards.length - 1,
+      nextCursor: snapshot.nextCursor,
+      hasMore: snapshot.hasMore,
+      peekCard: null,
+      peekOffset: 0,
+      showBackToTop: false,
+    });
   },
 
   goMe() {
@@ -83,60 +138,63 @@ Page({
     const app = getApp<IAppOption>();
     app.globalData.lastTheme = theme;
     setLastTheme(theme);
-    this.setData({
-      selectedTheme: theme,
-      themeMeta: themeByKey(theme),
-      cardIndex: 0,
-      endHint: false,
-    });
     trackEvent('home_theme_switch', { theme, reselect: isReselect });
-    this.loadFeed(theme);
+
+    const cached = getCachedThemeFeed(theme);
+    if (cached) {
+      this.applySnapshot(theme, cached);
+      return;
+    }
+    void this.bootstrapTheme(theme);
+  },
+
+  exploreNextTheme() {
+    const next = nextTheme(this.data.selectedTheme, 1);
+    if (next === this.data.selectedTheme) {
+      this.switchTheme(nextTheme(this.data.selectedTheme, -1));
+      return;
+    }
+    this.switchTheme(next);
   },
 
   onRetry() {
-    this.loadFeed(this.data.selectedTheme);
+    void this.refreshCurrentTheme();
   },
 
-  async loadFeed(theme: ThemeKey) {
-    const token = ++this._loadToken;
+  async refreshCurrentTheme() {
+    const theme = this.data.selectedTheme;
     this.setData({ loadState: 'loading', pullHint: '', endHint: false });
-    const api = getGateway();
+    this._isRefreshing = true;
     try {
-      const res = await api.getHomeFeed(theme, { limit: 20 });
-      if (token !== this._loadToken) return;
-      const cards = res.cards.map((c) => ({
-        ...c,
-        reasonDisplay: c.reason === '-' ? '为你精选的轻量推荐' : c.reason,
-      }));
-      if (!cards.length) {
-        this.setData({ loadState: 'empty', cards: [], currentCard: {} as never });
-        return;
-      }
-      this.setData({
-        loadState: 'success',
-        cards,
-        cardIndex: 0,
-        currentCard: cards[0],
-        cardOffset: 0,
-      });
-    } catch (err) {
-      if (token !== this._loadToken) return;
-      if (this.isOffline(err)) {
-        this.setData({ loadState: 'offline' });
-        return;
-      }
-      const message =
-        err instanceof GatewayBusinessError ? err.message : '加载失败，请稍后重试';
-      this.setData({ loadState: 'error', errorMessage: message });
+      const snapshot = await refreshThemeFeed(theme);
+      this.applySnapshot(theme, snapshot);
+      trackEvent('home_feed_refresh', { theme });
     } finally {
       this._isRefreshing = false;
     }
+  },
+
+  onBackToTop() {
+    const { cards } = this.data;
+    if (!cards.length) return;
+    this.setData({
+      cardIndex: 0,
+      currentCard: cards[0],
+      endHint: cards.length === 1,
+      showBackToTop: false,
+      cardOffset: 0,
+      pullHint: '',
+      peekCard: null,
+      peekOffset: 0,
+    });
+    trackEvent('home_back_to_top');
   },
 
   onCardTouchStart(e: WechatMiniprogram.TouchEvent) {
     this._touchStartY = e.touches[0].clientY;
     this._touchStartX = e.touches[0].clientX;
     this._isCardDragging = false;
+    this._refreshArmed = false;
   },
 
   onCardTouchMove(e: WechatMiniprogram.TouchEvent) {
@@ -152,6 +210,8 @@ Page({
     let offset = 0;
     let pullHint = '';
     let endHint = false;
+    let peekCard: DisplayCard | null = null;
+    let peekOffset = 0;
 
     if (dy > 0 && isFirst) {
       const pull = Math.min(dy, REFRESH_TRIGGER + 24);
@@ -159,16 +219,26 @@ Page({
       if (pull >= REFRESH_HINT) {
         pullHint = pull >= REFRESH_TRIGGER ? '松手刷新' : '继续下滑刷新';
       }
+      this._refreshArmed = pull >= REFRESH_TRIGGER;
     } else if (dy < 0 && isLast) {
       offset = Math.max(dy * 0.35, -120);
       endHint = true;
+      this._refreshArmed = false;
     } else if (dy > 0 && !isFirst) {
       offset = Math.min(dy, 280);
+      peekCard = cards[cardIndex - 1];
+      peekOffset = offset - 420;
+      this._refreshArmed = false;
     } else if (dy < 0 && !isLast) {
       offset = Math.max(dy, -280);
+      peekCard = cards[cardIndex + 1];
+      peekOffset = offset + 420;
+      this._refreshArmed = false;
+    } else {
+      this._refreshArmed = false;
     }
 
-    this.setData({ cardOffset: offset, pullHint, endHint });
+    this.setData({ cardOffset: offset, pullHint, endHint, peekCard, peekOffset });
   },
 
   onCardTouchEnd(e: WechatMiniprogram.TouchEvent) {
@@ -186,8 +256,7 @@ Page({
     const { cardIndex, cards } = this.data;
     const shouldNext = dy < -NEXT_THRESHOLD;
     const shouldPrev = dy > NEXT_THRESHOLD;
-    const shouldRefresh =
-      cardIndex === 0 && (dy > REFRESH_TRIGGER || e.changedTouches[0].clientY - this._touchStartY > REFRESH_TRIGGER);
+    const shouldRefresh = cardIndex === 0 && this._refreshArmed && dy >= REFRESH_TRIGGER;
 
     if (shouldNext && cardIndex + 1 < cards.length) {
       const nextIndex = cardIndex + 1;
@@ -195,16 +264,21 @@ Page({
         cardIndex: nextIndex,
         currentCard: cards[nextIndex],
         endHint: nextIndex >= cards.length - 1,
+        showBackToTop: nextIndex > 0,
       });
       trackEvent('home_card_swipe', { direction: 'next' });
+      void this.maybeLoadMore(nextIndex);
     } else if (shouldPrev && cardIndex > 0) {
       const prevIndex = cardIndex - 1;
-      this.setData({ cardIndex: prevIndex, currentCard: cards[prevIndex], endHint: false });
+      this.setData({
+        cardIndex: prevIndex,
+        currentCard: cards[prevIndex],
+        endHint: false,
+        showBackToTop: prevIndex > 0,
+      });
       trackEvent('home_card_swipe', { direction: 'prev' });
     } else if (shouldRefresh && !this._isRefreshing) {
-      this._isRefreshing = true;
-      trackEvent('home_feed_refresh', { theme: this.data.selectedTheme });
-      this.loadFeed(this.data.selectedTheme);
+      void this.refreshCurrentTheme();
     }
 
     setTimeout(() => {
@@ -214,26 +288,60 @@ Page({
   },
 
   resetCardMotion() {
-    this.setData({ cardOffset: 0, pullHint: '' });
+    this.setData({ cardOffset: 0, pullHint: '', peekCard: null, peekOffset: 0 });
+    this._refreshArmed = false;
+  },
+
+  async maybeLoadMore(cardIndex: number) {
+    const { cards, nextCursor, hasMore, selectedTheme } = this.data;
+    if (!hasMore || !nextCursor || this._loadingMore) return;
+    if (cardIndex < cards.length - 2) return;
+    this._loadingMore = true;
+    this.setData({ loadingMore: true });
+    try {
+      const prevLen = cards.length;
+      const patch = await appendThemeFeedPage(selectedTheme, nextCursor, cards);
+      this.setData({
+        cards: patch.cards,
+        nextCursor: patch.nextCursor,
+        hasMore: patch.hasMore,
+        endHint: this.data.cardIndex >= patch.cards.length - 1,
+      });
+      if (patch.cards.length > prevLen) {
+        trackEvent('home_feed_load_more', {
+          theme: selectedTheme,
+          count: patch.cards.length - prevLen,
+        });
+      }
+    } catch {
+      /* 静默失败，用户可下拉刷新重试 */
+    } finally {
+      this._loadingMore = false;
+      this.setData({ loadingMore: false });
+    }
   },
 
   openDetail() {
     if (this._isCardDragging) return;
     const card = this.data.currentCard;
     if (!card?.guideCardId) return;
-    const q = [
-      `guide_card_id=${encodeURIComponent(card.guideCardId)}`,
-      `recommendation_id=${encodeURIComponent(card.recommendationId)}`,
-      `scene=${encodeURIComponent(card.scene)}`,
-      `item_rank=${card.itemRank}`,
-      `title=${encodeURIComponent(card.title)}`,
-      `reason=${encodeURIComponent(card.reason)}`,
-      `theme=${this.data.selectedTheme}`,
-    ].join('&');
-    wx.navigateTo({ url: `/pages/guide-detail/guide-detail?${q}` });
+    wx.navigateTo({
+      url: guideDetailPath({
+        guideCardId: card.guideCardId,
+        recommendationId: card.recommendationId,
+        scene: card.scene,
+        itemRank: card.itemRank,
+        title: card.title,
+        reason: card.reason,
+        theme: this.data.selectedTheme,
+      }),
+    });
   },
 
-  isOffline(err: unknown): boolean {
-    return Boolean(err && typeof err === 'object' && (err as { kind?: string }).kind === 'offline');
+  goBuy() {
+    if (this._isCardDragging) return;
+    const card = this.data.currentCard;
+    if (!card?.guideCardId) return;
+    wx.navigateTo({ url: redirectPreparePath(feedContextFromCard(card), card.title) });
   },
 });

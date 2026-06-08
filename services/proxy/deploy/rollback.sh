@@ -30,7 +30,7 @@ IMAGE_TAG="${TARGET_TAG}" bash "${SCRIPT_DIR}/deploy_service.sh"
 
 echo "==> Post-rollback ingress verification"
 if ! bash "${SCRIPT_DIR}/verify_proxy.sh"; then
-  echo "ERROR: post-rollback verification failed; inspect nginx/frpc logs (see docs/README.md §6 logs)." >&2
+  echo "ERROR: post-rollback verification failed; inspect nginx/frpc logs (see ../README.md §6 logs)." >&2
   exit 2
 fi
 

@@ -6,6 +6,7 @@ option cc_generic_services = true;
 option go_package = "github.com/simple_living/services/gateway/proto/gwpagespb;gwpagespb";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
 // Gateway page aggregation edge messages. These are gateway-owned edge contracts
 // that map public JSON routes to internal RPC orchestration.
@@ -156,6 +157,19 @@ message BackofficeLoginResponse {
   optional bool success = 1;
   optional string token = 2;
   optional string role = 3;
+}
+
+message BackofficeMediaUploadRequest {
+  optional string content_base64 = 1;
+  optional string content_type = 2;
+  optional string filename = 3;
+  optional string data_url = 4;
+}
+
+message BackofficeMediaUploadResponse {
+  optional string asset_id = 1;
+  optional string url = 2;
+  optional string content_type = 3;
 }
 
 message BackofficeMediaRef {
@@ -367,6 +381,8 @@ service GatewayPagesEdgeV2 {
   rpc PrepareRedirect(RedirectPrepareRequest) returns (RedirectPrepareResponse);
   rpc GetMeSummary(MeSummaryRequest) returns (MeSummaryResponse);
   rpc PostBackofficeLogin(BackofficeLoginRequest) returns (BackofficeLoginResponse);
+  rpc PostBackofficeMediaUpload(BackofficeMediaUploadRequest) returns (BackofficeMediaUploadResponse);
+  rpc GetBackofficeMediaAsset(google.protobuf.Empty) returns (google.protobuf.Empty);
   rpc GetBackofficeAffiliatePartners(BackofficeListPartnersRequest) returns (BackofficePartnersResponse);
   rpc PostBackofficeAffiliatePartner(BackofficeCreatePartnerRequest) returns (BackofficePartnersResponse);
   rpc GetBackofficeContentItems(BackofficeListContentItemsRequest) returns (BackofficeContentItemsResponse);

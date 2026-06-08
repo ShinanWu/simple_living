@@ -11,7 +11,10 @@ filegroup(
 
 filegroup(
     name = "docs",
-    srcs = glob(["docs/**/*.md"]),
+    srcs = [
+        "README.md",
+        "api.md",
+    ],
 )
 
 proto_library(
@@ -36,7 +39,10 @@ proto_library(
     name = "gateway_pages_proto",
     srcs = ["proto/gateway_pages_edge.proto"],
     strip_import_prefix = "proto",
-    deps = ["@com_google_protobuf//:timestamp_proto"],
+    deps = [
+        "@com_google_protobuf//:empty_proto",
+        "@com_google_protobuf//:timestamp_proto",
+    ],
 )
 
 cc_proto_library(
@@ -51,6 +57,7 @@ cc_library(
     copts = BRPC_EXAMPLE_COPTS,
     includes = ["src"],
     deps = [
+        ":gateway_backoffice_media",
         ":gateway_pages_cc_proto",
         "//common/proto:catalog_cc_proto",
         "//common/proto:content_service_cc_proto",
@@ -61,12 +68,25 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "gateway_backoffice_media",
+    srcs = ["src/gateway_backoffice_media.cpp"],
+    hdrs = ["src/gateway_backoffice_media.h"],
+    copts = BRPC_EXAMPLE_COPTS,
+    includes = ["src"],
+    deps = [
+        ":gateway_pages_cc_proto",
+        "@brpc//:brpc",
+    ],
+)
+
 cc_binary(
     name = "gateway_edge_server",
     srcs = ["src/gateway_edge_server_main.cpp"],
     copts = BRPC_EXAMPLE_COPTS,
     deps = [
         ":gateway_backoffice_helpers",
+        ":gateway_backoffice_media",
         ":gateway_pages_cc_proto",
         ":gateway_user_cc_proto",
         "//common/proto:catalog_cc_proto",
@@ -94,7 +114,7 @@ sh_test(
     name = "gateway_pages_golden_contract_test",
     srcs = ["tests/gateway_pages_golden_contract_test.sh"],
     data = [
-        "docs/api.md",
+        "api.md",
         "proto/gateway_pages_edge.proto",
         "src/gateway_edge_server_main.cpp",
     ],
@@ -104,7 +124,7 @@ sh_test(
     name = "gateway_user_golden_contract_test",
     srcs = ["tests/gateway_user_golden_contract_test.sh"],
     data = [
-        "docs/api.md",
+        "api.md",
         "proto/gateway_user_edge.proto",
         "proto/gateway_user_http_messages.proto",
         "src/gateway_edge_server_main.cpp",

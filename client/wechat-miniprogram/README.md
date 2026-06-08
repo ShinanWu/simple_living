@@ -3,7 +3,7 @@
 ## 1. 交付定位
 
 - **当前主发布端**：原生微信小程序（WXML + TypeScript）。
-- **原生 App 路线**：iOS / Android 与小程序共享 gateway 契约，按商业化计划分阶段补齐真实网络层与端能力。
+- **原生 App 路线**：iOS / Android 与小程序共享 gateway 契约，补齐真实网络层与端能力。
 - 业务语义与 [frontend-page-specs.md](../frontend-page-specs.md)、[frontend-login-interaction.md](../frontend-login-interaction.md) 一致；`client_platform` 固定为 `wechat_miniprogram`。
 
 ## 2. 页面与路由
@@ -40,7 +40,7 @@
 2. `POST /api/v2/auth/token/issue`，`account_proof.oauth`：`provider=wechat`，`authorization_code=code`
 3. `provider_subject`：优先使用本地已缓存的 `openid`；首次登录可由 **user-server / 网关** 根据 `code` 解析（客户端在联调模式可手填，见登录页「高级联调」）
 
-手机号 OTP：网关 v1 未暴露独立「发验证码」路由；联调使用测试环境 `verification_id` / 固定验证码。
+手机号 OTP：网关未暴露独立「发验证码」路由；联调使用测试环境 `verification_id` / 固定验证码。
 
 ## 5. 本地开发
 
@@ -73,9 +73,13 @@ bash services/proxy/deploy/verify_proxy.sh
 
 发布/再发一条导购按各服务 `deploy/README` 与 [services/README.md](../../services/README.md) 部署。
 
-## 6. 相关文档
+## 6. 后端接口需求
+
+小程序按 `services/gateway/api.md` 消费接口。与公网联调发现的缺口（须 gateway / 运营数据配合）见 **[gateway-backend-requirements.md](./gateway-backend-requirements.md)**，交后端 Agent 实现。
+
+## 7. 相关文档
 
 - 品牌命名：[项目说明（品牌与命名）](../../README.md)
 - 分端交互：[interaction-notes.md](./interaction-notes.md)
 - 三端映射：[frontend-platform-mapping.md](../frontend-platform-mapping.md)
-- Gateway API：[services/gateway/docs/api.md](../../services/gateway/docs/api.md)
+- Gateway API：[services/gateway/api.md](../../services/gateway/api.md)

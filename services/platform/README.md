@@ -1,28 +1,55 @@
-# platform 服务组
+# 运营管理平台
 
-`services/platform/` 是**运营管理后台**总目录（非 C 端 App）。
+`services/platform/` 是**运营管理后台**总目录：导购内容、治理审核、联盟配置；写面权威在 `backoffice-backend`，经 snapshot 同步 C 端读路径。
 
 ## 组成
 
-| 目录 | 说明 |
+| 目录 | 角色 | 职责 |
+|------|------|------|
+| [`backoffice-web/`](./backoffice-web/) | UI | 运营工作台（React SPA）；经 gateway 调 API |
+| [`backoffice-backend/`](./backoffice-backend/README.md) | 后端 | content + governance + affiliate 写面；PostgreSQL + 导出 |
+
+## 契约
+
+| 文档 | 说明 |
 |------|------|
-| [`docs/`](docs/README.md) | 产品与 design（产品规格、详细设计、后端工程文档） |
-| [`backoffice-web/`](backoffice-web/) | UI：运营工作台 React SPA |
-| [`backoffice-backend/`](backoffice-backend/) | 后端：content + governance + affiliate 写面 + 导出 |
+| [api.md](./api.md) | 后端内部 RPC（brpc/proto） |
+| [backoffice-gateway-api.md](./backoffice-gateway-api.md) | 运营 HTTP（`/api/v2/backoffice/*`） |
+| [product-spec.md](./product-spec.md) | 产品规格 |
+| [detail-design.md](./detail-design.md) | 页面与写链路设计 |
 
-## 文档从哪读
+终端 JSON 信封：[`services/gateway/api.md`](../gateway/api.md)。
 
-1. [docs/README.md](docs/README.md) — 总览、**架构与部署**、文档索引  
-2. [docs/product-spec.md](docs/product-spec.md) — 做什么  
-3. [docs/detail-design.md](docs/detail-design.md) — 怎么做（页面、API、写链路）  
-4. [docs/backend-development.md](docs/backend-development.md) — 后端构建、运行与部署  
-5. [docs/backend-api.md](docs/backend-api.md) / [backend-data-model.md](docs/backend-data-model.md) / [backend-workflow.md](docs/backend-workflow.md) — RPC、DDL、导出工作流
+## 架构
 
-子目录 README 仅描述工程入口（构建、部署脚本）。
+```text
+运营浏览器 → proxy → backoffice-web :8088（/backoffice/）
+                    → gateway :8080（/api/）→ backoffice-backend :9110 → PostgreSQL
+                                                      ↓ export
+                              recommendation-server / tracking-server（同节点 snapshot）
+```
 
-## 边界
+| 导出 bundle | 消费方 |
+|-------------|--------|
+| `catalog_snapshot`、`visibility_index` | recommendation-server |
+| `affiliate_link_spec` | tracking-server |
 
-- 与 `client/` 无代码耦合；运营契约见 `gateway/docs/backoffice-backend.md` 与 `platform/docs/`。
-- UI 只经 gateway 调 API；后端导出 snapshot 供 `recommendation-server` / `tracking-server` 消费。
+**硬约束**：`backoffice-backend` `-export_dir` 与 `recommendation-server` / `tracking-server` `-snapshot_dir` 同挂载（默认 `/var/lib/simple-living/exports/`）。
 
-C 端导购读 + 推荐：`services/recommendation-server/`。
+## 部署
+
+| URL | 目标 |
+|-----|------|
+| `/backoffice/` | backoffice-web |
+| `/api/v2/backoffice/*` | gateway → backoffice-backend |
+
+启动顺序与端口见 [`environments/local-qemu/README.md`](../../environments/local-qemu/README.md)；单服务脚本在各子目录 `deploy/`。
+
+路由约定：[`services/proxy/README.md`](../proxy/README.md) §6。
+
+## 工程入口
+
+- Web：[backoffice-web/README.md](./backoffice-web/README.md)
+- 后端：[backoffice-backend/deploy/README.md](./backoffice-backend/deploy/README.md)
+
+与 `client/` 无代码耦合。C 端导购读见 `services/recommendation-server/`。

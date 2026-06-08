@@ -11,7 +11,10 @@ filegroup(
 
 filegroup(
     name = "docs",
-    srcs = glob(["docs/**/*.md"]),
+    srcs = [
+        "README.md",
+        "api.md",
+    ],
 )
 
 proto_library(

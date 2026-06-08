@@ -2,6 +2,7 @@
   padding: 24rpx;
   min-height: 100vh;
   box-sizing: border-box;
+  background: linear-gradient(180deg, #fafafa 0%, #f0f0f2 55%, #e8e8ea 100%);
 }
 
 .list-page__center {
@@ -12,8 +13,16 @@
 }
 
 .list-page__item {
-  padding: 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 24rpx 28rpx;
   margin-bottom: 16rpx;
+}
+
+.list-page__main {
+  flex: 1;
+  min-width: 0;
 }
 
 .list-page__title {
@@ -26,4 +35,13 @@
   display: block;
   margin-top: 8rpx;
   font-size: 24rpx;
+}
+
+.list-page__remove {
+  flex-shrink: 0;
+  height: 64rpx;
+  line-height: 64rpx;
+  font-size: 24rpx;
+  padding: 0 24rpx;
+  margin: 0;
 }

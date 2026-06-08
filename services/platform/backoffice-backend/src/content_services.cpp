@@ -1,5 +1,6 @@
 // platform/backoffice-backend brpc server — authoritative state in MySQL/PostgreSQL + Redis per services/README.md.
 #include <gflags/gflags.h>
+#include <brpc/controller.h>
 #include <brpc/server.h>
 #include <butil/logging.h>
 
@@ -343,20 +344,71 @@ public:
         resp->set_governance_queue_item_id(GenId("qi"));
     }
 
-    void PublishRevision(::google::protobuf::RpcController*,
+    void PublishRevision(::google::protobuf::RpcController* controller,
                          const PublishRevisionRequest* req,
                          PublishRevisionResponse* resp,
                          ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
+        auto* cntl = static_cast<brpc::Controller*>(controller);
+        if (req->resource_id().empty()) {
+            if (cntl) {
+                cntl->SetFailed("resource_id required");
+            }
+            return;
+        }
         GuideCard updated;
         const int64_t requested_revision = req->revision();
-        guide_store_.UpdateGuideCardStatus(req->resource_id(),
-                                           CONTENT_LIFECYCLE_STATUS_PUBLISHED,
-                                           requested_revision,
-                                           &updated);
+        if (!guide_store_.UpdateGuideCardStatus(req->resource_id(),
+                                                CONTENT_LIFECYCLE_STATUS_PUBLISHED,
+                                                requested_revision,
+                                                &updated)) {
+            if (cntl) {
+                cntl->SetFailed("publish failed");
+            }
+            return;
+        }
         resp->set_content_status(CONTENT_LIFECYCLE_STATUS_PUBLISHED);
         resp->set_published_revision(requested_revision > 0 ? requested_revision : updated.published_revision());
         RefreshSnapshotExport();
+    }
+
+    void ListGuideCardRevisions(::google::protobuf::RpcController*,
+                                const ListGuideCardRevisionsRequest* req,
+                                ListGuideCardRevisionsResponse* resp,
+                                ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        if (!req->has_card_id() || req->card_id().empty()) {
+            return;
+        }
+        std::vector<GuideCardRevisionMeta> revisions;
+        if (!guide_store_.ListGuideCardRevisions(req->card_id(), &revisions)) {
+            return;
+        }
+        for (const auto& rev : revisions) {
+            auto* out = resp->add_revisions();
+            out->set_revision(rev.revision);
+            out->set_change_summary(rev.change_summary);
+            out->set_created_by(rev.created_by);
+        }
+    }
+
+    void RollbackGuideCardRevision(::google::protobuf::RpcController*,
+                                   const RollbackGuideCardRevisionRequest* req,
+                                   RollbackGuideCardRevisionResponse* resp,
+                                   ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard g(done);
+        if (!req->has_card_id() || req->card_id().empty() || req->target_revision() <= 0) {
+            return;
+        }
+        GuideCard updated;
+        if (!guide_store_.RollbackGuideCardRevision(req->card_id(), req->target_revision(), &updated)) {
+            return;
+        }
+        resp->set_card_id(updated.card_id());
+        resp->set_new_revision(updated.revision());
+        if (updated.content_status() == CONTENT_LIFECYCLE_STATUS_PUBLISHED) {
+            RefreshSnapshotExport();
+        }
     }
 };
 

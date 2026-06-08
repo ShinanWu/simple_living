@@ -1,3 +1,8 @@
+/**
+ * Gateway HTTP 客户端。契约以 services/gateway/api.md 为准。
+ * 公网联调缺口与后端待办：../../gateway-backend-requirements.md
+ * （me/* 收藏历史等暂走 legacy POST 路径，待 gateway 按 api.md 部署后切回 REST）
+ */
 import { APP_VERSION, CLIENT_PLATFORM, resolvedDeviceId } from '../../config/env';
 import {
   clearAuth,
@@ -34,8 +39,10 @@ export class HttpGatewayAPI implements GatewayAPI {
   constructor(private readonly baseUrl: string) {}
 
   async getHomeFeed(theme: ThemeKey, pagination: Pagination): Promise<HomeFeedResponse> {
-    const query = `limit=${pagination.limit}&theme=${encodeURIComponent(theme)}`;
-    const cursor = pagination.cursor ? `&cursor=${encodeURIComponent(pagination.cursor)}` : '';
+    const parts = [`theme=${encodeURIComponent(theme)}`];
+    if (pagination.limit != null) parts.push(`limit=${pagination.limit}`);
+    if (pagination.cursor) parts.push(`cursor=${encodeURIComponent(pagination.cursor)}`);
+    const query = parts.join('&');
     const data = await this.request<{
       items: Array<{
         recommendation_id: string;
@@ -51,8 +58,8 @@ export class HttpGatewayAPI implements GatewayAPI {
           cover_media?: { url?: string };
         };
       }>;
-      pagination?: { next_cursor?: string | null };
-    }>('GET', `/api/v2/pages/home_feed?${query}${cursor}`, null, 'bearerOrGuest');
+      pagination?: { next_cursor?: string | null; has_more?: boolean };
+    }>('GET', `/api/v2/pages/home_feed?${query}`, null, 'bearerOrGuest');
 
     const cards: HomeCard[] = data.items.map((item) => {
       const title = item.guide_card?.title ?? item.guide_card_id;
@@ -68,7 +75,11 @@ export class HttpGatewayAPI implements GatewayAPI {
         coverUrl: item.guide_card?.cover_url ?? item.guide_card?.cover_media?.url,
       };
     });
-    return { cards, nextCursor: data.pagination?.next_cursor ?? null };
+    return {
+      cards,
+      nextCursor: data.pagination?.next_cursor ?? null,
+      hasMore: Boolean(data.pagination?.has_more),
+    };
   }
 
   async getGuideDetail(guideCardId: string): Promise<GuideDetailResponse> {
@@ -139,8 +150,8 @@ export class HttpGatewayAPI implements GatewayAPI {
       isLoggedIn: !isGuest,
       displayName: data.profile.display_name,
       avatarUrl: data.profile.avatar_url,
-      favoritesCount: data.counts.favorites_count,
-      historyCount: data.counts.history_count,
+      favoritesCount: parseCount(data.counts.favorites_count),
+      historyCount: parseCount(data.counts.history_count),
       consentGranted: data.consent?.personalization_allowed ?? false,
     };
   }
@@ -216,8 +227,8 @@ export class HttpGatewayAPI implements GatewayAPI {
       const pair = loadTokenPair();
       if (pair?.accessToken) {
         await this.request<{ revoked?: boolean }>(
-          'DELETE',
-          '/api/v2/auth/session',
+          'POST',
+          '/api/v2/auth/session/revoke',
           { revoke_scope: revokeAllDevices ? 'all_user_sessions' : 'single_session' },
           'bearerOrGuest'
         );
@@ -229,15 +240,21 @@ export class HttpGatewayAPI implements GatewayAPI {
   }
 
   async listFavorites(pagination: Pagination): Promise<{ items: FavoriteItem[]; nextCursor: string | null }> {
-    const q = `limit=${pagination.limit}${pagination.cursor ? `&cursor=${encodeURIComponent(pagination.cursor)}` : ''}`;
+    const body: Record<string, unknown> = { limit: pagination.limit };
+    if (pagination.cursor) body.cursor = pagination.cursor;
     const data = await this.request<{
-      items: Array<{ favorite_id: string; guide_card_id: string; favorited_at: string }>;
+      items: Array<{
+        favorite_id: string;
+        guide_card_id?: string;
+        content_id?: string;
+        favorited_at: string;
+      }>;
       pagination?: { next_cursor?: string | null };
-    }>('GET', `/api/v2/me/favorites?${q}`, null, 'bearerOrGuest');
+    }>('POST', '/api/v2/me/favorites/list', body, 'bearerOrGuest');
     return {
       items: data.items.map((i) => ({
         favoriteId: i.favorite_id,
-        guideCardId: i.guide_card_id,
+        guideCardId: i.guide_card_id ?? i.content_id ?? '',
         favoritedAt: i.favorited_at,
       })),
       nextCursor: data.pagination?.next_cursor ?? null,
@@ -247,22 +264,35 @@ export class HttpGatewayAPI implements GatewayAPI {
   async addFavorite(guideCardId: string): Promise<{ favoriteId: string; alreadyFavorited: boolean }> {
     const data = await this.request<{ favorite_id: string; already_favorited: boolean }>(
       'POST',
-      '/api/v2/me/favorites',
+      '/api/v2/me/favorites/add',
       { guide_card_id: guideCardId },
       'bearerOrGuest'
     );
     return { favoriteId: data.favorite_id, alreadyFavorited: data.already_favorited };
   }
 
+  async removeFavorite(favoriteId: string): Promise<void> {
+    await this.request<{ removed: boolean }>(
+      'POST',
+      '/api/v2/me/favorites/remove',
+      { favorite_id: favoriteId },
+      'bearerOrGuest'
+    );
+  }
+
   async listHistory(pagination: Pagination): Promise<{ items: HistoryItem[]; nextCursor: string | null }> {
-    const q = `limit=${pagination.limit}${pagination.cursor ? `&cursor=${encodeURIComponent(pagination.cursor)}` : ''}`;
+    const body: Record<string, unknown> = { limit: pagination.limit };
+    if (pagination.cursor) body.cursor = pagination.cursor;
     const data = await this.request<{
-      items: Array<{ content_ref: { guide_card_id: string }; last_seen_at: string }>;
+      items: Array<{
+        content_ref: { guide_card_id?: string; content_id?: string };
+        last_seen_at: string;
+      }>;
       pagination?: { next_cursor?: string | null };
-    }>('GET', `/api/v2/me/history?${q}`, null, 'bearerOrGuest');
+    }>('POST', '/api/v2/me/history/list', body, 'bearerOrGuest');
     return {
       items: data.items.map((i) => ({
-        guideCardId: i.content_ref.guide_card_id,
+        guideCardId: i.content_ref.guide_card_id ?? i.content_ref.content_id ?? '',
         lastSeenAt: i.last_seen_at,
       })),
       nextCursor: data.pagination?.next_cursor ?? null,
@@ -278,6 +308,15 @@ export class HttpGatewayAPI implements GatewayAPI {
         content_ref: { type: 'guide_card', guide_card_id: guideCardId },
         source_surface: sourceSurface,
       },
+      'bearerOrGuest'
+    );
+  }
+
+  async clearHistory(): Promise<void> {
+    await this.request<{ cleared: boolean }>(
+      'POST',
+      '/api/v2/me/history/clear',
+      { scope: 'all' },
       'bearerOrGuest'
     );
   }
@@ -381,6 +420,15 @@ export class HttpGatewayAPI implements GatewayAPI {
       });
     });
   }
+}
+
+function parseCount(value: number | string | undefined): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 }
 
 function mapTokenPair(data: {

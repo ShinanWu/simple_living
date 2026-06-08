@@ -2,7 +2,6 @@
   padding: 24rpx;
   min-height: 100vh;
   box-sizing: border-box;
-  background: linear-gradient(180deg, #fafafa 0%, #f0f0f2 55%, #e8e8ea 100%);
 }
 
 .me__center {
@@ -65,6 +64,12 @@
 .me__stat {
   flex: 1;
   text-align: center;
+  border-radius: 16rpx;
+  padding: 8rpx 0;
+}
+
+.me__stat--pressed {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .me__stat-num {

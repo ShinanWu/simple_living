@@ -29,9 +29,31 @@ const RESOURCE_KIND_LABELS: Record<ResourceKind, string> = {
   ranking_list: "榜单",
 };
 
+function resolveMediaUrl(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    return `${window.location.origin}${url}`;
+  }
+  return url;
+}
+
+function isPreviewableCoverUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith("data:")) return false;
+  return (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("/media/")
+  );
+}
+
 const STATUS_LABELS: Record<BackofficeContentStatus, string> = {
   draft: "草稿",
   in_review: "审核中",
+  approved: "待发布",
   published: "已发布",
   scheduled: "定时发布",
   offline: "已下架",
@@ -50,6 +72,8 @@ function getActionsForStatus(status: BackofficeContentStatus) {
       return { canEdit: true, canSubmitReview: true, canDelete: true };
     case "in_review":
       return { canViewReview: true };
+    case "approved":
+      return { canPublish: true };
     case "published":
       return { canOffline: true, canSubmitRevision: true, canRollback: true };
     case "scheduled":
@@ -145,8 +169,9 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
   const [visibilityContentId, setVisibilityContentId] = useState("");
   const [visibilityState, setVisibilityState] = useState<VisibilityState>("published");
   const [visibilityReasonCode, setVisibilityReasonCode] = useState("");
-  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverImageError, setCoverImageError] = useState<string | null>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
 
   const appendLog = (
@@ -260,7 +285,10 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
       return;
     }
     setBanner({ type: "success", text: `内容已发布` });
-    await loadContents();
+    await Promise.all([loadContents(), loadReviews()]);
+    if (detailOpen && detailData?.content.content_id === contentId) {
+      await refreshContentDetail(contentId);
+    }
   };
 
   const handleSubmitReview = async (contentId: string, revision: number) => {
@@ -275,7 +303,7 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
       return;
     }
     setBanner({ type: "success", text: `已提交审核` });
-    await loadContents();
+    await Promise.all([loadContents(), loadReviews()]);
   };
 
   const handleStatusChange = async (contentId: string, status: Exclude<BackofficeContentStatus, "in_review">) => {
@@ -300,7 +328,7 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
     await loadContents();
   };
 
-  const handleCoverFileChange = (files: FileList | null) => {
+  const handleCoverFileChange = async (files: FileList | null) => {
     setCoverUploadError(null);
     if (!files || files.length === 0) return;
     const file = files[0];
@@ -312,24 +340,34 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
       setCoverUploadError("图片大小不能超过 5MB");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setCoverPreviewUrl(dataUrl);
-      updateFormField("cover_url", dataUrl);
-    };
-    reader.onerror = () => setCoverUploadError("图片读取失败");
-    reader.readAsDataURL(file);
+    setCoverUploading(true);
+    try {
+      const resp = await api.uploadBackofficeMedia(file);
+      if (!resp.success || !resp.data?.url) {
+        setCoverUploadError(resp.message || "封面上传失败");
+        return;
+      }
+      updateFormField("cover_url", resp.data.url);
+      setCoverImageError(null);
+    } catch {
+      setCoverUploadError("封面上传失败");
+    } finally {
+      setCoverUploading(false);
+    }
   };
 
   const openCreateView = () => {
     setEditingContent(null);
     setContentForm(EMPTY_CONTENT_FORM);
+    setCoverUploadError(null);
+    setCoverImageError(null);
     setContentView("create");
   };
 
   const openEditView = (item: BackofficeContentItem, isRevision = false) => {
     setEditingContent(item);
+    setCoverUploadError(null);
+    setCoverImageError(null);
     setContentForm({
       resource_kind: item.resource_kind,
       title: item.title,
@@ -361,8 +399,9 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
     setContentView("list");
     setEditingContent(null);
     setContentForm(EMPTY_CONTENT_FORM);
-    setCoverPreviewUrl(null);
     setCoverUploadError(null);
+    setCoverImageError(null);
+    setCoverUploading(false);
   };
 
   const updateFormField = <K extends keyof ContentFormState>(key: K, value: ContentFormState[K]) => {
@@ -428,6 +467,12 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
     }
     if (contentForm.landing_url.trim() && !/^https?:\/\/.+/i.test(contentForm.landing_url.trim())) {
       return "链接格式不正确，需以 http:// 或 https:// 开头。";
+    }
+    if (coverUploading) {
+      return "封面正在上传，请稍候。";
+    }
+    if (contentForm.cover_url.trim().startsWith("data:")) {
+      return "封面需上传完成后保存，请重新选择图片。";
     }
     return null;
   };
@@ -596,7 +641,7 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
     setReviews(resp.data?.items ?? []);
     setReviewState((resp.data?.items?.length ?? 0) > 0 ? "success" : "empty");
     setBanner({ type: "success", text: `审核单 ${reviewId} 已更新为 ${status}` });
-    await loadContents();
+    await Promise.all([loadContents(), loadReviews()]);
   };
 
   const refreshContentDetail = async (contentId: string) => {
@@ -665,7 +710,8 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
   const publishedCount = contents.filter((item) => item.content_status === "published").length;
   const draftCount = contents.filter((item) => item.content_status === "draft").length;
   const inReviewCount = contents.filter((item) => item.content_status === "in_review").length;
-  const pendingReviewCount = reviews.filter((item) => item.status === "pending").length;
+  const readyToPublishCount = contents.filter((item) => item.content_status === "approved").length;
+  const pendingReviewCount = reviews.filter((item) => item.status === "pending" || item.status === "in_review").length;
   const activePartnerCount = partners.filter((item) => item.status === "active").length;
 
   const isActionable = (status: BackofficeReviewStatus) =>
@@ -716,7 +762,10 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
         <article className="metric-card">
           <span>已发布内容</span>
           <strong>{publishedCount}</strong>
-          <small>{draftCount} 个草稿，{inReviewCount} 个审核中</small>
+          <small>
+            {draftCount} 个草稿，{inReviewCount} 个审核中
+            {readyToPublishCount > 0 ? `，${readyToPublishCount} 个待发布` : ""}
+          </small>
         </article>
         <article className="metric-card">
           <span>审核待办</span>
@@ -824,12 +873,13 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                 </select>
                 <select value={filterContentStatus} onChange={(event) => setFilterContentStatus(event.target.value)} aria-label="内容状态过滤">
                   <option value="all">全部状态</option>
-                  <option value="draft">draft</option>
-                  <option value="in_review">in_review</option>
-                  <option value="published">published</option>
-                  <option value="scheduled">scheduled</option>
-                  <option value="offline">offline</option>
-                  <option value="archived">archived</option>
+                  <option value="draft">草稿</option>
+                  <option value="in_review">审核中</option>
+                  <option value="approved">待发布</option>
+                  <option value="published">已发布</option>
+                  <option value="scheduled">定时发布</option>
+                  <option value="offline">已下架</option>
+                  <option value="archived">已归档</option>
                 </select>
               </div>
 
@@ -864,7 +914,12 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                                 ? item.theme_ids.join(", ")
                                 : "-"}
                             </td>
-                            <td><StatusBadge status={item.content_status} /></td>
+                            <td>
+                              <StatusBadge
+                                status={item.content_status}
+                                label={STATUS_LABELS[item.content_status]}
+                              />
+                            </td>
                             <td>
                               <small>rev:{item.revision}</small>
                               {item.published_revision > 0 && (
@@ -957,15 +1012,20 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                   <div className="form-grid">
                     <label className="form-field">
                       资源类型
-                      <select
-                        value={contentForm.resource_kind}
-                        onChange={(e) => updateFormField("resource_kind", e.target.value as ResourceKind)}
-                        disabled={contentView === "edit"}
-                      >
-                        {RESOURCE_KIND_OPTIONS.map((k) => (
-                          <option key={k} value={k}>{RESOURCE_KIND_LABELS[k]}</option>
-                        ))}
-                      </select>
+                      {contentView === "create" ? (
+                        <input value={RESOURCE_KIND_LABELS.guide_card} disabled aria-label="资源类型" />
+                      ) : (
+                        <select
+                          value={contentForm.resource_kind}
+                          onChange={(e) => updateFormField("resource_kind", e.target.value as ResourceKind)}
+                          disabled
+                          aria-label="资源类型"
+                        >
+                          {RESOURCE_KIND_OPTIONS.map((k) => (
+                            <option key={k} value={k}>{RESOURCE_KIND_LABELS[k]}</option>
+                          ))}
+                        </select>
+                      )}
                     </label>
                     <label className="form-field">
                       标题 <span className="required">*</span>
@@ -1017,42 +1077,86 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                           className="cover-file-input"
                           onChange={(e) => handleCoverFileChange(e.target.files)}
                         />
-                        {coverPreviewUrl || (contentForm.cover_url && !contentForm.cover_url.startsWith("data:")) ? (
-                          <div className="cover-preview-area">
-                            <img
-                              src={coverPreviewUrl || contentForm.cover_url}
-                              alt="封面预览"
-                              className="cover-preview-img"
-                            />
-                            <button
-                              type="button"
-                              className="cover-clear-btn"
-                              onClick={() => {
-                                setCoverPreviewUrl(null);
-                                if (coverFileRef.current) coverFileRef.current.value = "";
-                                updateFormField("cover_url", "");
-                              }}
-                            >
-                              移除
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="cover-drop-zone" onClick={() => coverFileRef.current?.click()}>
-                            <span>点击或拖拽上传图片</span>
-                          </div>
-                        )}
+                        {(() => {
+                          const coverUrl = contentForm.cover_url.trim();
+                          const activeCoverUrl = isPreviewableCoverUrl(coverUrl)
+                            ? resolveMediaUrl(coverUrl)
+                            : "";
+                          if (activeCoverUrl && !coverImageError) {
+                            return (
+                              <div className="cover-preview-area">
+                                <img
+                                  key={activeCoverUrl}
+                                  src={activeCoverUrl}
+                                  alt="封面预览"
+                                  className="cover-preview-img"
+                                  referrerPolicy="no-referrer"
+                                  onLoad={() => setCoverImageError(null)}
+                                  onError={() => setCoverImageError("封面链接无法加载，请检查地址是否正确")}
+                                />
+                                <button
+                                  type="button"
+                                  className="cover-clear-btn"
+                                  onClick={() => {
+                                    if (coverFileRef.current) coverFileRef.current.value = "";
+                                    updateFormField("cover_url", "");
+                                    setCoverImageError(null);
+                                  }}
+                                >
+                                  移除
+                                </button>
+                                <a
+                                  className="cover-preview-link"
+                                  href={activeCoverUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  查看原图
+                                </a>
+                              </div>
+                            );
+                          }
+                          if (coverUploading) {
+                            return <div className="cover-drop-zone cover-drop-zone-busy">上传中…</div>;
+                          }
+                          if (coverUrl && coverImageError) {
+                            return (
+                              <div className="cover-drop-zone cover-drop-zone-error">
+                                <span>{coverImageError}</span>
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  onClick={() => coverFileRef.current?.click()}
+                                >
+                                  重新上传
+                                </button>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="cover-drop-zone" onClick={() => coverFileRef.current?.click()}>
+                              <span>点击上传图片</span>
+                            </div>
+                          );
+                        })()}
                         {coverUploadError && <span className="cover-error">{coverUploadError}</span>}
                       </div>
-                      <div className="cover-url-hint">
-                        <span>或直接粘贴链接：</span>
+                      <div className="cover-url-field">
+                        <span className="cover-url-label">封面链接</span>
                         <input
-                          value={contentForm.cover_url && !contentForm.cover_url.startsWith("data:") ? contentForm.cover_url : ""}
+                          className="cover-url-input"
+                          value={contentForm.cover_url}
                           onChange={(e) => {
-                            setCoverPreviewUrl(null);
+                            setCoverUploadError(null);
+                            setCoverImageError(null);
                             updateFormField("cover_url", e.target.value);
+                            if (coverFileRef.current) coverFileRef.current.value = "";
                           }}
-                          placeholder="https://..."
+                          placeholder="上传后自动填入，或粘贴 http(s):// 外部图片链接"
                         />
+                        <span className="cover-url-hint-text">
+                          支持本地上传或外部链接；两种方式共用此链接，修改链接会同步更新预览
+                        </span>
                       </div>
                     </label>
                   </div>
@@ -1239,9 +1343,6 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                       <button className="secondary-button" onClick={() => void handleSaveContent(false)}>
                         {contentView === "create" ? "保存草稿" : "保存修改"}
                       </button>
-                      <button className="primary-button" onClick={() => void handleSaveContent(true)}>
-                        {contentView === "create" ? "保存并发布" : "保存并发布"}
-                      </button>
                     </>
                   )}
                 </div>
@@ -1254,7 +1355,7 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
               <div className="panel-heading">
                 <div>
                   <h2>治理审核</h2>
-                  <p>审核通过不会自动发布，发布仍由内容运营显式触发。</p>
+                  <p>审核通过会将内容置为「待发布」；C 端上线仍须在「内容管理」显式发布。</p>
                 </div>
                 <button className="secondary-button" onClick={() => void loadReviews()}>刷新</button>
               </div>
@@ -1280,15 +1381,31 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                     <tbody>
                       {filteredReviews.map((item) => (
                         <tr key={item.review_id}>
-                          <td>{item.review_id}</td>
-                          <td>{item.subject_id}</td>
+                          <td className="cell-truncate" title={item.review_id}>{item.review_id}</td>
+                          <td className="cell-subject">
+                            <div className="cell-subject-inner">
+                              <span className="cell-subject-id" title={item.subject_id}>
+                                {item.subject_id}
+                              </span>
+                              <button
+                                className="text-button cell-subject-action"
+                                type="button"
+                                onClick={() => setVisibilityContentId(item.subject_id)}
+                              >
+                                可见性
+                              </button>
+                            </div>
+                          </td>
                           <td>{item.resource_kind ? RESOURCE_KIND_LABELS[item.resource_kind] : "-"}</td>
                           <td><StatusBadge status={item.status} /></td>
-                          <td><small>{item.enqueue_reason || "-"}</small></td>
+                          <td className="cell-truncate" title={item.enqueue_reason || undefined}>
+                            <small>{item.enqueue_reason || "-"}</small>
+                          </td>
                           <td>
                             {isActionable(item.status) ? (
                               <div className="action-group">
                                 <button className="text-button" onClick={() => void updateReview(item.review_id, "approved")}>通过</button>
+                                <button className="secondary-button" onClick={() => void updateReview(item.review_id, "needs_info")}>补充材料</button>
                                 <button className="danger-button" onClick={() => void updateReview(item.review_id, "rejected")}>拒绝</button>
                               </div>
                             ) : "已处理"}
@@ -1390,6 +1507,18 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                     <dt>状态</dt><dd><StatusBadge status={detailData.content.content_status} /></dd>
                     <dt>当前版本</dt><dd>rev:{detailData.content.revision} / pub:{detailData.content.published_revision}</dd>
                     <dt>摘要</dt><dd>{detailData.content.summary || "-"}</dd>
+                    <dt>封面</dt>
+                    <dd>
+                      {detailData.content.cover_media?.url ? (
+                        <img
+                          src={resolveMediaUrl(detailData.content.cover_media.url)}
+                          alt={`${detailData.content.title} 封面`}
+                          className="detail-cover-img"
+                        />
+                      ) : (
+                        "-"
+                      )}
+                    </dd>
                     <dt>落地页</dt><dd>{detailData.content.landing_url || "-"}</dd>
                     <dt>外部商品ID</dt><dd>{detailData.content.external_item_id || "-"}</dd>
                     <dt>更新时间</dt><dd>{new Date(detailData.content.updated_at).toLocaleString()}</dd>
@@ -1500,6 +1629,23 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                       <dt>审核员</dt><dd>{detailData.review_state.reviewer_id || "-"}</dd>
                       <dt>审核意见</dt><dd>{detailData.review_state.comment || "-"}</dd>
                     </dl>
+                    {detailData.content.content_status === "approved" && (
+                      <div className="detail-publish-callout">
+                        <p>治理已通过，当前为待发布状态。确认无误后点击下方发布。</p>
+                        <button
+                          className="primary-button"
+                          type="button"
+                          onClick={() =>
+                            void handlePublish(
+                              detailData.content.content_id,
+                              detailData.content.revision,
+                            ).then(() => refreshContentDetail(detailData.content.content_id))
+                          }
+                        >
+                          发布到线上
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1538,6 +1684,6 @@ function StateMessage({ state, emptyText }: { state: LoadState; emptyText: strin
   return <p className="state-copy">{emptyText}</p>;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  return <span className={`status-badge status-${status}`}>{status}</span>;
+function StatusBadge({ status, label }: { status: string; label?: string }) {
+  return <span className={`status-badge status-${status}`}>{label ?? status}</span>;
 }

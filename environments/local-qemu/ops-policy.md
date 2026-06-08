@@ -25,7 +25,7 @@ bash services/<service>/deploy/check_nodes.sh
 bash services/<service>/deploy/deploy_service.sh
 ```
 
-## 版本策略
+## 构建工具版本
 
 - `.bazelversion` 为唯一 Bazel 版本来源。
 - build 节点优先 `bazelisk`。

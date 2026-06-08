@@ -4,6 +4,7 @@ import { loadTokenPair, getLastTheme } from './services/auth/storage';
 import type { ThemeKey } from './utils/theme';
 import { trackEvent } from './utils/analytics';
 import { setBrandNavigationTitle } from './utils/navigation';
+import { startColdPrefetchAllThemes } from './services/feed/theme-feed-cache';
 
 App<IAppOption>({
   globalData: {
@@ -18,5 +19,6 @@ App<IAppOption>({
     setBrandNavigationTitle();
     const hasAuth = Boolean(loadTokenPair()?.accessToken);
     trackEvent('app_launch', { logged_in: hasAuth });
+    void startColdPrefetchAllThemes();
   },
 });

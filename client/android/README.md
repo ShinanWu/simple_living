@@ -34,5 +34,5 @@ Use Android Studio (open `client/android`) or command line:
 
 ## Notes
 
-- Field names in API models use `snake_case` semantics from `.cursor/rules/shared-contracts.mdc`.
+- Field names in API models use `snake_case` semantics from `services/gateway/api.md`.
 - Runtime repository must call gateway under `client/android/app/src/main/java/com/simpleliving/android/data/gateway`; fake data must stay inside tests/previews and cannot be used for acceptance.

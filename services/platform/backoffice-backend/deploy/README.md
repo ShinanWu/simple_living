@@ -5,7 +5,7 @@
 - Bazel：`//services/platform/backoffice-backend:backoffice_backend_server`
 - 配置：`-pg_conninfo`、`-export_dir`、`-secret_backend_uri`
 
-## 2. 同节点编排（v1 硬约束）
+## 2. 同节点编排（硬约束）
 
 与 `recommendation-server` **必须**同 Pod/VM：
 

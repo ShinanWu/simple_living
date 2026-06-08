@@ -13,6 +13,12 @@ namespace content_server {
 using catalog::ContentLifecycleStatus;
 using catalog::GuideCard;
 
+struct GuideCardRevisionMeta {
+    int64_t revision{0};
+    std::string change_summary;
+    std::string created_by;
+};
+
 // PostgreSQL-backed CMS store for guide cards. Thread-safe; owns one libpq connection.
 class PgContentStore {
 public:
@@ -34,6 +40,15 @@ public:
                         std::vector<GuideCard>* cards,
                         bool* has_more);
     bool UpsertGuideCard(GuideCard* card);
+    bool LoadGuideCard(const std::string& card_id, GuideCard* card);
+    bool ListGuideCardRevisions(const std::string& card_id,
+                                std::vector<GuideCardRevisionMeta>* revisions);
+    bool LoadGuideCardRevision(const std::string& card_id,
+                               int64_t revision,
+                               GuideCard* card);
+    bool RollbackGuideCardRevision(const std::string& card_id,
+                                   int64_t target_revision,
+                                   GuideCard* updated);
     bool UpdateGuideCardStatus(const std::string& card_id,
                                ContentLifecycleStatus status,
                                int64_t published_revision,
@@ -58,8 +73,10 @@ private:
     static std::string FirstAffiliateExternalItemId(const GuideCard& card);
     static std::string FirstAffiliateLandingUrl(const GuideCard& card);
     static bool CardFromRow(PGresult* r, int row, GuideCard* card);
-    bool UpsertGuideCardLocked(const GuideCard& card);
+    bool UpsertGuideCardLocked(const GuideCard& card, bool record_revision_snapshot = true);
+    bool RecordGuideCardRevisionLocked(const GuideCard& card, const std::string& change_summary);
     bool LoadGuideCardLocked(const std::string& card_id, GuideCard* card);
+    bool LoadGuideCardRevisionLocked(const std::string& card_id, int64_t revision, GuideCard* card);
     int CountGuideCardsLocked();
 };
 

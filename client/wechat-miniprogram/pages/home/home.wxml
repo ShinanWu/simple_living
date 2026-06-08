@@ -22,7 +22,15 @@
       <state-placeholder title="{{errorMessage}}" bind:action="onRetry" />
     </block>
     <block wx:elif="{{loadState === 'empty'}}">
-      <state-placeholder title="暂无内容" bind:action="onRetry" />
+      <view class="home__empty sl-card">
+        <text class="home__empty-icon">{{themeMeta.icon}}</text>
+        <text class="home__empty-title">{{themeMeta.slogan}}</text>
+        <text class="home__empty-desc sl-muted">这个主题还没有推荐，试试切换其他主题或刷新</text>
+        <view class="home__empty-actions">
+          <button class="sl-btn-ghost home__empty-btn" bindtap="onRetry">刷新</button>
+          <button class="sl-btn-primary home__empty-btn" bindtap="exploreNextTheme">看看其他主题</button>
+        </view>
+      </view>
     </block>
     <block wx:else>
       <view wx:if="{{pullHint}}" class="home__pull-hint sl-muted">{{pullHint}}</view>
@@ -35,6 +43,23 @@
         bindtouchend="onCardTouchEnd"
         bindtouchcancel="onCardTouchEnd"
       >
+        <view
+          wx:if="{{peekCard}}"
+          class="home__card home__card--peek sl-card"
+          style="transform: translateY({{peekOffset}}px);"
+        >
+          <view class="home__cover home__cover--peek">
+            <image
+              wx:if="{{peekCard.coverUrl}}"
+              class="home__cover-img"
+              src="{{peekCard.coverUrl}}"
+              mode="aspectFill"
+            />
+            <view wx:else class="home__cover-fallback">
+              <text class="home__cover-emoji">{{themeMeta.icon}}</text>
+            </view>
+          </view>
+        </view>
         <view class="home__card sl-card" style="transform: translateY({{cardOffset}}px);">
           <view class="home__cover" bindtap="openDetail">
             <image
@@ -47,14 +72,32 @@
               <text class="home__cover-emoji">{{themeMeta.icon}}</text>
             </view>
           </view>
+          <text class="home__title" bindtap="openDetail">{{currentCard.title}}</text>
           <view class="home__reason" bindtap="openDetail">
             <text class="home__reason-label sl-muted">推荐理由</text>
             <text class="home__reason-text">{{currentCard.reasonDisplay}}</text>
           </view>
-          <text class="home__index sl-muted">{{cardIndex + 1}}/{{cards.length}}</text>
+          <view class="home__footer">
+            <text class="home__index sl-muted">{{cardIndex + 1}}/{{cards.length}}</text>
+            <view class="home__actions">
+              <button class="sl-btn-ghost home__action-btn" catchtap="openDetail">查看详情</button>
+              <button class="sl-btn-primary home__action-btn" catchtap="goBuy">去购买</button>
+            </view>
+          </view>
+          <text wx:if="{{loadingMore}}" class="home__loading-more sl-muted">加载更多…</text>
         </view>
       </view>
     </block>
+  </view>
+
+  <view
+    wx:if="{{showBackToTop}}"
+    class="home__back-top sl-card-strong"
+    bindtap="onBackToTop"
+    hover-class="home__back-top--pressed"
+  >
+    <text class="home__back-top-icon">↑</text>
+    <text class="home__back-top-label">顶部</text>
   </view>
 
   <view
@@ -66,6 +109,7 @@
       wx:for="{{themes}}"
       wx:key="key"
       class="home__theme-item {{selectedTheme === item.key ? 'home__theme-item--active' : ''}}"
+      style="{{selectedTheme === item.key ? '--tab-accent: ' + item.accent : ''}}"
       hover-class="home__theme-item--pressed"
       data-theme="{{item.key}}"
       catchtap="onThemeTap"

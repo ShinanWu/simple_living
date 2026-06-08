@@ -48,6 +48,8 @@ simple_living::affiliate_server::PartnerLifecycleStatus StatusToPartnerLifecycle
 std::string VisibilityStateToString(simple_living::governance_server::VisibilityState state);
 std::string VisibilitySourceToString(simple_living::governance_server::VisibilityVerdictSource source);
 std::string ReviewQueueStatusToString(simple_living::governance_server::ReviewQueueItemStatus status);
+std::string ReviewOutcomeToString(simple_living::governance_server::ReviewOutcome outcome);
+simple_living::governance_server::ReviewOutcome ReviewOutcomeFromString(const std::string& status);
 
 simple_living::governance_server::VisibilityState VisibilityStateFromString(const std::string& state);
 

@@ -8,7 +8,7 @@ option java_multiple_files = true;
 option java_package = "com.simpleliving.recommendation.domain";
 option go_package = "github.com/simple_living/services/recommendation-server/proto;recommendationpb";
 
-// Stable scene keys aligned with .cursor/rules/shared-contracts.mdc (wire as enum name mapping or string in gateway).
+// Stable scene keys aligned with recommendation-server api.md (wire as enum name mapping or string in gateway).
 enum RecommendationScene {
   RECOMMENDATION_SCENE_UNSPECIFIED = 0;
   HOME_FEED = 1;
@@ -20,7 +20,7 @@ enum RecommendationScene {
 }
 
 // Application error codes returned in RPC status details or domain envelope; align with api.md §8.
-// Ranges follow .cursor/rules/shared-contracts.mdc: 10xxx generic, 20xxx auth, 40xxx recommendation, 90xxx system.
+// Error code ranges per recommendation-server api.md: 10xxx generic, 20xxx auth, 40xxx recommendation, 90xxx system.
 enum RecommendationErrorCode {
   RECOMMENDATION_ERROR_UNSPECIFIED = 0;
   MISSING_REQUIRED_ARGUMENT = 10001;

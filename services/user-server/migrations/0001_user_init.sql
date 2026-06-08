@@ -1,4 +1,4 @@
--- user-server PostgreSQL schema (v1). Apply on service startup or via migration job.
+-- user-server PostgreSQL schema. Apply on service startup or via migration job.
 
 CREATE TABLE IF NOT EXISTS user_account (
     user_id TEXT PRIMARY KEY,

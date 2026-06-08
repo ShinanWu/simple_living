@@ -11,7 +11,7 @@
       -> 登录 Login（面板/页）
       -> 收藏 Favorites
       -> 历史 History
-      -> 偏好 Preferences（v2 规划，v1 未实现）
+      -> 偏好 Preferences（未实现）
 ```
 
 ## 2. 主导航结构

@@ -1,6 +1,6 @@
 # Gateway C 端 E2E 清单
 
-仅覆盖 **C 端**页面与用户路由；运营后台验收见 `services/platform/docs/detail-design.md`。
+仅覆盖 **C 端**页面与用户路由；运营后台验收见 `services/platform/detail-design.md`。
 
 运行时基址：`GATEWAY_BASE_URL`（本地联调默认 `http://127.0.0.1:8080`；公网入口见 `environments/local-qemu/nodes.env` 的 `FRP_CUSTOM_DOMAIN`）。
 

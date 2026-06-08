@@ -12,7 +12,7 @@ bash services/user-server/deploy/deploy_service.sh
 
 ## 1.1 配置注入（机密不入库）
 
-部署时通过环境变量 / 部署密钥注入连接串与机密（见 docs/development.md §4）：
+部署时通过环境变量 / 部署密钥注入连接串与机密（见 [README.md](../README.md)）：
 
 ```bash
 export PG_PWD=...                       # 数据库口令
@@ -34,7 +34,7 @@ IMAGE_TAG=v2026.04.27 bash services/user-server/deploy/deploy_service.sh
 ```
 
 2. **验证回滚**：执行 §3 验收命令确认 `/healthz` 200 且关键 RPC 可用。
-3. **数据库**：本域迁移要求向后兼容，应用回滚通常**无需**回退 schema；若某迁移确含破坏性变更，则该迁移必须随附反向脚本并在 `changelog.md` 标注，回滚时按需执行。
+3. **数据库**：本域迁移要求向后兼容，应用回滚通常**无需**回退 schema；若某迁移确含破坏性变更，则该迁移必须随附反向脚本并在 Git 提交/PR 说明，回滚时按需执行。
 4. 如需停服：
 
 ```bash
@@ -55,7 +55,7 @@ ssh -p 2202 ubuntu@127.0.0.1 "ss -ltnp | grep 9101"
 # 3) 关键链路冒烟：签发→内省→撤销（经联调脚本或 brpc 客户端，断言 valid 翻转）
 ```
 
-验收通过判据：`/healthz` 返回 200；`9101` 端口监听；登录签发→内省→撤销闭环符合 docs/api.md 语义。
+验收通过判据：`/healthz` 返回 200；`9101` 端口监听；登录签发→内省→撤销闭环符合 [api.md](../api.md) 语义。
 
 ## 4. 故障排查
 
@@ -71,7 +71,7 @@ ssh -p 2202 ubuntu@127.0.0.1 "ss -ltnp | grep 9101"
 
 - 容器/编排：标准输出（`kubectl logs deploy/user-server` 或 `journalctl -u user-server`）。
 - QEMU 节点：服务日志默认随 `deploy_service.sh` 落到运行用户目录下的服务日志文件（结构化 JSON，含 `request_id`/`trace_id`）。
-- 日志**不含**完整 token / 手机号 / OTP 明文（见 docs/development.md §4.1）。
+- 日志**不含**完整 token / 手机号 / OTP 明文。
 
 ## 4.2 优雅退出
 
@@ -79,7 +79,7 @@ ssh -p 2202 ubuntu@127.0.0.1 "ss -ltnp | grep 9101"
 
 ## 5. 跨服务协作原则
 
-- 仅通过契约文档协作：`.cursor/rules/shared-contracts.mdc` 与 `services/*/docs/api.md`。
+- 仅通过契约文档协作：`services/gateway/api.md` 与各服务 `api.md`。
 - 不直接依赖其他服务源码与内部实现细节。
 
 ## 6. K8s（服务内部署入口）

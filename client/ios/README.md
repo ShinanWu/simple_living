@@ -9,7 +9,7 @@ This directory provides the iOS client implementation aligned with `client/front
 - Shared page state enum: `loading`, `success`, `empty`, `error`, `offline`
 - Core flow screens: Home -> GuideDetail -> RedirectPrepare, plus MeSummary
 - Gateway API protocol with:
-  - `HttpGatewayAPI`（运行时默认，真实 HTTPS/HTTP + JSON，对齐 `services/gateway/docs/api.md`）
+  - `HttpGatewayAPI`（运行时默认，真实 HTTPS/HTTP + JSON，对齐 `services/gateway/api.md`）
   - `MockGatewayAPI`（仅用于 Swift 单元测试和离线 UI fixture，不作为运行时默认）
 - 我的页：`登录` sheet（手机号 + 微信联调字段）、`退出`（`DELETE /api/v2/auth/session`）；令牌落盘 `UserDefaults`，冷启动自动恢复
 - `GatewayRuntime.makeFromEnvironment()` 在 App 入口选择实现
@@ -64,6 +64,6 @@ swift test --package-path Packages/SimpleLivingCore
 
 ## Notes
 
-- `HttpGatewayAPI` 使用 `JSONEncoder/JSONDecoder` 的 snake_case 转换，与 `.cursor/rules/shared-contracts.mdc` 字段一致。
+- `HttpGatewayAPI` 使用 `JSONEncoder/JSONDecoder` 的 snake_case 转换，与 `services/gateway/api.md` 字段一致。
 - 首页列表项使用 `guide_card_id` 进入详情；`redirect_prepare` 携带 `FeedItemContext`（含 `recommendation_id` / `scene` / `item_rank`）。
 - Gateway remains the only client entry; no internal `proto` assumptions in iOS.

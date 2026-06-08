@@ -1,4 +1,4 @@
-<view class="me">
+<view class="me" style="{{pageStyle}}">
   <block wx:if="{{loadState === 'loading'}}">
     <view class="me__center"><text class="sl-muted">加载中…</text></view>
   </block>
@@ -20,11 +20,11 @@
     </view>
 
     <view class="me__stats sl-card">
-      <view class="me__stat">
+      <view class="me__stat" bindtap="goFavorites" hover-class="me__stat--pressed">
         <text class="me__stat-num">{{favoritesCount}}</text>
         <text class="me__stat-label sl-muted">收藏</text>
       </view>
-      <view class="me__stat">
+      <view class="me__stat" bindtap="goHistory" hover-class="me__stat--pressed">
         <text class="me__stat-num">{{historyCount}}</text>
         <text class="me__stat-label sl-muted">历史</text>
       </view>
