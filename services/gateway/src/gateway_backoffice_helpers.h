@@ -19,6 +19,7 @@ bool ValidateBackofficeLoginToken(const std::string& access_token, std::string* 
 
 std::string ThemeIdFromTheme(const std::string& theme);
 std::string ThemeFromThemeId(const std::string& theme_id);
+std::string CanonicalThemeId(const std::string& raw);
 std::string SanitizeIdPart(const std::string& raw);
 
 std::string StatusFromContentStatus(simple_living::catalog::ContentLifecycleStatus status);

@@ -24,4 +24,8 @@ export DEPLOY_EXTRA_RUN_ARGS="-v ${EXPORT_DIR}:${EXPORT_DIR}"
 export DEPLOY_REMOTE_PREP_CMD="sudo mkdir -p '${EXPORT_DIR}' &&"
 export DEPLOY_SERVER_FLAGS="-port=${SERVICE_PORT_BACKOFFICE_BACKEND:-9110} -pg_conninfo='${PG_CONNINFO}' -export_dir='${EXPORT_DIR}'"
 
-exec bash "${ROOT_DIR}/tools/deploy_cpp_service.sh"
+bash "${ROOT_DIR}/tools/deploy_cpp_service.sh"
+
+if [[ "${ENABLE_SNAPSHOT_FANOUT:-0}" == "1" ]]; then
+  bash "${ROOT_DIR}/services/platform/backoffice-backend/deploy/setup_snapshot_fanout_remote.sh"
+fi

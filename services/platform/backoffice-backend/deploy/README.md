@@ -5,15 +5,17 @@
 - Bazel：`//services/platform/backoffice-backend:backoffice_backend_server`
 - 配置：`-pg_conninfo`、`-export_dir`、`-secret_backend_uri`
 
-## 2. 同节点编排（硬约束）
+## 2. 快照目录与消费者
 
-与 `recommendation-server` **必须**同 Pod/VM：
+**生产 / 同机联调**：与 `recommendation-server` **必须**同 Pod/VM，共享同一物理目录：
 
 ```text
 /shared/exports/          # hostPath 或 PVC
   active/
   staging/
 ```
+
+**local-qemu（多来宾）**：各来宾磁盘独立，路径虽同为 `/var/lib/simple-living/exports`，内容不同步。部署 backoffice 时可启用 **来宾侧 inotify fan-out**（见 §6）：监听 `export_dir/active/`，变更后 rsync 到 recommendation / tracking 来宾。
 
 启动顺序：
 
@@ -42,6 +44,17 @@ curl -sf http://127.0.0.1:9110/health  # 以实现为准
 | 脚本 | 用途 |
 |------|------|
 | `deploy_service.sh` | 构建镜像并部署（调用 `tools/deploy_cpp_service.sh`） |
+| `setup_snapshot_fanout_remote.sh` | lab：`ENABLE_SNAPSHOT_FANOUT=1` 时安装 inotify fan-out systemd |
 | `start_nodes.sh` / `check_nodes.sh` / `stop_nodes.sh` | QEMU 节点生命周期 |
 
 `recommendation-server` 的 `start_nodes.sh` 委托本目录脚本（同机联调）。
+
+## 6. 快照 fan-out（local-qemu）
+
+`nodes.env` 中 `ENABLE_SNAPSHOT_FANOUT=1` 时，`deploy_service.sh` 在 backoffice 来宾安装 `simple-living-snapshot-fanout.service`：
+
+- 监听 `${EXPORT_DIR}/active/`（`inotifywait`）
+- 防抖后执行 `snapshot_fanout_push.sh`，经 slirp 网关 `LAB_QEMU_GATEWAY_HOST` 与 Mac 转发的 SSH 端口推到消费者来宾
+- 依赖：`inotify-tools`、`rsync`、来宾间 SSH（与部署用同一私钥，安装到 `~/.ssh/simple_living_fanout`）
+
+同机共享 `EXPORT_DIR` 时保持 `ENABLE_SNAPSHOT_FANOUT=0`（默认）。

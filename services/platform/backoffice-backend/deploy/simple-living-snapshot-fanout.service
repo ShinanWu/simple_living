@@ -1,0 +1,14 @@
+[Unit]
+Description=Simple Living snapshot fan-out (inotify on backoffice export_dir)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/simple-living/snapshot-fanout.env
+ExecStart=/usr/local/lib/simple-living/snapshot_fanout_watch.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

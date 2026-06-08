@@ -90,7 +90,23 @@ std::string PgContentStore::FirstSellingPoint(const GuideCard& card) {
 }
 
 std::string PgContentStore::FirstThemeId(const GuideCard& card) {
-    return card.theme_ids_size() > 0 ? card.theme_ids(0) : "";
+    if (card.theme_ids_size() == 0) {
+        return "";
+    }
+    const std::string raw = card.theme_ids(0);
+    if (raw == "clothing" || raw == "theme_1" || raw.empty()) {
+        return "theme_1";
+    }
+    if (raw == "food" || raw == "theme_2") {
+        return "theme_2";
+    }
+    if (raw == "housing" || raw == "theme_3") {
+        return "theme_3";
+    }
+    if (raw == "transport" || raw == "theme_4") {
+        return "theme_4";
+    }
+    return raw;
 }
 
 std::string PgContentStore::FirstAffiliateChannel(const GuideCard& card) {

@@ -25,7 +25,7 @@ C 端推荐排序、对外 HTTPS/JSON（gateway）、点击归因（tracking-ser
 | 方向 | 服务 | 文档 |
 |------|------|------|
 | 消费方 | `gateway` | [api.md](../../gateway/api.md)、[backoffice-gateway-api.md](../backoffice-gateway-api.md) |
-| 导出消费 | `recommendation-server`、`tracking-server` | 同挂载 `-export_dir` / `-snapshot_dir` |
+| 导出消费 | `recommendation-server`、`tracking-server` | 同挂载 `-export_dir` / `-snapshot_dir`；lab 多来宾见 [deploy/README.md](./deploy/README.md) §6 |
 | 基础设施 | PostgreSQL、Redis、Kafka | [foundation/postgres](../../foundation/postgres/README.md) 等 |
 
 ## 本地开发

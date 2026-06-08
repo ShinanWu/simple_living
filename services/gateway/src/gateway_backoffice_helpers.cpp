@@ -87,6 +87,10 @@ std::string ThemeFromThemeId(const std::string& theme_id) {
     return theme_id;
 }
 
+std::string CanonicalThemeId(const std::string& raw) {
+    return ThemeIdFromTheme(ThemeFromThemeId(raw));
+}
+
 std::string SanitizeIdPart(const std::string& raw) {
     std::string out;
     out.reserve(raw.size());
@@ -151,7 +155,7 @@ void FillBackofficeContentItem(const catalog::GuideCard& card, BackofficeContent
     out->set_subtitle(card.subtitle());
     out->clear_theme_ids();
     for (const auto& theme_id : card.theme_ids()) {
-        out->add_theme_ids(theme_id);
+        out->add_theme_ids(ThemeFromThemeId(theme_id));
         if (out->theme().empty()) {
             out->set_theme(ThemeFromThemeId(theme_id));
         }
@@ -225,7 +229,7 @@ catalog::GuideCard BuildGuideCardFromCreate(const BackofficeCreateContentItemReq
     card.set_price_hint("以渠道实时价格为准");
     if (req.theme_ids_size() > 0) {
         for (const auto& theme_id : req.theme_ids()) {
-            card.add_theme_ids(theme_id);
+            card.add_theme_ids(CanonicalThemeId(theme_id));
         }
     } else {
         card.add_theme_ids(ThemeIdFromTheme(theme));
@@ -289,7 +293,7 @@ void ApplyContentUpdate(const BackofficeUpdateContentItemRequest& req, catalog::
     if (req.theme_ids_size() > 0) {
         card->clear_theme_ids();
         for (const auto& theme_id : req.theme_ids()) {
-            card->add_theme_ids(theme_id);
+            card->add_theme_ids(CanonicalThemeId(theme_id));
         }
     } else if (req.has_theme()) {
         card->clear_theme_ids();

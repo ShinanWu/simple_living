@@ -37,6 +37,14 @@ bash services/tracking-server/deploy/deploy_service.sh
 bash services/gateway/deploy/deploy_service.sh
 ```
 
+lab 各来宾磁盘独立：部署 backoffice 时设 `ENABLE_SNAPSHOT_FANOUT=1`（见 `nodes.example.env`），来宾上会跑 inotify 监听 `export_dir/active/`，发布后自动 rsync 到 recommendation / tracking。
+
+一次性从 Mac 手动同步（排障用）：
+
+```bash
+bash tools/sync_lab_snapshot.sh
+```
+
 验收：
 
 ```bash
