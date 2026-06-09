@@ -81,6 +81,44 @@ customDomains = ["${FRP_CUSTOM_DOMAIN}"]
 EOF
 }
 
+resolve_https_custom_domain() {
+  if [[ -n "${FRP_HTTPS_CUSTOM_DOMAIN:-}" ]]; then
+    echo "${FRP_HTTPS_CUSTOM_DOMAIN}"
+    return
+  fi
+  if [[ "${FRP_CUSTOM_DOMAIN:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf '%s.nip.io\n' "$(echo "${FRP_CUSTOM_DOMAIN}" | tr '.' '-')"
+    return
+  fi
+  echo "${FRP_CUSTOM_DOMAIN:-}"
+}
+
+append_frpc_https() {
+  if [[ "${ENABLE_INGRESS_HTTPS}" != "1" ]]; then
+    return
+  fi
+  local https_domain
+  https_domain="$(resolve_https_custom_domain)"
+  if [[ -z "${https_domain}" ]]; then
+    echo "[proxy] ENABLE_INGRESS_HTTPS=1 requires FRP_CUSTOM_DOMAIN or FRP_HTTPS_CUSTOM_DOMAIN" >&2
+    exit 1
+  fi
+  cat >> /tmp/frpc.toml <<EOF
+
+[[proxies]]
+name = "${FRP_PROXY_NAME}-https"
+type = "https"
+customDomains = ["${https_domain}"]
+
+[proxies.plugin]
+type = "https2http"
+localAddr = "127.0.0.1:80"
+crtPath = "/etc/nginx/certs/fullchain.pem"
+keyPath = "/etc/nginx/certs/privkey.pem"
+hostHeaderRewrite = "${FRP_CUSTOM_DOMAIN}"
+EOF
+}
+
 write_frpc_tcp() {
   cat > /tmp/frpc.toml <<EOF
 serverAddr = "${FRP_SERVER_ADDR}"
@@ -126,6 +164,7 @@ start_frp_if_needed() {
         exit 1
       fi
       write_frpc_http
+      append_frpc_https
     fi
     start_frpc_background
     echo "[proxy] embedded frp: public TCP entry on container port ${FRP_REMOTE_PORT} (map host -p ${FRP_REMOTE_PORT}:${FRP_REMOTE_PORT})"
@@ -149,9 +188,41 @@ start_frp_if_needed() {
   fi
 
   write_frpc_http
+  append_frpc_https
   start_frpc_background
 }
 
+setup_ingress_https() {
+  if [[ "${ENABLE_INGRESS_HTTPS}" != "1" ]]; then
+    rm -f /etc/nginx/http.d/https-lab.conf
+    return
+  fi
+  if [[ -z "${FRP_CUSTOM_DOMAIN}" ]]; then
+    echo "[proxy] ENABLE_INGRESS_HTTPS=1 requires FRP_CUSTOM_DOMAIN" >&2
+    exit 1
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "[proxy] ENABLE_INGRESS_HTTPS=1 requires openssl" >&2
+    exit 1
+  fi
+
+  local cn
+  cn="$(resolve_https_custom_domain)"
+  local san="DNS:${cn}"
+
+  mkdir -p /etc/nginx/certs
+  if [[ ! -s /etc/nginx/certs/fullchain.pem ]]; then
+    openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
+      -keyout /etc/nginx/certs/privkey.pem \
+      -out /etc/nginx/certs/fullchain.pem \
+      -subj "/CN=${cn}" \
+      -addext "subjectAltName=${san}"
+    echo "[proxy] generated self-signed TLS cert for ${cn} (${san})"
+  fi
+  rm -f /etc/nginx/http.d/https-lab.conf
+}
+
+setup_ingress_https
 start_frp_if_needed
 
 # Bridge-network containers cannot reach sibling services via 127.0.0.1; Podman lab uses

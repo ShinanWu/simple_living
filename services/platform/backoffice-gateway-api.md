@@ -57,7 +57,7 @@
 
 封面字段 `cover_media.url` **必须**为可公开访问的绝对 URL（`http://` 或 `https://`），**禁止** inline `data:` URL 或站内相对路径。运营台上传封面时应先调用 media upload，将返回的 `url`（完整 HTTP 链接）写入内容。
 
-gateway 通过 `-gateway_backoffice_media_public_base_url` 配置素材公网基址。**lab** 直接用外网 IP（`http://8.152.103.12`，与 `nodes.env` 的 `FRP_CUSTOM_DOMAIN` / `GATEWAY_MEDIA_PUBLIC_BASE_URL` 一致）；后续可切换为独立域名或 CDN。
+gateway 通过 `-gateway_backoffice_media_public_base_url` 配置素材公网基址。**lab** 在 `ENABLE_INGRESS_HTTPS=1` 时，公网 IP 场景自动用 `https://<ip-with-dashes>.nip.io`；也可显式设置 `GATEWAY_MEDIA_PUBLIC_BASE_URL`。生产使用正式域名与受信证书。
 
 ### 3.3 治理审核
 
@@ -300,7 +300,7 @@ gateway 通过 `-gateway_backoffice_media_public_base_url` 配置素材公网基
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `asset_id` | string | 素材 ID |
-| `url` | string | 返回 **绝对 HTTP(S) URL**，如 `http://8.152.103.12/media/backoffice/media_*.jpg` |
+| `url` | string | 返回 **绝对 HTTPS URL**（lab 公网 IP 时为 `https://<ip-with-dashes>.nip.io/media/backoffice/...`，自签证书） |
 | `content_type` | string | 存储 MIME |
 
 文件落盘目录由 gateway `-gateway_backoffice_media_dir` 控制（默认 `/var/lib/simple-living/media/backoffice`）。公网访问域名由 `-gateway_backoffice_media_public_base_url` 配置（必填，上传接口依赖此项）。`GET /media/backoffice/{filename}` 由 gateway 直接返回二进制，不经 JSON 信封。

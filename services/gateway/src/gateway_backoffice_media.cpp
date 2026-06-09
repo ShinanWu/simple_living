@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -188,6 +189,13 @@ std::string NormalizeMediaUrlForClient(const std::string& url) {
         return url;
     }
     if (url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0) {
+        const std::string base = MediaPublicBaseUrl();
+        if (!base.empty() && base.rfind("https://", 0) == 0 && url.rfind("http://", 0) == 0) {
+            const std::string http_base = std::string("http://") + base.substr(std::strlen("https://"));
+            if (url.rfind(http_base, 0) == 0) {
+                return std::string("https://") + url.substr(std::strlen("http://"));
+            }
+        }
         return url;
     }
     if (IsMediaPath(url)) {
