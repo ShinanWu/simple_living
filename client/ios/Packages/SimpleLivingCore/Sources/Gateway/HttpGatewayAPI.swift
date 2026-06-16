@@ -36,9 +36,9 @@ public final class HttpGatewayAPI: GatewayAPI {
 
         let cards = payload.items.map { item in
             let title = item.guideCard?.title ?? item.guideCardId
-            let reason = (item.reasonTags ?? []).joined(separator: " / ")
             let id = "\(item.recommendationId)-\(item.rank)"
             let coverUrl = item.guideCard?.coverUrl ?? item.guideCard?.coverMedia?.url
+            let trimmedReason = item.reasonText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return HomeCard(
                 id: id,
                 guideCardId: item.guideCardId,
@@ -46,7 +46,7 @@ public final class HttpGatewayAPI: GatewayAPI {
                 scene: item.scene,
                 itemRank: item.rank,
                 title: title,
-                reason: reason.isEmpty ? "-" : reason,
+                reason: trimmedReason.isEmpty ? "-" : trimmedReason,
                 coverUrl: coverUrl
             )
         }
@@ -368,6 +368,7 @@ private struct HomeFeedItemDTO: Decodable {
     let scene: String
     let rank: Int
     let guideCardId: String
+    let reasonText: String?
     let reasonTags: [String]?
     let guideCard: GuideCardSnippetDTO?
 }

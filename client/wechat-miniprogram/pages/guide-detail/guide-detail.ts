@@ -170,7 +170,7 @@ Page({
     }
   },
 
-  goBuy() {
+  goPurchase() {
     if (!this.context) return;
     const title = this.data.detail.title || this.data.previewTitle;
     wx.navigateTo({ url: redirectPreparePath(this.context, title) });

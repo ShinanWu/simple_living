@@ -14,7 +14,7 @@ final class HttpGatewayAPITests: XCTestCase {
 
     func testGetHomeFeedBuildsQueryAndParsesResponse() async throws {
         let body = """
-        {"success":true,"code":0,"message":"ok","data":{"items":[{"recommendation_id":"rec_1","scene":"home_feed","rank":1,"guide_card_id":"guide_1","reason_tags":["a","b"],"guide_card":{"title":"Title A"}}],"pagination":{"next_cursor":"n1","has_more":true,"limit":20}}}
+        {"success":true,"code":0,"message":"ok","data":{"items":[{"recommendation_id":"rec_1","scene":"home_feed","rank":1,"guide_card_id":"guide_1","reason_text":"a / b","reason_tags":["a","b"],"guide_card":{"title":"Title A"}}],"pagination":{"next_cursor":"n1","has_more":true,"limit":20}}}
         """
         URLProtocolStub.enqueue(.init(statusCode: 200, headers: [:], body: Data(body.utf8)))
 

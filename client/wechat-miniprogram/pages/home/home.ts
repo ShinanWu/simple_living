@@ -1,13 +1,11 @@
 import { BRAND_NAME, BRAND_FEED_END_HINT } from '../../config/brand';
-import { setLastTheme } from '../../services/auth/storage';
+import { loadTokenPair, setLastTheme } from '../../services/auth/storage';
+import { getGateway } from '../../services/gateway/runtime';
 import { THEMES, nextTheme, themeByKey, type ThemeKey } from '../../utils/theme';
 import { trackEvent } from '../../utils/analytics';
 import { setBrandNavigationTitle } from '../../utils/navigation';
-import {
-  feedContextFromCard,
-  guideDetailPath,
-  redirectPreparePath,
-} from '../../utils/guide-route';
+import { GatewayBusinessError } from '../../utils/errors';
+import { guideDetailPath } from '../../utils/guide-route';
 import {
   appendThemeFeedPage,
   getCachedThemeFeed,
@@ -19,9 +17,6 @@ import {
   type ThemeFeedSnapshot,
 } from '../../services/feed/theme-feed-cache';
 
-const NEXT_THRESHOLD = 90;
-const REFRESH_HINT = 28;
-const REFRESH_TRIGGER = 92;
 const THEME_SWIPE = 54;
 
 Page({
@@ -34,27 +29,20 @@ Page({
     loadState: 'loading' as ThemeFeedLoadState | 'loading',
     errorMessage: '',
     cards: [] as DisplayCard[],
-    cardIndex: 0,
-    currentCard: {} as DisplayCard,
-    cardOffset: 0,
-    pullHint: '',
+    swiperCurrent: 0,
     endHint: false,
     nextCursor: null as string | null,
     hasMore: false,
     loadingMore: false,
-    peekCard: null as DisplayCard | null,
-    peekOffset: 0,
     showBackToTop: false,
+    favoriteLabel: '收藏',
+    favorited: false,
+    refreshing: false,
   },
 
   _loadingMore: false,
-  _isCardDragging: false,
-  _touchStartY: 0,
-  _touchStartX: 0,
   _themeTouchX: 0,
   _themeTouchY: 0,
-  _isRefreshing: false,
-  _refreshArmed: false,
 
   onLoad() {
     const app = getApp<IAppOption>();
@@ -66,6 +54,20 @@ Page({
   onShow() {
     setBrandNavigationTitle();
     trackEvent('home_page_show');
+    const app = getApp<IAppOption>();
+    const pending = app.globalData.pendingHomeFavoriteGuide;
+    void this.syncFavoriteState().then(() => {
+      const card = this.currentCard();
+      if (pending && loadTokenPair()?.accessToken && card?.guideCardId === pending) {
+        app.globalData.pendingHomeFavoriteGuide = null;
+        void this.onFavorite();
+      }
+    });
+  },
+
+  currentCard(): DisplayCard | undefined {
+    const { cards, swiperCurrent } = this.data;
+    return cards[swiperCurrent];
   },
 
   async bootstrapTheme(theme: ThemeKey) {
@@ -85,7 +87,6 @@ Page({
   },
 
   applySnapshot(theme: ThemeKey, snapshot: ThemeFeedSnapshot) {
-    const cardIndex = 0;
     const cards = snapshot.cards;
     this.setData({
       selectedTheme: theme,
@@ -93,17 +94,16 @@ Page({
       loadState: snapshot.loadState,
       errorMessage: snapshot.errorMessage,
       cards,
-      cardIndex,
-      currentCard: cards[0] ?? ({} as DisplayCard),
-      cardOffset: 0,
-      pullHint: '',
-      endHint: cards.length > 0 && cardIndex >= cards.length - 1,
+      swiperCurrent: 0,
+      endHint: cards.length > 0 && cards.length === 1,
       nextCursor: snapshot.nextCursor,
       hasMore: snapshot.hasMore,
-      peekCard: null,
-      peekOffset: 0,
       showBackToTop: false,
+      favoriteLabel: '收藏',
+      favorited: false,
+      refreshing: false,
     });
+    void this.syncFavoriteState();
   },
 
   goMe() {
@@ -163,167 +163,65 @@ Page({
 
   async refreshCurrentTheme() {
     const theme = this.data.selectedTheme;
-    this.setData({ loadState: 'loading', pullHint: '', endHint: false });
-    this._isRefreshing = true;
+    this.setData({ loadState: 'loading', endHint: false, refreshing: false });
     try {
       const snapshot = await refreshThemeFeed(theme);
       this.applySnapshot(theme, snapshot);
       trackEvent('home_feed_refresh', { theme });
-    } finally {
-      this._isRefreshing = false;
+    } catch {
+      /* applySnapshot 已写入 error/offline */
     }
+  },
+
+  async onPullRefresh() {
+    if (this.data.swiperCurrent !== 0 || this.data.refreshing) return;
+    this.setData({ refreshing: true });
+    const theme = this.data.selectedTheme;
+    try {
+      const snapshot = await refreshThemeFeed(theme);
+      this.applySnapshot(theme, snapshot);
+      trackEvent('home_feed_refresh', { theme, source: 'pull' });
+    } catch {
+      wx.showToast({ title: '刷新失败', icon: 'none' });
+    } finally {
+      this.setData({ refreshing: false });
+    }
+  },
+
+  onSwiperChange(e: WechatMiniprogram.SwiperChange) {
+    const { current, source } = e.detail;
+    if (source === '' || current === this.data.swiperCurrent) return;
+
+    const prev = this.data.swiperCurrent;
+    const { cards } = this.data;
+    this.setData({
+      swiperCurrent: current,
+      showBackToTop: current > 0,
+      endHint: cards.length > 0 && current >= cards.length - 1,
+    });
+    trackEvent('home_card_swipe', { direction: current > prev ? 'next' : 'prev' });
+    void this.maybeLoadMore(current);
+    void this.syncFavoriteState();
   },
 
   onBackToTop() {
-    const { cards } = this.data;
-    if (!cards.length) return;
+    if (!this.data.cards.length) return;
     this.setData({
-      cardIndex: 0,
-      currentCard: cards[0],
-      endHint: cards.length === 1,
+      swiperCurrent: 0,
       showBackToTop: false,
-      cardOffset: 0,
-      pullHint: '',
-      peekCard: null,
-      peekOffset: 0,
+      endHint: this.data.cards.length === 1,
     });
     trackEvent('home_back_to_top');
+    void this.syncFavoriteState();
   },
 
-  onCardTouchStart(e: WechatMiniprogram.TouchEvent) {
-    this._touchStartY = e.touches[0].clientY;
-    this._touchStartX = e.touches[0].clientX;
-    this._isCardDragging = false;
-    this._refreshArmed = false;
+  cardAt(e: WechatMiniprogram.TouchEvent): DisplayCard | undefined {
+    const index = Number(e.currentTarget.dataset.index ?? this.data.swiperCurrent);
+    return this.data.cards[index];
   },
 
-  onCardTouchMove(e: WechatMiniprogram.TouchEvent) {
-    const dy = e.touches[0].clientY - this._touchStartY;
-    const dx = e.touches[0].clientX - this._touchStartX;
-    if (Math.abs(dy) > 10 || Math.abs(dx) > 10) this._isCardDragging = true;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > THEME_SWIPE) return;
-    if (Math.abs(dy) <= Math.abs(dx)) return;
-
-    const { cardIndex, cards } = this.data;
-    const isFirst = cardIndex === 0;
-    const isLast = cardIndex >= cards.length - 1;
-    let offset = 0;
-    let pullHint = '';
-    let endHint = false;
-    let peekCard: DisplayCard | null = null;
-    let peekOffset = 0;
-
-    if (dy > 0 && isFirst) {
-      const pull = Math.min(dy, REFRESH_TRIGGER + 24);
-      offset = pull * 0.35;
-      if (pull >= REFRESH_HINT) {
-        pullHint = pull >= REFRESH_TRIGGER ? '松手刷新' : '继续下滑刷新';
-      }
-      this._refreshArmed = pull >= REFRESH_TRIGGER;
-    } else if (dy < 0 && isLast) {
-      offset = Math.max(dy * 0.35, -120);
-      endHint = true;
-      this._refreshArmed = false;
-    } else if (dy > 0 && !isFirst) {
-      offset = Math.min(dy, 280);
-      peekCard = cards[cardIndex - 1];
-      peekOffset = offset - 420;
-      this._refreshArmed = false;
-    } else if (dy < 0 && !isLast) {
-      offset = Math.max(dy, -280);
-      peekCard = cards[cardIndex + 1];
-      peekOffset = offset + 420;
-      this._refreshArmed = false;
-    } else {
-      this._refreshArmed = false;
-    }
-
-    this.setData({ cardOffset: offset, pullHint, endHint, peekCard, peekOffset });
-  },
-
-  onCardTouchEnd(e: WechatMiniprogram.TouchEvent) {
-    const dy = e.changedTouches[0].clientY - this._touchStartY;
-    const dx = e.changedTouches[0].clientX - this._touchStartX;
-
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > THEME_SWIPE) {
-      const dir = dx < 0 ? 1 : -1;
-      const next = nextTheme(this.data.selectedTheme, dir);
-      if (next !== this.data.selectedTheme) this.switchTheme(next);
-      this.resetCardMotion();
-      return;
-    }
-
-    const { cardIndex, cards } = this.data;
-    const shouldNext = dy < -NEXT_THRESHOLD;
-    const shouldPrev = dy > NEXT_THRESHOLD;
-    const shouldRefresh = cardIndex === 0 && this._refreshArmed && dy >= REFRESH_TRIGGER;
-
-    if (shouldNext && cardIndex + 1 < cards.length) {
-      const nextIndex = cardIndex + 1;
-      this.setData({
-        cardIndex: nextIndex,
-        currentCard: cards[nextIndex],
-        endHint: nextIndex >= cards.length - 1,
-        showBackToTop: nextIndex > 0,
-      });
-      trackEvent('home_card_swipe', { direction: 'next' });
-      void this.maybeLoadMore(nextIndex);
-    } else if (shouldPrev && cardIndex > 0) {
-      const prevIndex = cardIndex - 1;
-      this.setData({
-        cardIndex: prevIndex,
-        currentCard: cards[prevIndex],
-        endHint: false,
-        showBackToTop: prevIndex > 0,
-      });
-      trackEvent('home_card_swipe', { direction: 'prev' });
-    } else if (shouldRefresh && !this._isRefreshing) {
-      void this.refreshCurrentTheme();
-    }
-
-    setTimeout(() => {
-      this._isCardDragging = false;
-    }, 120);
-    this.resetCardMotion();
-  },
-
-  resetCardMotion() {
-    this.setData({ cardOffset: 0, pullHint: '', peekCard: null, peekOffset: 0 });
-    this._refreshArmed = false;
-  },
-
-  async maybeLoadMore(cardIndex: number) {
-    const { cards, nextCursor, hasMore, selectedTheme } = this.data;
-    if (!hasMore || !nextCursor || this._loadingMore) return;
-    if (cardIndex < cards.length - 2) return;
-    this._loadingMore = true;
-    this.setData({ loadingMore: true });
-    try {
-      const prevLen = cards.length;
-      const patch = await appendThemeFeedPage(selectedTheme, nextCursor, cards);
-      this.setData({
-        cards: patch.cards,
-        nextCursor: patch.nextCursor,
-        hasMore: patch.hasMore,
-        endHint: this.data.cardIndex >= patch.cards.length - 1,
-      });
-      if (patch.cards.length > prevLen) {
-        trackEvent('home_feed_load_more', {
-          theme: selectedTheme,
-          count: patch.cards.length - prevLen,
-        });
-      }
-    } catch {
-      /* 静默失败，用户可下拉刷新重试 */
-    } finally {
-      this._loadingMore = false;
-      this.setData({ loadingMore: false });
-    }
-  },
-
-  openDetail() {
-    if (this._isCardDragging) return;
-    const card = this.data.currentCard;
+  openDetail(e: WechatMiniprogram.TouchEvent) {
+    const card = this.cardAt(e);
     if (!card?.guideCardId) return;
     wx.navigateTo({
       url: guideDetailPath({
@@ -338,10 +236,78 @@ Page({
     });
   },
 
-  goBuy() {
-    if (this._isCardDragging) return;
-    const card = this.data.currentCard;
+  async syncFavoriteState() {
+    const card = this.currentCard();
+    if (!card?.guideCardId || !loadTokenPair()?.accessToken) {
+      this.setData({ favorited: false, favoriteLabel: '收藏' });
+      return;
+    }
+    try {
+      const res = await getGateway().listFavorites({ limit: 100 });
+      const hit = res.items.find((item) => item.guideCardId === card.guideCardId);
+      this.setData({
+        favorited: Boolean(hit),
+        favoriteLabel: hit ? '已收藏' : '收藏',
+      });
+    } catch {
+      /* 收藏态非关键路径 */
+    }
+  },
+
+  async onFavorite(e: WechatMiniprogram.TouchEvent) {
+    const card = this.cardAt(e);
     if (!card?.guideCardId) return;
-    wx.navigateTo({ url: redirectPreparePath(feedContextFromCard(card), card.title) });
+    if (!loadTokenPair()?.accessToken) {
+      const app = getApp<IAppOption>();
+      app.globalData.pendingHomeFavoriteGuide = card.guideCardId;
+      wx.navigateTo({ url: '/pages/login/login' });
+      return;
+    }
+    try {
+      const res = await getGateway().addFavorite(card.guideCardId);
+      this.setData({
+        favorited: true,
+        favoriteLabel: res.alreadyFavorited ? '已收藏' : '收藏成功',
+      });
+      trackEvent('home_favorite_success', { guide_card_id: card.guideCardId });
+      wx.showToast({ title: this.data.favoriteLabel, icon: 'none' });
+    } catch (err) {
+      if (err instanceof GatewayBusinessError && err.code === 20001) {
+        const app = getApp<IAppOption>();
+        app.globalData.pendingHomeFavoriteGuide = card.guideCardId;
+        wx.navigateTo({ url: '/pages/login/login' });
+        return;
+      }
+      wx.showToast({ title: '收藏失败', icon: 'none' });
+    }
+  },
+
+  async maybeLoadMore(index: number) {
+    const { cards, nextCursor, hasMore, selectedTheme } = this.data;
+    if (!hasMore || !nextCursor || this._loadingMore) return;
+    if (index < cards.length - 2) return;
+    this._loadingMore = true;
+    this.setData({ loadingMore: true });
+    try {
+      const prevLen = cards.length;
+      const patch = await appendThemeFeedPage(selectedTheme, nextCursor, cards);
+      this.setData({
+        cards: patch.cards,
+        nextCursor: patch.nextCursor,
+        hasMore: patch.hasMore,
+        endHint: this.data.swiperCurrent >= patch.cards.length - 1,
+      });
+      if (patch.cards.length > prevLen) {
+        trackEvent('home_feed_load_more', {
+          theme: selectedTheme,
+          count: patch.cards.length - prevLen,
+        });
+      }
+    } catch {
+      /* 静默失败，用户可点刷新重试 */
+    } finally {
+      this._loadingMore = false;
+      this.setData({ loadingMore: false });
+    }
   },
 });

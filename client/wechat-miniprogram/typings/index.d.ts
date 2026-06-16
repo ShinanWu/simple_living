@@ -4,6 +4,7 @@ interface IAppOption {
   globalData: {
     gateway: import('../services/gateway/types').GatewayAPI;
     pendingLoginAction: string | null;
+    pendingHomeFavoriteGuide: string | null;
     lastTheme: import('../utils/theme').ThemeKey;
   };
 }

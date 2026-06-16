@@ -36,8 +36,8 @@
         </view>
 
         <view class="detail__actions">
-          <button class="sl-btn-ghost detail__btn" bindtap="onFavorite">{{favoriteLabel}}</button>
-          <button class="sl-btn-primary detail__btn" bindtap="goBuy">去购买</button>
+          <button class="sl-btn-primary detail__btn" bindtap="onFavorite">{{favoriteLabel}}</button>
+          <button class="sl-btn-ghost detail__btn detail__btn--purchase" bindtap="goPurchase">购买</button>
         </view>
       </view>
     </scroll-view>

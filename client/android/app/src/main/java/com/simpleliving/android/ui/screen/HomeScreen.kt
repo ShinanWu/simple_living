@@ -79,7 +79,7 @@ fun HomeScreen(
         uiState = runCatching {
             gatewayApi.getHomeFeed(HomeFeedRequest(theme = selectedTheme)).data?.items?.map { item ->
                 val title = item.guide_card?.title ?: item.guide_card_id
-                val reason = (item.reason_tags ?: emptyList()).joinToString(" / ").ifEmpty { "-" }
+                val reason = item.reason_text?.trim().takeUnless { it.isNullOrEmpty() } ?: "-"
                 HomeCard(
                     id = "${item.recommendation_id}-${item.rank}",
                     guide_card_id = item.guide_card_id,

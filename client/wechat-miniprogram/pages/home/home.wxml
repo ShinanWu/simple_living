@@ -33,67 +33,74 @@
       </view>
     </block>
     <block wx:else>
-      <view wx:if="{{pullHint}}" class="home__pull-hint sl-muted">{{pullHint}}</view>
-      <view wx:if="{{endHint}}" class="home__pull-hint sl-muted">{{brandEndHint}}</view>
+      <view wx:if="{{endHint}}" class="home__hint sl-muted">{{brandEndHint}}</view>
 
-      <view
-        class="home__card-wrap"
-        bindtouchstart="onCardTouchStart"
-        bindtouchmove="onCardTouchMove"
-        bindtouchend="onCardTouchEnd"
-        bindtouchcancel="onCardTouchEnd"
+      <swiper
+        class="home__swiper"
+        vertical
+        duration="{{320}}"
+        easing-function="easeOutCubic"
+        current="{{swiperCurrent}}"
+        skip-hidden-item-layout
+        bindchange="onSwiperChange"
       >
-        <view
-          wx:if="{{peekCard}}"
-          class="home__card home__card--peek sl-card"
-          style="transform: translateY({{peekOffset}}px);"
-        >
-          <view class="home__cover home__cover--peek">
-            <image
-              wx:if="{{peekCard.coverUrl}}"
-              class="home__cover-img"
-              src="{{peekCard.coverUrl}}"
-              mode="aspectFill"
-            />
-            <view wx:else class="home__cover-fallback">
-              <text class="home__cover-emoji">{{themeMeta.icon}}</text>
+        <swiper-item wx:for="{{cards}}" wx:key="id" class="home__swiper-item">
+          <scroll-view
+            class="home__scroll"
+            scroll-y="{{index === 0}}"
+            enhanced
+            show-scrollbar="{{false}}"
+            refresher-enabled="{{index === 0}}"
+            refresher-triggered="{{refreshing}}"
+            refresher-threshold="{{72}}"
+            bindrefresherrefresh="onPullRefresh"
+          >
+            <view class="home__card sl-card" bindtap="openDetail" data-index="{{index}}">
+              <view class="home__cover">
+                <image
+                  wx:if="{{item.coverUrl}}"
+                  class="home__cover-img"
+                  src="{{item.coverUrl}}"
+                  mode="aspectFill"
+                  lazy-load="{{false}}"
+                />
+                <view wx:else class="home__cover-fallback">
+                  <text class="home__cover-emoji">{{themeMeta.icon}}</text>
+                </view>
+              </view>
+              <text class="home__title">{{item.title}}</text>
+              <view class="home__reason">
+                <text class="home__reason-label sl-muted">推荐理由</text>
+                <text class="home__reason-text">{{item.reasonDisplay}}</text>
+              </view>
+              <view class="home__footer">
+                <text class="home__index sl-muted">{{index + 1}}/{{cards.length}}</text>
+                <view class="home__actions">
+                  <button
+                    class="sl-btn-ghost home__action-btn"
+                    catchtap="onFavorite"
+                    data-index="{{index}}"
+                  >{{index === swiperCurrent ? favoriteLabel : '收藏'}}</button>
+                  <button
+                    class="sl-btn-primary home__action-btn"
+                    catchtap="openDetail"
+                    data-index="{{index}}"
+                  >详情</button>
+                </view>
+              </view>
             </view>
-          </view>
-        </view>
-        <view class="home__card sl-card" style="transform: translateY({{cardOffset}}px);">
-          <view class="home__cover" bindtap="openDetail">
-            <image
-              wx:if="{{currentCard.coverUrl}}"
-              class="home__cover-img"
-              src="{{currentCard.coverUrl}}"
-              mode="aspectFill"
-            />
-            <view wx:else class="home__cover-fallback">
-              <text class="home__cover-emoji">{{themeMeta.icon}}</text>
-            </view>
-          </view>
-          <text class="home__title" bindtap="openDetail">{{currentCard.title}}</text>
-          <view class="home__reason" bindtap="openDetail">
-            <text class="home__reason-label sl-muted">推荐理由</text>
-            <text class="home__reason-text">{{currentCard.reasonDisplay}}</text>
-          </view>
-          <view class="home__footer">
-            <text class="home__index sl-muted">{{cardIndex + 1}}/{{cards.length}}</text>
-            <view class="home__actions">
-              <button class="sl-btn-ghost home__action-btn" catchtap="openDetail">查看详情</button>
-              <button class="sl-btn-primary home__action-btn" catchtap="goBuy">去购买</button>
-            </view>
-          </view>
-          <text wx:if="{{loadingMore}}" class="home__loading-more sl-muted">加载更多…</text>
-        </view>
-      </view>
+          </scroll-view>
+        </swiper-item>
+      </swiper>
+
+      <text wx:if="{{loadingMore}}" class="home__loading-more sl-muted">加载更多…</text>
     </block>
   </view>
 
   <view
     wx:if="{{showBackToTop}}"
     class="home__back-top sl-card-strong"
-    bindtap="onBackToTop"
+    catchtap="onBackToTop"
     hover-class="home__back-top--pressed"
   >
     <text class="home__back-top-icon">↑</text>

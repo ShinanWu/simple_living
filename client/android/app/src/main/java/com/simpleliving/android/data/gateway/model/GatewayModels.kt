@@ -35,6 +35,7 @@ data class HomeFeedItem(
     val scene: String,
     val rank: Int,
     val guide_card_id: String,
+    val reason_text: String? = null,
     val reason_tags: List<String>? = null,
     val guide_card: GuideCardSnippet? = null,
 )

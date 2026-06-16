@@ -106,3 +106,10 @@
   line-height: 88rpx;
   font-size: 30rpx;
 }
+
+.detail__btn--purchase {
+  flex: 0.85;
+  font-weight: 500;
+  color: var(--sl-text-secondary);
+  box-shadow: none;
+}

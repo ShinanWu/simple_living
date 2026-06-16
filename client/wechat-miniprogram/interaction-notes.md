@@ -13,20 +13,20 @@
 | 详情 / 跳转 | `navigateTo` 子页面；返回使用 `navigateBack` |
 | 登录 | 独立页 `/pages/login/login`；支持 `return_url` 回跳 |
 
-## 3. 首页手势（对齐 iOS 阈值）
+## 3. 首页卡片
 
-| 手势 | 行为 |
+| 能力 | 实现 |
 |------|------|
-| 左右滑（主题栏或卡片区） | 切换 `clothing` → `food` → `housing` → `transport` |
-| 上滑 / 下滑 | 下一条 / 上一条；拖拽时露出相邻卡片预览层 |
-| 下滑（首卡） | 二段提示；松手时仍 ≥ 刷新阈值才刷新（中途回弹低于阈值不刷新） |
-| 拖拽中 | `isCardDragging` 为 true 时不触发进入详情 / 去购买 |
-| 主题空态 | 展示主题 slogan +「刷新」「看看其他主题」 |
-| 数据刷新 | **冷启动**（`App.onLaunch`）并行拉取四主题首屏并缓存；**切换主题 / 热启动回前台**不请求；首卡下拉刷新、空态/错误「重试」仅刷新当前主题 |
-| 卡片条数 | 以 gateway `items.length` 为准（首屏不传 `limit`）；`has_more` + `next_cursor` 控制翻页追加 |
-| 回到顶部 | `cardIndex > 0` 时显示悬浮按钮，回到当前主题第 1 张卡 |
+| 上下滑切卡 | 原生 **`swiper` 纵向**；每张卡一个 `swiper-item`，数据直接 `wx:for="{{cards}}"` |
+| 主题切换 | 底部 Tab 点击；主题栏横滑（阈值约 54px） |
+| 首张刷新 | 第一张卡内 `scroll-view` 原生下拉刷新（`refresher`）；空态/错误态「重试」 |
+| 末张提示 | 滑到最后一张时顶部展示 `brandEndHint` |
+| 卡片按钮 | **收藏** + **详情**；点卡片或「详情」进详情页 |
+| 数据刷新 | 冷启动预拉四主题缓存；切主题不重复请求；刷新仅当前主题 |
+| 翻页加载 | `has_more` + `next_cursor`；滑到倒数第二张附近追加 |
+| 回到顶部 | `swiperCurrent > 0` 时右下悬浮圆钮，`swiperCurrent` 置 0 |
 
-阈值（px，与 iOS 逻辑同量级）：下一条 90、刷新提示 28、刷新触发 92、主题横滑 54。
+`swiper`：`duration=320`、`easing-function=easeOutCubic`、`skip-hidden-item-layout`。
 
 主题 Tab 选中态使用对应 `--tab-accent` 微光晕胶囊。
 
@@ -50,7 +50,7 @@
 
 ## 6. 收藏与历史
 
-- 详情页「收藏」：未登录 `navigateTo` 登录页并带 `action=favorite` 回跳参数。
+- 首页 / 详情页「收藏」：未登录 `navigateTo` 登录页；登录后 `navigateBack` 回首页时由 `pendingHomeFavoriteGuide` 自动完成收藏，详情页回跳 `action=favorite`。
 - 我的页入口：收藏 / 历史列表页，分别调用 `GET /api/v2/me/favorites`、`GET /api/v2/me/history`。
 
 ## 7. 埋点（最小）
