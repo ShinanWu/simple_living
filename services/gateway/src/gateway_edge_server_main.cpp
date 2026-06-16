@@ -18,13 +18,14 @@
 #include "gateway_user_edge.pb.h"
 #include "gateway_pages_edge.pb.h"
 #include "user_server_service.pb.h"
-#include "recommendation_server_service.pb.h"
 #include "content_service.pb.h"
 #include "tracking_server.pb.h"
 #include "governance_server.pb.h"
 #include "affiliate_server.pb.h"
 #include "gateway_backoffice_helpers.h"
 #include "gateway_backoffice_media.h"
+#include "gateway_home_feed_helpers.h"
+#include "gateway_user_http_json.h"
 
 namespace {
 constexpr const char* kDefaultUserServerAddr =
@@ -228,7 +229,7 @@ bool EnsurePost(brpc::Controller* outer) {
         return false;
     }
     if (outer->http_request().method() != brpc::HTTP_METHOD_POST) {
-        FinishBizError(outer, 10001, "Method not allowed, use POST", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+        FinishBizError(outer, 10051, "Method not allowed, use POST", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
         return false;
     }
     return true;
@@ -243,8 +244,48 @@ bool EnsureReadHttp(brpc::Controller* outer) {
     if (m == brpc::HTTP_METHOD_GET || m == brpc::HTTP_METHOD_POST) {
         return true;
     }
-    FinishBizError(outer, 10001, "Method not allowed, use GET or POST", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+    FinishBizError(outer, 10051, "Method not allowed, use GET or POST", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
     return false;
+}
+
+bool EnsureGet(brpc::Controller* outer) {
+    const auto m = outer->http_request().method();
+    if (m == brpc::HTTP_METHOD_OPTIONS) {
+        FinishCorsPreflight(outer);
+        return false;
+    }
+    if (m != brpc::HTTP_METHOD_GET) {
+        FinishBizError(outer, 10051, "Method not allowed, use GET", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+        return false;
+    }
+    return true;
+}
+
+bool EnsureDelete(brpc::Controller* outer) {
+    const auto m = outer->http_request().method();
+    if (m == brpc::HTTP_METHOD_OPTIONS) {
+        FinishCorsPreflight(outer);
+        return false;
+    }
+    if (m != brpc::HTTP_METHOD_DELETE) {
+        FinishBizError(outer, 10051, "Method not allowed, use DELETE", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+        return false;
+    }
+    return true;
+}
+
+bool EnsureGetOrDelete(brpc::Controller* outer) {
+    const auto m = outer->http_request().method();
+    if (m == brpc::HTTP_METHOD_OPTIONS) {
+        FinishCorsPreflight(outer);
+        return false;
+    }
+    if (m != brpc::HTTP_METHOD_GET && m != brpc::HTTP_METHOD_DELETE) {
+        FinishBizError(outer, 10051, "Method not allowed, use GET or DELETE",
+                       brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+        return false;
+    }
+    return true;
 }
 
 std::string UrlDecode(const std::string& in) {
@@ -376,13 +417,44 @@ public:
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
         if (!EnsurePost(outer)) return;
-        if (!req->has_account_proof() || !req->account_proof().has_user_id() ||
-            req->account_proof().user_id().empty()) {
+        if (!req->has_account_proof()) {
             FinishBizError(outer, 10002, "Validation failed", brpc::HTTP_STATUS_BAD_REQUEST);
             return;
         }
+        const AccountProofHttp& proof = req->account_proof();
+        // Public clients authenticate via phone_otp / oauth only. user_id-based
+        // issuance is reserved for the trusted internal refresh path
+        // (token/refresh → IssueTokenPair) and is not exposed on this contract,
+        // preventing client-supplied user_id impersonation.
         simple_living::user_server::IssueTokenPairRequest ireq;
-        ireq.set_user_id(req->account_proof().user_id());
+        if (proof.has_phone_otp()) {
+            const auto& otp = proof.phone_otp();
+            auto* dst = ireq.mutable_phone_otp();
+            if (otp.has_phone_e164()) {
+                dst->set_phone_e164(otp.phone_e164());
+            }
+            if (otp.has_otp_code()) {
+                dst->set_otp_code(otp.otp_code());
+            }
+            if (otp.has_verification_id()) {
+                dst->set_verification_id(otp.verification_id());
+            }
+        } else if (proof.has_oauth()) {
+            const auto& oauth = proof.oauth();
+            auto* dst = ireq.mutable_oauth();
+            if (oauth.has_provider()) {
+                dst->set_provider(oauth.provider());
+            }
+            if (oauth.has_provider_subject()) {
+                dst->set_provider_subject(oauth.provider_subject());
+            }
+            if (oauth.has_authorization_code()) {
+                dst->set_authorization_code(oauth.authorization_code());
+            }
+        } else {
+            FinishBizError(outer, 10002, "Validation failed", brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
         if (req->has_device_fingerprint()) {
             ireq.set_device_fingerprint(req->device_fingerprint());
         }
@@ -401,7 +473,11 @@ public:
             FinishDownstreamBrpcFailure(outer, cntl);
             return;
         }
-        FinishOk(outer, *resp);
+        if (resp->access_token().empty()) {
+            FinishBizError(outer, 20006, "Invalid login credentials", brpc::HTTP_STATUS_UNAUTHORIZED);
+            return;
+        }
+        user_http_json::FinishOkJson(outer, user_http_json::BuildIssueTokenPairJson(*resp));
     }
 
     void PostAuthTokenRefresh(::google::protobuf::RpcController* controller_base,
@@ -431,7 +507,7 @@ public:
             FinishDownstreamBrpcFailure(outer, cntl);
             return;
         }
-        FinishOk(outer, *resp);
+        user_http_json::FinishOkJson(outer, user_http_json::BuildIssueTokenPairJson(*resp));
     }
 
     void DeleteAuthSession(::google::protobuf::RpcController* controller_base,
@@ -440,18 +516,23 @@ public:
                            ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
+        if (!EnsureDelete(outer)) return;
         ResolvedActor actor;
         if (!ResolveActor(&user_stub_, outer, &actor) || actor.kind != ActorKind::kUser) {
             FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
             return;
         }
+        RevokeSessionHttpRequest hreq;
+        if (req->has_revoke_scope()) {
+            hreq.set_revoke_scope(req->revoke_scope());
+        }
+        JsonBodyToMessage(outer, &hreq);
         simple_living::user_server::RevokeSessionRequest dreq;
         dreq.set_user_id(actor.user_id);
         if (!actor.session_id.empty()) {
             dreq.set_session_id(actor.session_id);
         }
-        dreq.set_scope(ParseRevokeScope(req->revoke_scope()));
+        dreq.set_scope(ParseRevokeScope(hreq.has_revoke_scope() ? hreq.revoke_scope() : "single_session"));
         brpc::Controller cntl;
         user_stub_.RevokeSession(&cntl, &dreq, resp, nullptr);
         if (cntl.Failed()) {
@@ -467,9 +548,12 @@ public:
                        ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
-        const std::string action = outer->http_request().unresolved_path();
-        if (action == "get") {
+        const auto method = outer->http_request().method();
+        if (method == brpc::HTTP_METHOD_OPTIONS) {
+            FinishCorsPreflight(outer);
+            return;
+        }
+        if (method == brpc::HTTP_METHOD_GET) {
             simple_living::user_server::GetProfileRequest dreq;
             ResolvedActor actor;
             if (ResolveActor(&user_stub_, outer, &actor)) {
@@ -489,7 +573,7 @@ public:
             FinishOk(outer, resp);
             return;
         }
-        if (action == "update") {
+        if (method == brpc::HTTP_METHOD_PATCH) {
             ResolvedActor actor;
             if (!ResolveActor(&user_stub_, outer, &actor) || actor.kind != ActorKind::kUser) {
                 FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
@@ -511,7 +595,7 @@ public:
             FinishOk(outer, resp);
             return;
         }
-        FinishBizError(outer, 10002, "Unknown profile action", brpc::HTTP_STATUS_BAD_REQUEST);
+        FinishBizError(outer, 10051, "Method not allowed", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
     }
 
     void MePreferencesHttp(::google::protobuf::RpcController* controller_base,
@@ -520,14 +604,21 @@ public:
                            ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
-        const std::string action = outer->http_request().unresolved_path();
+        const auto method = outer->http_request().method();
+        if (method == brpc::HTTP_METHOD_OPTIONS) {
+            FinishCorsPreflight(outer);
+            return;
+        }
+        if (method != brpc::HTTP_METHOD_GET && method != brpc::HTTP_METHOD_PUT) {
+            FinishBizError(outer, 10051, "Method not allowed", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+            return;
+        }
         ResolvedActor actor;
         if (!ResolveActor(&user_stub_, outer, &actor) || actor.kind != ActorKind::kUser) {
             FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
             return;
         }
-        if (action == "get") {
+        if (method == brpc::HTTP_METHOD_GET) {
             simple_living::user_server::GetPreferencesRequest dreq;
             dreq.set_user_id(actor.user_id);
             simple_living::user_server::GetPreferencesResponse resp;
@@ -540,7 +631,7 @@ public:
             FinishOk(outer, resp);
             return;
         }
-        if (action == "update") {
+        {
             PutMePreferencesHttpRequest hreq;
             if (!JsonBodyToMessage(outer, &hreq)) {
                 FinishBizError(outer, 10002, "Invalid JSON body", brpc::HTTP_STATUS_BAD_REQUEST);
@@ -567,7 +658,6 @@ public:
             FinishOk(outer, resp);
             return;
         }
-        FinishBizError(outer, 10002, "Unknown preferences action", brpc::HTTP_STATUS_BAD_REQUEST);
     }
 
     void GetMeFavorites(::google::protobuf::RpcController* controller_base,
@@ -576,7 +666,42 @@ public:
                         ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
+        const auto method = outer->http_request().method();
+        if (method == brpc::HTTP_METHOD_OPTIONS) {
+            FinishCorsPreflight(outer);
+            return;
+        }
+        if (method == brpc::HTTP_METHOD_POST) {
+            AddFavoriteHttpRequest hreq;
+            if (!JsonBodyToMessage(outer, &hreq) || !hreq.has_guide_card_id() ||
+                hreq.guide_card_id().empty()) {
+                FinishBizError(outer, 10002, "Validation failed", brpc::HTTP_STATUS_BAD_REQUEST);
+                return;
+            }
+            ResolvedActor actor;
+            if (!ResolveActor(&user_stub_, outer, &actor) || actor.kind != ActorKind::kUser) {
+                FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
+                return;
+            }
+            simple_living::user_server::AddFavoriteRequest dreq;
+            dreq.set_user_id(actor.user_id);
+            dreq.set_content_id(hreq.guide_card_id());
+            dreq.set_content_type(simple_living::user_server::CONTENT_REF_TYPE_GUIDE_CARD);
+            simple_living::user_server::AddFavoriteResponse aresp;
+            brpc::Controller cntl;
+            user_stub_.AddFavorite(&cntl, &dreq, &aresp, nullptr);
+            if (cntl.Failed()) {
+                FinishDownstreamBrpcFailure(outer, cntl);
+                return;
+            }
+            FinishOk(outer, aresp);
+            return;
+        }
+        if (method != brpc::HTTP_METHOD_GET) {
+            FinishBizError(outer, 10051, "Method not allowed, use GET or POST",
+                           brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+            return;
+        }
         ResolvedActor actor;
         if (!ResolveActor(&user_stub_, outer, &actor) || actor.kind != ActorKind::kUser) {
             FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
@@ -584,10 +709,16 @@ public:
         }
         simple_living::user_server::ListFavoritesRequest dreq;
         dreq.set_user_id(actor.user_id);
-        if (req->limit() > 0) {
+        const std::string lim = QueryParam(outer, "limit");
+        if (!lim.empty()) {
+            dreq.mutable_page()->set_limit(std::stoi(lim));
+        } else if (req->limit() > 0) {
             dreq.mutable_page()->set_limit(req->limit());
         }
-        if (req->has_cursor()) {
+        const std::string cursor = QueryParam(outer, "cursor");
+        if (!cursor.empty()) {
+            dreq.mutable_page()->set_cursor(cursor);
+        } else if (req->has_cursor()) {
             dreq.mutable_page()->set_cursor(req->cursor());
         }
         brpc::Controller cntl;
@@ -596,32 +727,7 @@ public:
             FinishDownstreamBrpcFailure(outer, cntl);
             return;
         }
-        FinishOk(outer, *resp);
-    }
-
-    void PostMeFavorite(::google::protobuf::RpcController* controller_base,
-                        const AddFavoriteHttpRequest* req,
-                        ::simple_living::user_server::AddFavoriteResponse* resp,
-                        ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard g(done);
-        auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
-        ResolvedActor actor;
-        if (!ResolveActor(&user_stub_, outer, &actor) || actor.kind != ActorKind::kUser) {
-            FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
-            return;
-        }
-        simple_living::user_server::AddFavoriteRequest dreq;
-        dreq.set_user_id(actor.user_id);
-        dreq.set_content_id(req->guide_card_id());
-        dreq.set_content_type(simple_living::user_server::CONTENT_REF_TYPE_GUIDE_CARD);
-        brpc::Controller cntl;
-        user_stub_.AddFavorite(&cntl, &dreq, resp, nullptr);
-        if (cntl.Failed()) {
-            FinishDownstreamBrpcFailure(outer, cntl);
-            return;
-        }
-        FinishOk(outer, *resp);
+        user_http_json::FinishOkJson(outer, user_http_json::BuildListFavoritesJson(*resp));
     }
 
     void DeleteMeFavorite(::google::protobuf::RpcController* controller_base,
@@ -630,15 +736,25 @@ public:
                           ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
+        if (!EnsureDelete(outer)) return;
         ResolvedActor actor;
         if (!ResolveActor(&user_stub_, outer, &actor) || actor.kind != ActorKind::kUser) {
             FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
             return;
         }
+        std::string fid = outer->http_request().unresolved_path();
+        while (!fid.empty() && fid.front() == '/') {
+            fid.erase(fid.begin());
+        }
+        if (fid.empty() && req->has_favorite_id()) {
+            fid = req->favorite_id();
+        }
+        if (fid.empty()) {
+            FinishBizError(outer, 10002, "favorite_id required", brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
         simple_living::user_server::RemoveFavoriteRequest dreq;
         dreq.set_user_id(actor.user_id);
-        std::string fid = req->favorite_id();
         dreq.set_favorite_id(fid);
         brpc::Controller cntl;
         user_stub_.RemoveFavorite(&cntl, &dreq, resp, nullptr);
@@ -655,14 +771,17 @@ public:
                        ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
-        const std::string action = outer->http_request().unresolved_path();
-        if (action == "list") {
+        if (!EnsureGetOrDelete(outer)) return;
+        const auto method = outer->http_request().method();
+        if (method == brpc::HTTP_METHOD_GET) {
             simple_living::user_server::ListHistoryRequest dreq;
-            ListHistoryHttpRequest hreq;
-            if (JsonBodyToMessage(outer, &hreq)) {
-                if (hreq.limit() > 0) dreq.mutable_page()->set_limit(hreq.limit());
-                if (hreq.has_cursor()) dreq.mutable_page()->set_cursor(hreq.cursor());
+            const std::string lim = QueryParam(outer, "limit");
+            if (!lim.empty()) {
+                dreq.mutable_page()->set_limit(std::stoi(lim));
+            }
+            const std::string cursor = QueryParam(outer, "cursor");
+            if (!cursor.empty()) {
+                dreq.mutable_page()->set_cursor(cursor);
             }
             ResolvedActor actor;
             if (ResolveActor(&user_stub_, outer, &actor)) {
@@ -679,36 +798,32 @@ public:
                 FinishDownstreamBrpcFailure(outer, cntl);
                 return;
             }
-            FinishOk(outer, resp);
+            user_http_json::FinishOkJson(outer, user_http_json::BuildListHistoryJson(resp));
             return;
         }
-        if (action == "clear") {
-            ClearHistoryHttpRequest hreq;
-            if (!JsonBodyToMessage(outer, &hreq)) {
-                FinishBizError(outer, 10002, "Invalid JSON body", brpc::HTTP_STATUS_BAD_REQUEST);
-                return;
-            }
-            simple_living::user_server::ClearHistoryRequest dreq;
-            ResolvedActor actor;
-            if (ResolveActor(&user_stub_, outer, &actor)) {
-                if (actor.kind == ActorKind::kUser) {
-                    dreq.set_user_id(actor.user_id);
-                } else {
-                    dreq.set_session_id(actor.session_id);
-                }
-            }
-            dreq.set_scope(ParseClearHistoryScope(hreq.scope()));
-            simple_living::user_server::ClearHistoryResponse resp;
-            brpc::Controller cntl;
-            user_stub_.ClearHistory(&cntl, &dreq, &resp, nullptr);
-            if (cntl.Failed()) {
-                FinishDownstreamBrpcFailure(outer, cntl);
-                return;
-            }
-            FinishOk(outer, resp);
+        ClearHistoryHttpRequest hreq;
+        if (!JsonBodyToMessage(outer, &hreq)) {
+            FinishBizError(outer, 10002, "Invalid JSON body", brpc::HTTP_STATUS_BAD_REQUEST);
             return;
         }
-        FinishBizError(outer, 10002, "Unknown history action", brpc::HTTP_STATUS_BAD_REQUEST);
+        simple_living::user_server::ClearHistoryRequest dreq;
+        ResolvedActor actor;
+        if (ResolveActor(&user_stub_, outer, &actor)) {
+            if (actor.kind == ActorKind::kUser) {
+                dreq.set_user_id(actor.user_id);
+            } else {
+                dreq.set_session_id(actor.session_id);
+            }
+        }
+        dreq.set_scope(ParseClearHistoryScope(hreq.has_scope() ? hreq.scope() : "all"));
+        simple_living::user_server::ClearHistoryResponse resp;
+        brpc::Controller cntl;
+        user_stub_.ClearHistory(&cntl, &dreq, &resp, nullptr);
+        if (cntl.Failed()) {
+            FinishDownstreamBrpcFailure(outer, cntl);
+            return;
+        }
+        FinishOk(outer, resp);
     }
 
     void PostMeHistoryEvent(::google::protobuf::RpcController* controller_base,
@@ -772,14 +887,21 @@ public:
                        ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
-        const std::string action = outer->http_request().unresolved_path();
+        const auto method = outer->http_request().method();
+        if (method == brpc::HTTP_METHOD_OPTIONS) {
+            FinishCorsPreflight(outer);
+            return;
+        }
+        if (method != brpc::HTTP_METHOD_GET && method != brpc::HTTP_METHOD_PUT) {
+            FinishBizError(outer, 10051, "Method not allowed", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+            return;
+        }
         ResolvedActor actor;
         if (!ResolveActor(&user_stub_, outer, &actor) || actor.kind != ActorKind::kUser) {
             FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
             return;
         }
-        if (action == "get") {
+        if (method == brpc::HTTP_METHOD_GET) {
             simple_living::user_server::GetConsentRequest dreq;
             dreq.set_user_id(actor.user_id);
             simple_living::user_server::GetConsentResponse resp;
@@ -792,7 +914,7 @@ public:
             FinishOk(outer, resp);
             return;
         }
-        if (action == "update") {
+        {
             simple_living::user_server::UpdateConsentRequest dreq;
             if (!JsonBodyToMessage(outer, &dreq)) {
                 FinishBizError(outer, 10002, "Invalid JSON body", brpc::HTTP_STATUS_BAD_REQUEST);
@@ -809,7 +931,6 @@ public:
             FinishOk(outer, resp);
             return;
         }
-        FinishBizError(outer, 10002, "Unknown consent action", brpc::HTTP_STATUS_BAD_REQUEST);
     }
 
     void GetMeSummary(::google::protobuf::RpcController* controller_base,
@@ -818,7 +939,7 @@ public:
                       ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
+        if (!EnsureGet(outer)) return;
         simple_living::user_server::GetMeSummaryRequest dreq = *req;
         if (!dreq.has_user_id() && !dreq.has_session_id()) {
             ResolvedActor actor;
@@ -836,7 +957,7 @@ public:
             FinishDownstreamBrpcFailure(outer, cntl);
             return;
         }
-        FinishOk(outer, *resp);
+        user_http_json::FinishOkJson(outer, user_http_json::BuildMeSummaryJson(*resp));
     }
 
     void GetHealth(::google::protobuf::RpcController* controller_base,
@@ -845,16 +966,24 @@ public:
                    ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
-        if (!EnsurePost(outer)) return;
+        if (!EnsureGet(outer)) return;
         brpc::Controller cntl;
         user_stub_.HealthCheck(&cntl, req, resp, nullptr);
         if (cntl.Failed()) {
             resp->Clear();
             resp->set_status("degraded");
-            FinishOk(outer, *resp);
-            return;
+            auto* c = resp->add_components();
+            c->set_name("user-server");
+            c->set_ok(false);
+            c->set_detail("unreachable");
         }
-        FinishOk(outer, *resp);
+        auto* gw = resp->add_components();
+        gw->set_name("gateway");
+        gw->set_ok(true);
+        if (resp->status().empty()) {
+            resp->set_status("ok");
+        }
+        user_http_json::FinishOkJson(outer, user_http_json::BuildHealthJson(*resp));
     }
 };
 
@@ -877,15 +1006,16 @@ bool ValidatePersistableCoverUrl(const std::string& url, brpc::Controller* outer
 
 class GatewayPagesEdgeV2Impl : public GatewayPagesEdgeV2 {
     brpc::Channel rec_ch_;
+    brpc::Channel user_ch_;
     brpc::Channel backoffice_ch_;
     brpc::Channel tracking_ch_;
-    simple_living::recommendation_server::RecommendationService_Stub rec_stub_;
     simple_living::content_server::ContentService_Stub catalog_stub_;
     simple_living::content_server::ContentService_Stub bo_content_stub_;
     simple_living::tracking_server::TrackingLinkService_Stub tracking_stub_;
     simple_living::governance_server::GovernanceVisibilityService_Stub bo_visibility_stub_;
     simple_living::governance_server::GovernanceReviewService_Stub bo_review_stub_;
     simple_living::affiliate_server::AffiliatePartnerService_Stub bo_affiliate_stub_;
+    simple_living::user_server::UserServerService_Stub user_stub_;
 
     bool IsContentVisible(const std::string& content_id) {
         if (content_id.empty()) {
@@ -924,14 +1054,15 @@ class GatewayPagesEdgeV2Impl : public GatewayPagesEdgeV2 {
 
 public:
     GatewayPagesEdgeV2Impl()
-        : rec_stub_(&rec_ch_),
-          catalog_stub_(&rec_ch_),
+        : catalog_stub_(&rec_ch_),
           bo_content_stub_(&backoffice_ch_),
           tracking_stub_(&tracking_ch_),
           bo_visibility_stub_(&backoffice_ch_),
           bo_review_stub_(&backoffice_ch_),
-          bo_affiliate_stub_(&backoffice_ch_) {
+          bo_affiliate_stub_(&backoffice_ch_),
+          user_stub_(&user_ch_) {
         InitChannel(&rec_ch_, FLAGS_recommendation_server_addr);
+        InitChannel(&user_ch_, FLAGS_user_server_addr);
         InitChannel(&backoffice_ch_, FLAGS_backoffice_backend_addr);
         InitChannel(&tracking_ch_, FLAGS_tracking_server_addr);
     }
@@ -963,130 +1094,68 @@ public:
         int lim = (parsed.limit() > 0) ? parsed.limit() : 20;
         const std::string theme = parsed.theme().empty() ? "clothing" : parsed.theme();
 
-        if (theme == "clothing") {
-            brpc::Controller ccntl;
-            simple_living::content_server::ListGuideCardsRequest lreq;
-            lreq.set_theme_id(bo::ThemeIdFromTheme(theme));
-            lreq.set_limit(lim);
-            simple_living::content_server::ListGuideCardsResponse lresp;
-            catalog_stub_.ListGuideCards(&ccntl, &lreq, &lresp, nullptr);
-            if (ccntl.Failed()) {
-                FinishDownstreamBrpcFailure(outer, ccntl);
-                return;
-            }
-
-            int rank = 1;
-            const std::string recommendation_id = "rec_cms_" + std::to_string(NowUnixMs());
-            for (const auto& card : lresp.cards()) {
-                if (card.content_status() != simple_living::catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED) {
-                    continue;
-                }
-                if (!IsContentVisible(card.card_id())) {
-                    continue;
-                }
-                auto* fi = resp->add_items();
-                fi->set_recommendation_id(recommendation_id);
-                fi->set_scene("home_feed");
-                fi->set_rank(rank++);
-                fi->set_guide_card_id(card.card_id());
-                auto* gs = fi->mutable_guide_card();
-                gs->set_guide_card_id(card.card_id());
-                gs->set_title(card.title());
-                gs->set_subtitle(card.subtitle());
-                gs->set_summary(card.subtitle());
-                if (card.has_cover_media() && !card.cover_media().url().empty()) {
-                    gs->set_cover_url(
-                        bo_media::NormalizeMediaUrlForClient(card.cover_media().url()));
-                }
-                gs->set_theme(theme);
-                fi->add_reason_tags("cms_published");
-                fi->add_reason_tags("clothing_pick");
-            }
-            resp->mutable_pagination()->set_next_cursor(lresp.has_pagination() ? lresp.pagination().next_cursor() : "");
-            resp->mutable_pagination()->set_has_more(lresp.has_pagination() && lresp.pagination().has_more());
-            resp->mutable_pagination()->set_limit(lim);
-            FinishOk(outer, *resp);
-            return;
-        }
-
-        brpc::Controller cntl;
-        simple_living::recommendation_server::QueryRecommendationsRequest rreq;
-        rreq.set_scene(simple_living::recommendation_server::HOME_FEED);
-        if (!parsed.theme().empty()) {
-            rreq.mutable_context()->set_theme(parsed.theme());
-        }
-        rreq.mutable_cursor_limits()->set_limit(lim);
+        brpc::Controller ccntl;
+        simple_living::content_server::ListGuideCardsRequest lreq;
+        lreq.set_theme_id(bo::ThemeIdFromTheme(theme));
+        lreq.set_limit(lim);
         if (!parsed.cursor().empty()) {
-            rreq.mutable_cursor_limits()->set_cursor(parsed.cursor());
+            lreq.set_cursor(parsed.cursor());
         }
-        simple_living::recommendation_server::QueryRecommendationsResponse rresp;
-        rec_stub_.QueryRecommendations(&cntl, &rreq, &rresp, nullptr);
-        if (cntl.Failed()) {
-            FinishDownstreamBrpcFailure(outer, cntl);
+        simple_living::content_server::ListGuideCardsResponse lresp;
+        catalog_stub_.ListGuideCards(&ccntl, &lreq, &lresp, nullptr);
+        if (ccntl.Failed()) {
+            FinishDownstreamBrpcFailure(outer, ccntl);
             return;
         }
 
+        int rank = 1;
+        const std::string recommendation_id = "rec_cms_" + std::to_string(NowUnixMs());
         std::vector<std::string> card_ids;
-        card_ids.reserve(static_cast<size_t>(rresp.items_size()));
-        for (const auto& item : rresp.items()) {
-            card_ids.push_back(item.guide_card_id());
+        card_ids.reserve(static_cast<size_t>(lresp.cards_size()));
+        for (const auto& summary : lresp.cards()) {
+            if (!summary.card_id().empty()) {
+                card_ids.push_back(summary.card_id());
+            }
         }
-
         std::unordered_map<std::string, simple_living::catalog::GuideCard> card_by_id;
         if (!card_ids.empty()) {
-            brpc::Controller ccntl;
-            simple_living::content_server::BatchGetGuideCardsRequest creq;
+            brpc::Controller bcntl;
+            simple_living::content_server::BatchGetGuideCardsRequest breq;
             for (const auto& id : card_ids) {
-                creq.add_card_ids(id);
+                breq.add_card_ids(id);
             }
-            simple_living::content_server::BatchGetGuideCardsResponse cresp;
-            catalog_stub_.BatchGetGuideCards(&ccntl, &creq, &cresp, nullptr);
-            if (!ccntl.Failed()) {
-                for (const auto& card : cresp.cards()) {
+            simple_living::content_server::BatchGetGuideCardsResponse bresp;
+            catalog_stub_.BatchGetGuideCards(&bcntl, &breq, &bresp, nullptr);
+            if (!bcntl.Failed()) {
+                for (const auto& card : bresp.cards()) {
                     card_by_id[card.card_id()] = card;
                 }
             }
         }
-
-        for (const auto& item : rresp.items()) {
-            auto cit = card_by_id.find(item.guide_card_id());
-            if (cit == card_by_id.end() ||
-                cit->second.content_status() != simple_living::catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED) {
+        for (const auto& summary : lresp.cards()) {
+            auto cit = card_by_id.find(summary.card_id());
+            if (cit == card_by_id.end()) {
                 continue;
             }
-            if (!IsContentVisible(cit->second.card_id())) {
-                continue;
-            }
-            auto* fi = resp->add_items();
-            fi->set_recommendation_id(rresp.recommendation_id());
-            fi->set_scene("home_feed");
-            fi->set_rank(item.rank());
-            fi->set_guide_card_id(item.guide_card_id());
-            auto* gs = fi->mutable_guide_card();
-            gs->set_guide_card_id(item.guide_card_id());
-
             const auto& card = cit->second;
-            gs->set_title(card.title());
-            gs->set_subtitle(card.subtitle());
-            if (!card.selling_points().empty()) {
-                gs->set_summary(card.selling_points(0));
+            if (card.content_status() != simple_living::catalog::CONTENT_LIFECYCLE_STATUS_PUBLISHED) {
+                continue;
             }
-            if (card.has_cover_media() && !card.cover_media().url().empty()) {
-                gs->set_cover_url(bo_media::NormalizeMediaUrlForClient(card.cover_media().url()));
+            if (!IsContentVisible(card.card_id())) {
+                continue;
             }
-            gs->set_theme(parsed.theme());
-            fi->add_reason_tags("clothing_pick");
-            fi->add_reason_tags("tmall_deal");
-
-            for (const auto& rt : item.reason_tags()) {
-                fi->add_reason_tags(rt);
-            }
+            home_feed::FillHomeFeedItemFromCard(resp->add_items(),
+                                                card,
+                                                theme,
+                                                recommendation_id,
+                                                "home_feed",
+                                                rank++,
+                                                {},
+                                                "");
         }
-        if (rresp.has_cursor_pagination()) {
-            resp->mutable_pagination()->set_next_cursor(rresp.cursor_pagination().next_cursor());
-            resp->mutable_pagination()->set_has_more(rresp.cursor_pagination().has_more());
-            resp->mutable_pagination()->set_limit(lim);
-        }
+        resp->mutable_pagination()->set_next_cursor(lresp.has_pagination() ? lresp.pagination().next_cursor() : "");
+        resp->mutable_pagination()->set_has_more(lresp.has_pagination() && lresp.pagination().has_more());
+        resp->mutable_pagination()->set_limit(lim);
         FinishOk(outer, *resp);
     }
 
@@ -1133,15 +1202,39 @@ public:
         detail->set_guide_card_id(card.card_id());
         detail->set_title(card.title());
         detail->set_subtitle(card.subtitle());
+        detail->set_schema_version(1);
+        if (!card.theme_ids().empty()) {
+            detail->set_theme(bo::ThemeFromThemeId(card.theme_ids(0)));
+        }
         if (!card.selling_points().empty()) {
             detail->set_summary(card.selling_points(0));
         } else {
             detail->set_summary(card.subtitle());
         }
         detail->set_is_commercial(card.commercial_disclosure_required());
-        if (card.has_cover_media()) {
-            detail->set_cover_url(
-                bo_media::NormalizeMediaUrlForClient(card.cover_media().url()));
+        auto* disc = detail->mutable_commercial_disclosure();
+        disc->set_is_commercial(card.commercial_disclosure_required());
+        disc->set_disclosure_text_key(card.commercial_disclosure_required() ? "commercial.default"
+                                                                            : "commercial.none");
+        if (card.has_cover_media() && !card.cover_media().url().empty()) {
+            const auto& cm = card.cover_media();
+            const std::string url = bo_media::NormalizeMediaUrlForClient(cm.url());
+            detail->set_cover_url(url);
+            auto* out_cm = detail->mutable_cover_media();
+            out_cm->set_type("image");
+            out_cm->set_url(url);
+            if (cm.width() > 0) {
+                out_cm->set_width(cm.width());
+            }
+            if (cm.height() > 0) {
+                out_cm->set_height(cm.height());
+            }
+        }
+        if (card.has_updated_at()) {
+            *detail->mutable_updated_at() = card.updated_at();
+        }
+        if (card.has_effective_from()) {
+            *detail->mutable_published_at() = card.effective_from();
         }
         FinishOk(outer, *resp);
     }
@@ -1153,6 +1246,11 @@ public:
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
         if (!EnsurePost(outer)) return;
+        ResolvedActor actor;
+        if (!ResolveActor(&user_stub_, outer, &actor)) {
+            FinishBizError(outer, 20001, "Unauthorized", brpc::HTTP_STATUS_UNAUTHORIZED);
+            return;
+        }
         brpc::Controller content_cntl;
         simple_living::content_server::BatchGetGuideCardsRequest content_req;
         content_req.add_card_ids(req->guide_card_id());
@@ -1193,13 +1291,26 @@ public:
             FinishDownstreamBrpcFailure(outer, cntl);
             return;
         }
-        resp->set_landing_url(tresp.landing_url());
-        if (!tresp.link_ref().empty()) {
-            resp->set_click_id(tresp.link_ref());
-        } else {
-            resp->set_click_id(tresp.short_token());
+        landing_url = tresp.landing_url();
+        std::string click_id = tresp.link_ref();
+        if (click_id.empty()) {
+            click_id = tresp.short_token();
+        }
+        if (landing_url.empty()) {
+            FinishBizError(outer, 50002, "Link assembly failed", brpc::HTTP_STATUS_BAD_GATEWAY);
+            return;
+        }
+        if (click_id.empty()) {
+            FinishBizError(outer, 50002, "Link assembly failed", brpc::HTTP_STATUS_BAD_GATEWAY);
+            return;
+        }
+        resp->set_landing_url(landing_url);
+        resp->set_click_id(click_id);
+        if (tresp.has_expires_at()) {
+            *resp->mutable_expires_at() = tresp.expires_at();
         }
         if (tresp.has_attribution_echo()) {
+            resp->mutable_attribution()->set_click_id(click_id);
             resp->mutable_attribution()->set_channel_code(tresp.attribution_echo().placement());
             resp->mutable_attribution()->set_scene(req->scene());
             resp->mutable_attribution()->set_item_rank(req->item_rank());
@@ -1214,10 +1325,27 @@ public:
         brpc::ClosureGuard g(done);
         auto* outer = static_cast<brpc::Controller*>(controller_base);
         if (!EnsureReadHttp(outer)) return;
-        resp->mutable_profile()->set_is_guest(true);
-        resp->mutable_counts()->set_favorites_count(0);
-        resp->mutable_counts()->set_history_count(0);
-        FinishOk(outer, *resp);
+        if (outer->http_request().method() != brpc::HTTP_METHOD_GET) {
+            FinishBizError(outer, 10051, "Method not allowed, use GET", brpc::HTTP_STATUS_METHOD_NOT_ALLOWED);
+            return;
+        }
+        simple_living::user_server::GetMeSummaryRequest dreq;
+        ResolvedActor actor;
+        if (ResolveActor(&user_stub_, outer, &actor)) {
+            if (actor.kind == ActorKind::kUser) {
+                dreq.set_user_id(actor.user_id);
+            } else {
+                dreq.set_session_id(actor.session_id);
+            }
+        }
+        simple_living::user_server::GetMeSummaryResponse us_resp;
+        brpc::Controller cntl;
+        user_stub_.GetMeSummary(&cntl, &dreq, &us_resp, nullptr);
+        if (cntl.Failed()) {
+            FinishDownstreamBrpcFailure(outer, cntl);
+            return;
+        }
+        user_http_json::FinishOkJson(outer, user_http_json::BuildMeSummaryJson(us_resp));
     }
 
     void PostBackofficeLogin(::google::protobuf::RpcController* controller_base,
@@ -1360,11 +1488,23 @@ public:
         }
 
         simple_living::catalog::GuideCard card = bo::BuildGuideCardFromCreate(*req);
-        const std::string initial = !req->initial_status().empty() ? req->initial_status()
-            : (!req->status().empty() ? req->status() : "draft");
+        const std::string initial = !req->initial_status().empty() ? req->initial_status() : "draft";
         if (initial == "published") {
             FinishBizError(outer, 10002, "submit for review and publish after approval",
                            brpc::HTTP_STATUS_BAD_REQUEST);
+            return;
+        }
+
+        brpc::Controller exists_cntl;
+        simple_living::content_server::BatchGetGuideCardsRequest exists_req;
+        exists_req.add_card_ids(card.card_id());
+        simple_living::content_server::BatchGetGuideCardsResponse exists_resp;
+        bo_content_stub_.BatchGetGuideCards(&exists_cntl, &exists_req, &exists_resp, nullptr);
+        if (!exists_cntl.Failed() && exists_resp.cards_size() > 0) {
+            FinishBizError(outer, 10007,
+                           "content_id already exists for this landing_url or external_item_id; "
+                           "edit the existing item or use a different link",
+                           brpc::HTTP_STATUS_CONFLICT);
             return;
         }
 
@@ -1375,6 +1515,10 @@ public:
         bo_content_stub_.UpsertGuideCard(&cntl, &creq, &cresp, nullptr);
         if (cntl.Failed()) {
             FinishDownstreamBrpcFailure(outer, cntl);
+            return;
+        }
+        if (cresp.card_id().empty()) {
+            FinishBizError(outer, 10002, "failed to persist guide card", brpc::HTTP_STATUS_INTERNAL_SERVER_ERROR);
             return;
         }
         SyncVisibilityForContent(cresp.card_id(), false);
@@ -1434,10 +1578,6 @@ public:
         }
         if (req->has_cover_media() && !req->cover_media().url().empty() &&
             !ValidatePersistableCoverUrl(req->cover_media().url(), outer)) {
-            return;
-        }
-        if (req->has_cover_url() && !req->cover_url().empty() &&
-            !ValidatePersistableCoverUrl(req->cover_url(), outer)) {
             return;
         }
         bo::ApplyContentUpdate(*req, &card);
@@ -1988,18 +2128,17 @@ int main(int argc, char* argv[]) {
         "/api/v2/guest/session              => PostGuestSession,"
         "/api/v2/auth/token/issue           => PostAuthTokenIssue,"
         "/api/v2/auth/token/refresh         => PostAuthTokenRefresh,"
-        "/api/v2/auth/session/revoke        => DeleteAuthSession,"
-        "/api/v2/me/profile/*               => MeProfileHttp,"
-        "/api/v2/me/preferences/*           => MePreferencesHttp,"
-        "/api/v2/me/favorites/list          => GetMeFavorites,"
-        "/api/v2/me/favorites/add           => PostMeFavorite,"
-        "/api/v2/me/favorites/remove        => DeleteMeFavorite,"
-        "/api/v2/me/history/*               => MeHistoryHttp,"
+        "/api/v2/auth/session               => DeleteAuthSession,"
+        "/api/v2/me/profile                 => MeProfileHttp,"
+        "/api/v2/me/preferences             => MePreferencesHttp,"
+        "/api/v2/me/favorites               => GetMeFavorites,"
+        "/api/v2/me/favorites/*             => DeleteMeFavorite,"
+        "/api/v2/me/history                 => MeHistoryHttp,"
         "/api/v2/me/history/events          => PostMeHistoryEvent,"
         "/api/v2/me/feedback                => PostMeFeedback,"
-        "/api/v2/me/consent/*               => MeConsentHttp,"
-        "/api/v2/me/summary/get             => GetMeSummary,"
-        "/api/v2/health/check               => GetHealth";
+        "/api/v2/me/consent                 => MeConsentHttp,"
+        "/api/v2/me/summary                 => GetMeSummary,"
+        "/api/v2/health                     => GetHealth";
     if (server.AddService(&g_user_edge, brpc::SERVER_DOESNT_OWN_SERVICE, kUserRestful) != 0) {
         LOG(ERROR) << "Fail to add GatewayUserEdgeV2";
         return 1;

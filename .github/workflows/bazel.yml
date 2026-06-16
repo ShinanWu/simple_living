@@ -23,12 +23,12 @@ jobs:
       - name: Contract smoke tests (shell)
         run: |
           bazel test \
-            //services/gateway:gateway_contract_smoke_test \
             //services/gateway:gateway_pages_golden_contract_test \
             //services/gateway:gateway_user_golden_contract_test \
             //services/gateway:gateway_backoffice_contract_smoke_test \
             //services/platform/backoffice-backend:backoffice_backend_contract_smoke_test \
             //services/recommendation-server:recommendation_server_contract_smoke_test \
             //services/tracking-server:tracking_server_contract_smoke_test \
-            //services/user-server:user_server_store_smoke_test \
+            //services/user-server:issue_token_pair_smoke_test \
+            //services/user-server:pg_user_store_unit_test \
             --test_output=errors

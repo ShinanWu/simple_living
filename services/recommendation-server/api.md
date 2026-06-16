@@ -413,6 +413,79 @@
 | `ExplainRecommendations` | `ExplainRecommendationsRequest` | `ExplainRecommendationsResponse` |
 | `HealthCheck` | `HealthCheckRequest` | `HealthCheckResponse` |
 
+---
+
+## 11. `ContentService` catalog 读（snapshot）
+
+本服务在同一进程内实现 `content_server.ContentService` 的**只读** catalog RPC，供 `gateway` 等内部消费者通过 brpc 调用。写路径（`UpsertGuideCard`、`PublishRevision` 等）返回 `read-only: use platform/backoffice-backend`。
+
+**Proto 源码**：`common/proto/content_service.proto`；卡片实体见 `common/proto/catalog.proto`。
+
+**数据来源**：`-snapshot_dir` 下 `active/catalog.json`（`CatalogSnapshotBundle`）与 `active/visibility.json`（可见 ID 列表）。仅返回 **可见且已发布** 的卡片；`BatchGetGuideCards` 对不可见或未发布 ID 静默省略（不进入 `cards`，可出现在 `missing_ids`）。
+
+### 11.1 主题 ID 映射（与 gateway 一致）
+
+| `theme_id` | slug | 生活主题 |
+|------------|------|----------|
+| `theme_1` | `clothing` | 衣 |
+| `theme_2` | `food` | 食 |
+| `theme_3` | `housing` | 住 |
+| `theme_4` | `transport` | 行 |
+
+卡片上的 `theme_ids` 使用上表 **`theme_id`** 字符串（非 slug）。`ListGuideCards.theme_id` 过滤时与 `GuideCard.theme_ids` 精确匹配。
+
+### 11.2 RPC：`ListGuideCards`
+
+**用途**：按主题、标签等条件列出导购卡片摘要，供首页 feed、主题频道等 hydration。
+
+#### 请求 `ListGuideCardsRequest`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `theme_id` | string（可选） | 非空时仅返回 `theme_ids` **包含**该值的卡片 |
+| `tag_ids` | repeated string | 标签过滤（未实现时忽略） |
+| `sort` | `GuideCardListSort` | 排序（未实现时使用 snapshot 内可见顺序） |
+| `cursor` | string | 分页游标；v1 可为 offset 式，首页空 |
+| `limit` | int32 | 本页最大条数；缺省 **50**；超过上限时截断 |
+
+#### 响应 `ListGuideCardsResponse`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `cards` | repeated `GuideCardSummary` | 可见且已发布的摘要列表 |
+| `pagination` | `PaginationCursor` | 可选；含 `next_cursor`、`has_more` |
+
+#### 行为约定
+
+- **可见性**：卡片 ID 须在 `visibility.json` 的 `visible_ids` 中；若无 visibility 文件，则仅 `content_status = CONTENT_LIFECYCLE_STATUS_PUBLISHED` 的卡片可见。
+- **`theme_id` 过滤**：`has_theme_id()` 且非空时，跳过 `theme_ids` 不含该值的卡片；未传则不过滤主题。
+- **`limit`**：按 snapshot 可见顺序取前 N 条；达到 `limit` 后停止。
+- **Snapshot 字段**：摘要须含 `cover_media.url`（HTTPS），供 gateway feed/详情 hydration；完整跳转 URL 来自 `affiliate_refs[].payload.landing_url`（`BatchGetGuideCards` 全量路径）。
+
+### 11.3 RPC：`BatchGetGuideCards`
+
+**用途**：按 ID 批量拉取完整 `GuideCard`，供详情页、收藏 hydration。
+
+#### 请求 `BatchGetGuideCardsRequest`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `card_ids` | repeated string | 待查询卡片 ID |
+
+#### 响应 `BatchGetGuideCardsResponse`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `cards` | repeated `GuideCard` | 命中且可见已发布的完整卡片 |
+| `missing_ids` | repeated string | 未命中或不可见的 ID（实现可选填充） |
+
+#### 行为约定
+
+- 每个 `card_id` 独立查找；不可见、未发布或不存在的不写入 `cards`。
+- 返回顺序与请求 `card_ids` 顺序一致（仅包含命中项时仍保持请求序）。
+
+---
+
 ## 附录 A. 典型请求 / 响应示例
 
 以下示例使用 **proto-text** 形式展示 `proto` 消息，便于直接对应内部 RPC 报文结构；实际 wire 传输仍以 `proto2 + gRPC` 为准。枚举展示为符号名，时间字段保持本域约定的字符串形态。

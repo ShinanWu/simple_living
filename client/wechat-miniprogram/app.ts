@@ -1,4 +1,4 @@
-import { ensureRealGatewayConfig } from './config/env';
+import { ensureGatewayConfig } from './config/env';
 import { getGateway, resetGatewayForTests } from './services/gateway/runtime';
 import { loadTokenPair, getLastTheme } from './services/auth/storage';
 import type { ThemeKey } from './utils/theme';
@@ -10,10 +10,11 @@ App<IAppOption>({
   globalData: {
     gateway: null as unknown as ReturnType<typeof getGateway>,
     pendingLoginAction: null,
+    pendingHomeFavoriteGuide: null as string | null,
     lastTheme: (getLastTheme() as ThemeKey) || 'clothing',
   },
   onLaunch() {
-    ensureRealGatewayConfig();
+    ensureGatewayConfig();
     resetGatewayForTests();
     this.globalData.gateway = getGateway();
     setBrandNavigationTitle();

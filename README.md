@@ -2,7 +2,7 @@
 
 > 一个面向衣、食、住、行场景的导购资讯平台，核心目标是用更少决策成本帮助用户完成更优选择。
 
-对外品牌名为 **少糖**（曾用名「简单生活」因商标原因停用，主旨不变）。命名约定见下文「品牌与命名」。
+对外品牌名为 **少糖**。命名约定见下文「品牌与命名」。
 
 ## 产品定位
 
@@ -60,7 +60,7 @@
 
 ## 品牌与命名
 
-- **对外品牌名**：`少糖`（曾用对外名 `简单生活` 因商标被注册停用，不再作为 App/小程序/用户可见文案）
+- **对外品牌名**：`少糖`（App/小程序/用户可见文案统一使用）
 - **用户可见文案**：App/小程序名「少糖」；登录页「登录少糖」；默认昵称「少糖用户」；首页 feed 收尾「少糖就先到这里吧」
 - **内部工程名（与对外品牌解耦，可继续使用）**：仓库目录、Bazel 模块、`simple_living` C++ 命名空间、Kubernetes `simple-living` Service DNS、iOS `SimpleLivingCore`
 - 对外 HTTP 客户端标识（`User-Agent`、统计）建议用 `Shaotang/<version>`，与 `client_platform` 契约字段无关
@@ -106,13 +106,13 @@ simple_living/
 - **构建系统**：Bazel
 - **容器与编排**：Docker + Kubernetes
 - **K8s 使用范围**：容器编排、服务发现、Ingress、NetworkPolicy、灰度与回滚
-- **服务治理**：本地 本地联调由 由 `gateway` 与各域 `brpc` 承载限流、超时、重试；生产集群补齐 Ingress / NetworkPolicy / 证书 / 灰度发布
+- **服务治理**：本地联调由 `gateway` 与各域 `brpc` 承载限流、超时、重试；生产集群补齐 Ingress / NetworkPolicy / 证书 / 灰度发布
 - **可观测性**：Prometheus + Grafana + ELK + Jaeger
 - **交付链路**：GitLab CI + ArgoCD + Terraform
 
 ## 文档地图
 
-顶层不再维护独立 `docs/` 目录；按主题在下表查找 **唯一来源（SoT）**。
+文档按服务就近维护；按主题在下表查找 **唯一来源（SoT）**。
 
 | 主题 | 去哪里读 |
 |------|----------|

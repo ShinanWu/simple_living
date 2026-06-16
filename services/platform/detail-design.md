@@ -101,8 +101,8 @@
 ```text
 gateway content/* → content 模块（Upsert / SubmitForReview / PublishRevision）
                   → governance（审核、SetVisibilityVerdict）
-                  → 事务 + outbox → 导出 catalog_snapshot + visibility_index
-                  → recommendation-server 热加载
+                  → 写事务成功后同步 RefreshNow()：重建 catalog_snapshot + visibility_index（staging→active 原子切换）
+                  → snapshot fan-out / 同盘 → recommendation-server 热加载
 ```
 
 ### 4.2 紧急不可见

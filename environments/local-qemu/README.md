@@ -17,7 +17,7 @@ QEMU 磁盘与日志在 `vms/`（已 gitignore）。启动来宾：`services/<se
 | `services/tracking-server`             | `tracking-server`       | `simple-living-tracking-server`       | `9105`                 | `9105→9105`                     | `2206` |
 | `services/proxy` + 公网入口                | `nginx`                 | `simple-living-proxy` 等               | `80` / `8080` / `8088` | 见 `proxy/deploy/start_nodes.sh` | `2208` |
 | 构建                                     | `build`                 | —                                     | —                      | —                               | `2209` |
-| foundation                             | `foundation`            | —                                     | `5432`/`6379`/`9092`   | `15432`/`16379`/`19092`         | `2211` |
+| foundation                             | `foundation`            | —                                     | `5432`/`6379`/`9092`   | `5432`/`6379`/`9092`            | `2211` |
 
 
 brpc 服务在来宾上使用 `**--network host`**：容器监听端口与来宾端口相同，无需 `-p 9103:9103` 二次映射。
@@ -39,7 +39,7 @@ bash services/gateway/deploy/deploy_service.sh
 
 lab 各来宾磁盘独立：部署 backoffice 时设 `ENABLE_SNAPSHOT_FANOUT=1`（见 `nodes.example.env`），来宾上会跑 inotify 监听 `export_dir/active/`，发布后自动 rsync 到 recommendation / tracking。
 
-HTTPS：`ENABLE_INGRESS_HTTPS=1` 时封面等素材 URL 为 `https://…`（公网 IP 场景自动用 `<ip-with-dashes>.nip.io` 走 frp `https2http` 443）。
+HTTPS：`ENABLE_INGRESS_HTTPS=1` 时公网入口与素材 URL 为 `https://shaotang.top`（证书：`services/proxy/deploy/issue_tls_cert.sh`）。
 
 一次性从 Mac 手动同步（排障用）：
 
@@ -50,7 +50,7 @@ bash tools/sync_lab_snapshot.sh
 验收：
 
 ```bash
-BASE_URL=http://8.152.103.12 python3 client/tests/gateway_api_smoke.py
+BASE_URL=https://shaotang.top python3 client/tests/gateway_live_smoke.py
 ```
 
 ## Bazel

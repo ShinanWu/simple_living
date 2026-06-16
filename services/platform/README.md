@@ -15,6 +15,7 @@
 |------|------|
 | [api.md](./api.md) | 后端内部 RPC（brpc/proto） |
 | [backoffice-gateway-api.md](./backoffice-gateway-api.md) | 运营 HTTP（`/api/v2/backoffice/*`） |
+| [backoffice-delivery-spec.md](./backoffice-delivery-spec.md) | C 端 snapshot 数据交付与验收 |
 | [product-spec.md](./product-spec.md) | 产品规格 |
 | [detail-design.md](./detail-design.md) | 页面与写链路设计 |
 

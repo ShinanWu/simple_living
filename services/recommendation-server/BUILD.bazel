@@ -85,7 +85,8 @@ sh_test(
     name = "recommendation_server_contract_smoke_test",
     srcs = ["tests/recommendation_server_contract_smoke_test.sh"],
     data = [
-        "proto/recommendation_server_service.proto",
-        "src/recommendation_server_main.cpp",
+        "api.md",
+        "src/catalog_read_service.cpp",
+        "tests/fixtures/catalog.json",
     ],
 )

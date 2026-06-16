@@ -12,6 +12,7 @@
 
 - `services/proxy/src/frp/frps.toml.example`
 - `services/proxy/src/frp/frpc.toml.example`
+- `services/proxy/src/frp/frpc-desktop.toml.example`（Mac 桌面 VNC 远程，独立于 gateway frpc）
 - `services/proxy/src/nginx/gateway.conf.example`（HTTP，当前联调入口）
 - `services/proxy/src/nginx/gateway.https.conf.example`（HTTPS + HSTS，正式生产入口）
 
@@ -28,7 +29,7 @@
 - **TLS 终止**：在入口终止 HTTPS，向 `gateway` 回源（私网内 HTTP）。
 - **反向代理**：按路径前缀把请求转发到 `gateway`（业务 API）与 `backoffice-web`（后台前端 SPA），见 §6。
 - **基础限流**：入口层粗粒度 `limit_req` 抵御突发与扫描；细粒度/按身份的业务限流由 `gateway` 负责。
-- **入口健康检查**：暴露 `/healthz`，回源到 gateway 健康接口（`../../gateway/api.md` §9.19 `/api/v2/health`，本仓 `/healthz → /api/v2/health/check`）。
+- **入口健康检查**：暴露 `/healthz`，回源到 gateway 健康接口 `GET /api/v2/health`（见 `../../gateway/api.md` §9.19）。
 - **公网隧道（FRP）**：在无公网 IP/域名时，`frpc` 建立到入口机 `frps` 的隧道，公网链路为 `frps → frpc → nginx → gateway`。
 
 ### 本服务不负责（指向正确归属）
@@ -280,7 +281,7 @@ curl -v http://127.0.0.1/healthz
 
 ```bash
 sudo ss -lntp | rg ':(7000|80)\b'
-curl -v http://8.152.103.12/healthz
+curl -vk https://shaotang.top/healthz
 ```
 
 ### 4.3 链路检查建议
@@ -417,10 +418,61 @@ location /backoffice {
 
 ---
 
-## 8. 变更记录
+## 8. Mac 桌面远程（VNC via frp）
 
-契约/行为变更靠 Git 历史与 PR 说明追溯（破坏性变更须在 PR 中显式标注并列出受影响方）。
+在 gateway/nginx 的 HTTP 隧道之外，可在 **Mac 宿主机** 单独运行一条 **TCP frpc**，把本机屏幕共享（VNC）映射到远端 frps 的独立端口。与容器内 gateway frpc **并行**，共用同一 `frps` 与 `auth.token`，但 `user` 与 proxy 名称须不同（默认 `mac-desktop` / `desktop-vnc`）。
 
-| 日期 | 变更 | 影响方 |
-|------|------|--------|
-| 2026-06-04 | 补齐上线级文档：新增「职责与边界、SLO、配置项表、可观测性与指标、安全基线」章节；Nginx 示例新增 `ingress` 访问日志格式、`limit_req` 入口限流，HTTPS 示例补 `ssl_ciphers`；新增 `deploy/rollback.sh` 与证书续期/故障排查 runbook。 | 运维（部署/回滚/排查流程更新）；无对外 JSON 契约变更 |
+### 8.1 前置条件
+
+1. **Mac 屏幕共享**：系统设置 → 通用 → 共享 → 开启「屏幕共享」，设置**强密码**（VNC 明文传输，密码是唯一应用层防护）。
+2. **远端 frps**：与 gateway 相同（`7000` 控制面已放行）；额外在 VPS 防火墙/安全组放行 **`FRP_DESKTOP_VNC_REMOTE_PORT`**（默认 **`15900`**）。
+3. **本机 frpc**：`brew install frp`（或已有 `frpc` 在 `PATH`）。
+
+### 8.2 启动与停止
+
+```bash
+# token 仅通过环境变量传入，禁止写入 nodes.env / 仓库
+FRP_AUTH_TOKEN=your_token \
+FRP_SERVER_ADDR=8.152.103.12 \
+bash services/proxy/deploy/start_desktop_frpc.sh
+
+bash services/proxy/deploy/verify_desktop_vnc.sh
+bash services/proxy/deploy/stop_desktop_frpc.sh
+```
+
+### 8.3 远程连接
+
+在任意 VNC 客户端连接：
+
+```text
+<frps 公网 IP>:15900
+```
+
+示例（macOS 自带「屏幕共享」）：
+
+```bash
+open vnc://8.152.103.12:15900
+```
+
+输入 Mac 屏幕共享密码即可控制桌面。
+
+### 8.4 环境变量
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `FRP_SERVER_ADDR` | 空 | 远端 frps 公网 IP（可与 gateway 共用） |
+| `FRP_SERVER_PORT` | `7000` | frps 控制端口 |
+| `FRP_AUTH_TOKEN` | 空 | 与 frps `auth.token` 一致，**仅环境变量注入** |
+| `FRP_DESKTOP_USER` | `mac-desktop` | frpc 身份，避免与 `phase1-local-gateway` 冲突 |
+| `FRP_DESKTOP_VNC_LOCAL_PORT` | `5900` | 本机屏幕共享端口 |
+| `FRP_DESKTOP_VNC_REMOTE_PORT` | `15900` | frps 公网暴露的 VNC 端口 |
+| `FRP_DESKTOP_RUNTIME_DIR` | `$XDG_RUNTIME_DIR/simple-living-frpc-desktop` | 运行时配置、日志、pid |
+
+模板：`services/proxy/src/frp/frpc-desktop.toml.example`。部署细节见 `deploy/README.md` §5.4。
+
+### 8.5 安全建议
+
+- 不用时执行 `stop_desktop_frpc.sh` 关闭隧道；VNC 端口不要长期对 `0.0.0.0/0` 开放。
+- 在 VPS 上将 `15900` 限制为可信来源 IP（若可行）。
+- 勿使用弱密码；frp token 只保护隧道建立，**不替代** VNC 认证。
+- 本方案为 **TCP 明文 VNC**；高敏感场景可改用 SSH 本地转发或 VPN，不在本入口层叠加。

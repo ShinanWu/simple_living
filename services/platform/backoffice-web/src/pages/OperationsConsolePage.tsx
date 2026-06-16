@@ -31,7 +31,19 @@ const RESOURCE_KIND_LABELS: Record<ResourceKind, string> = {
 
 function resolveMediaUrl(url: string): string {
   if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+  if (url.startsWith("data:")) return url;
+  if (url.startsWith("/media/backoffice/")) {
+    return `${window.location.origin}${url}`;
+  }
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.pathname.startsWith("/media/backoffice/")) {
+        return `${window.location.origin}${parsed.pathname}`;
+      }
+    } catch {
+      return url;
+    }
     return url;
   }
   if (url.startsWith("/")) {
@@ -157,6 +169,8 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
   const [contentState, setContentState] = useState<LoadState>("loading");
   const [reviewState, setReviewState] = useState<LoadState>("loading");
   const [banner, setBanner] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [contentSaving, setContentSaving] = useState(false);
   const [logs, setLogs] = useState<OperationLogItem[]>([]);
   const [contentView, setContentView] = useState<ContentView>("list");
   const [editingContent, setEditingContent] = useState<BackofficeContentItem | null>(null);
@@ -361,6 +375,7 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
     setContentForm(EMPTY_CONTENT_FORM);
     setCoverUploadError(null);
     setCoverImageError(null);
+    setFormError(null);
     setContentView("create");
   };
 
@@ -411,7 +426,7 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
   const addAffiliateRef = () => {
     setContentForm((prev) => ({
       ...prev,
-      affiliate_refs: [...prev.affiliate_refs, { channel: "PDD", external_item_id: "" }],
+      affiliate_refs: [...prev.affiliate_refs, { channel: "tmall", external_item_id: "" }],
     }));
   };
 
@@ -480,9 +495,12 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
   const handleSaveContent = async (publishNow: boolean) => {
     const validationError = validateContentForm();
     if (validationError) {
+      setFormError(validationError);
       setBanner({ type: "error", text: validationError });
       return;
     }
+    setFormError(null);
+    setContentSaving(true);
 
     const body = {
       resource_kind: contentForm.resource_kind,
@@ -506,35 +524,51 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
       effective_to: contentForm.effective_to || undefined,
     };
 
-    if (editingContent) {
-      const resp = await api.updateBackofficeContent({
-        content_id: editingContent.content_id,
-        revision: editingContent.revision,
-        ...body,
-      });
-      appendLog("content.update", editingContent.content_id, resp, "content_update");
-      if (!resp.success) {
-        setBanner({ type: "error", text: `更新失败：${resp.message}` });
-        return;
+    try {
+      if (editingContent) {
+        const resp = await api.updateBackofficeContent({
+          content_id: editingContent.content_id,
+          revision: editingContent.revision,
+          ...body,
+        });
+        appendLog("content.update", editingContent.content_id, resp, "content_update");
+        if (!resp.success) {
+          setFormError(resp.message || "更新失败");
+          setBanner({ type: "error", text: `更新失败：${resp.message}` });
+          return;
+        }
+        if (publishNow) {
+          await handlePublish(editingContent.content_id, editingContent.revision + 1);
+        }
+        setBanner({ type: "success", text: publishNow ? "内容已更新并发布" : "内容已更新" });
+      } else {
+        // New content always starts as draft: publishing requires review approval
+        // first (gateway state machine rejects creating directly as published).
+        const resp = await api.postBackofficeContentItem({
+          ...body,
+          initial_status: "draft",
+        });
+        appendLog("content.create", contentForm.title.trim(), resp, "content_create");
+        if (!resp.success) {
+          setFormError(resp.message || "创建失败");
+          setBanner({ type: "error", text: `创建失败：${resp.message}` });
+          return;
+        }
+        setBanner({
+          type: "success",
+          text: publishNow
+            ? "内容已创建为草稿，请在列表中提交审核并审核通过后再发布。"
+            : "内容已创建",
+        });
       }
-      if (publishNow) {
-        await handlePublish(editingContent.content_id, editingContent.revision + 1);
-      }
-      setBanner({ type: "success", text: publishNow ? "内容已更新并发布" : "内容已更新" });
-    } else {
-      const resp = await api.postBackofficeContentItem({
-        ...body,
-        initial_status: publishNow ? "published" : "draft",
-      });
-      appendLog("content.create", contentForm.title.trim(), resp, "content_create");
-      if (!resp.success) {
-        setBanner({ type: "error", text: `创建失败：${resp.message}` });
-        return;
-      }
-      setBanner({ type: "success", text: publishNow ? "内容已创建并发布" : "内容已创建" });
+      setFilterContentStatus("all");
+      setFilterTheme("all");
+      setFilterResourceKind("all");
+      closeContentForm();
+      await loadContents();
+    } finally {
+      setContentSaving(false);
     }
-    closeContentForm();
-    await loadContents();
   };
 
   const handleSaveContentForRevision = async (submitForReview: boolean) => {
@@ -1067,15 +1101,19 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                         ))}
                       </div>
                     </label>
-                    <label className="form-field full-width">
-                      封面图
+                    <div className="form-field full-width">
+                      <span>封面图</span>
                       <div className="cover-uploader">
                         <input
                           ref={coverFileRef}
                           type="file"
                           accept="image/*"
                           className="cover-file-input"
-                          onChange={(e) => handleCoverFileChange(e.target.files)}
+                          aria-label="上传封面图"
+                          onChange={(e) => {
+                            void handleCoverFileChange(e.target.files);
+                            e.target.value = "";
+                          }}
                         />
                         {(() => {
                           const coverUrl = contentForm.cover_url.trim();
@@ -1158,7 +1196,7 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                           支持本地上传或外部链接；两种方式共用此链接，修改链接会同步更新预览
                         </span>
                       </div>
-                    </label>
+                    </div>
                   </div>
                 </div>
 
@@ -1179,7 +1217,7 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                         <input
                           value={contentForm.external_item_id}
                           onChange={(e) => updateFormField("external_item_id", e.target.value)}
-                          placeholder="可选"
+                          placeholder="建议填写天猫/淘宝商品 id，避免与已有内容冲突"
                         />
                       </label>
                       <div className="form-field full-width">
@@ -1190,10 +1228,11 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                               value={ref.channel}
                               onChange={(e) => updateAffiliateRef(index, "channel", e.target.value)}
                             >
+                              <option value="tmall">天猫</option>
+                              <option value="TAOBAO">淘宝</option>
+                              <option value="JD">京东</option>
                               <option value="PDD">拼多多</option>
                               <option value="DOUYIN">抖音</option>
-                              <option value="JD">京东</option>
-                              <option value="TAOBAO">淘宝</option>
                             </select>
                             <input
                               value={ref.external_item_id}
@@ -1326,22 +1365,30 @@ export function OperationsConsolePage({ api, onLogout }: OperationsConsolePagePr
                 </div>
 
                 <div className="form-actions">
-                  <button className="secondary-button" onClick={closeContentForm}>
+                  {formError ? (
+                    <p className="form-inline-error" role="alert">{formError}</p>
+                  ) : null}
+                  <button type="button" className="secondary-button" onClick={closeContentForm} disabled={contentSaving}>
                     取消
                   </button>
                   {contentView === "revision" ? (
                     <>
-                      <button className="secondary-button" onClick={() => void handleSaveContentForRevision(false)}>
+                      <button type="button" className="secondary-button" onClick={() => void handleSaveContentForRevision(false)} disabled={contentSaving}>
                         保存修订
                       </button>
-                      <button className="primary-button" onClick={() => void handleSaveContentForRevision(true)}>
+                      <button type="button" className="primary-button" onClick={() => void handleSaveContentForRevision(true)} disabled={contentSaving}>
                         保存并提交审核
                       </button>
                     </>
                   ) : (
                     <>
-                      <button className="secondary-button" onClick={() => void handleSaveContent(false)}>
-                        {contentView === "create" ? "保存草稿" : "保存修改"}
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => void handleSaveContent(false)}
+                        disabled={contentSaving || coverUploading}
+                      >
+                        {contentSaving ? "保存中…" : contentView === "create" ? "保存草稿" : "保存修改"}
                       </button>
                     </>
                   )}

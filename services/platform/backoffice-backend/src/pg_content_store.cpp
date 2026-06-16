@@ -18,6 +18,16 @@ void ClearRes(PGresult* r) {
     }
 }
 
+// Canonicalizes a theme slug (clothing/food/housing/transport) or theme_id to the
+// stable theme_id (theme_1..theme_4). Unknown values pass through unchanged.
+std::string NormalizeThemeId(const std::string& raw) {
+    if (raw == "clothing" || raw == "theme_1") return "theme_1";
+    if (raw == "food" || raw == "theme_2") return "theme_2";
+    if (raw == "housing" || raw == "theme_3") return "theme_3";
+    if (raw == "transport" || raw == "theme_4") return "theme_4";
+    return raw;
+}
+
 }  // namespace
 
 PgContentStore::~PgContentStore() {
@@ -94,19 +104,10 @@ std::string PgContentStore::FirstThemeId(const GuideCard& card) {
         return "";
     }
     const std::string raw = card.theme_ids(0);
-    if (raw == "clothing" || raw == "theme_1" || raw.empty()) {
+    if (raw.empty()) {
         return "theme_1";
     }
-    if (raw == "food" || raw == "theme_2") {
-        return "theme_2";
-    }
-    if (raw == "housing" || raw == "theme_3") {
-        return "theme_3";
-    }
-    if (raw == "transport" || raw == "theme_4") {
-        return "theme_4";
-    }
-    return raw;
+    return NormalizeThemeId(raw);
 }
 
 std::string PgContentStore::FirstAffiliateChannel(const GuideCard& card) {
@@ -222,21 +223,57 @@ int PgContentStore::CountGuideCardsLocked() {
     return count;
 }
 
+namespace {
+
+bool CoverUrlEmpty(const GuideCard& card) {
+    return !card.has_cover_media() || card.cover_media().url().empty();
+}
+
+bool AffiliateLandingUrlEmpty(const GuideCard& card) {
+    if (card.affiliate_refs_size() == 0) {
+        return true;
+    }
+    const auto& payload = card.affiliate_refs(0).payload();
+    const auto it = payload.find("landing_url");
+    return it == payload.end() || it->second.empty();
+}
+
+// Backfills ONLY the C-end hard requirements (empty cover_media.url / empty
+// affiliate landing_url) on an existing seed card; never overwrites
+// operator-edited content. See backoffice-delivery-spec.md §5.
+void MergeSeedBackfill(const GuideCard& seed, GuideCard* existing) {
+    if (CoverUrlEmpty(*existing) && seed.has_cover_media() && !seed.cover_media().url().empty()) {
+        *existing->mutable_cover_media() = seed.cover_media();
+    }
+    if (AffiliateLandingUrlEmpty(*existing) && seed.affiliate_refs_size() > 0) {
+        existing->clear_affiliate_refs();
+        for (const auto& ref : seed.affiliate_refs()) {
+            *existing->add_affiliate_refs() = ref;
+        }
+    }
+}
+
+}  // namespace
+
 bool PgContentStore::EnsureSeedGuideCards(const std::vector<GuideCard>& seeds) {
     std::lock_guard<std::mutex> lock(mu_);
     if (!conn_) {
         return false;
     }
-    const int count = CountGuideCardsLocked();
-    if (count < 0) {
-        return false;
-    }
-    if (count > 0) {
-        return true;
-    }
     for (const auto& seed : seeds) {
-        if (!UpsertGuideCardLocked(seed)) {
-            return false;
+        GuideCard existing;
+        if (!LoadGuideCardLocked(seed.card_id(), &existing)) {
+            if (!UpsertGuideCardLocked(seed, /*record_revision_snapshot=*/false)) {
+                return false;
+            }
+            continue;
+        }
+        GuideCard merged = existing;
+        MergeSeedBackfill(seed, &merged);
+        if (merged.SerializeAsString() != existing.SerializeAsString()) {
+            if (!UpsertGuideCardLocked(merged, /*record_revision_snapshot=*/false)) {
+                return false;
+            }
         }
     }
     return true;
@@ -269,17 +306,33 @@ bool PgContentStore::UpsertGuideCardLocked(const GuideCard& card, bool record_re
             return false;
         }
     }
+    GuideCard normalized = card;
+    for (int i = 0; i < normalized.theme_ids_size(); ++i) {
+        normalized.set_theme_ids(i, NormalizeThemeId(normalized.theme_ids(i)));
+    }
     std::string raw;
-    if (!card.SerializeToString(&raw)) {
+    if (!normalized.SerializeToString(&raw)) {
         return false;
     }
     const std::string proto_hex = HexEncode(raw);
-    const std::string summary = FirstSellingPoint(card);
-    const std::string theme_id = FirstThemeId(card);
+    const std::string summary = FirstSellingPoint(normalized);
+    const std::string theme_id = FirstThemeId(normalized);
     const std::string affiliate_channel = FirstAffiliateChannel(card);
     const std::string external_item_id = FirstAffiliateExternalItemId(card);
     const std::string landing_url = FirstAffiliateLandingUrl(card);
     const std::string status = std::to_string(card.content_status());
+    if (!had_existing && !landing_url.empty()) {
+        const char* dup_pv[] = {landing_url.c_str()};
+        PGresult* dup = ExecParams(
+            "SELECT card_id FROM content_guide_card WHERE landing_url = $1 LIMIT 1",
+            1, dup_pv, nullptr, nullptr);
+        if (dup && PQresultStatus(dup) == PGRES_TUPLES_OK && PQntuples(dup) > 0) {
+            ClearRes(dup);
+            LOG(WARNING) << "UpsertGuideCard: landing_url already exists for another card";
+            return false;
+        }
+        ClearRes(dup);
+    }
     const std::string revision = std::to_string(card.revision());
     const std::string published_revision = std::to_string(card.published_revision());
     const std::string commercial = card.commercial_disclosure_required() ? "true" : "false";

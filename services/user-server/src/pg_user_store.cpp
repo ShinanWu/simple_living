@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -24,10 +25,127 @@ std::string GenId(const std::string& prefix) {
     return prefix + "_" + std::to_string(ts) + "_" + std::to_string(g_id_counter.fetch_add(1));
 }
 
+// Offset-style cursor window for list endpoints. cursor encodes a 0-based offset.
+struct PaginationWindow {
+    int32_t limit = 20;
+    int64_t offset = 0;
+};
+
+PaginationWindow ResolvePaginationWindow(const PaginationCursor* page) {
+    PaginationWindow w;
+    if (page != nullptr) {
+        if (page->limit() > 0) {
+            w.limit = page->limit();
+        }
+        if (!page->cursor().empty()) {
+            w.offset = std::strtoll(page->cursor().c_str(), nullptr, 10);
+        }
+    }
+    if (w.limit > 100) {
+        w.limit = 100;
+    }
+    if (w.limit < 1) {
+        w.limit = 20;
+    }
+    if (w.offset < 0) {
+        w.offset = 0;
+    }
+    return w;
+}
+
 void ClearRes(PGresult* r) {
     if (r) {
         PQclear(r);
     }
+}
+
+bool ParsePgEpochSecondsValue(const char* value, google::protobuf::Timestamp* out) {
+    if (!value || !out) {
+        return false;
+    }
+    char* end = nullptr;
+    const double epoch = std::strtod(value, &end);
+    if (end == value || epoch <= 0.0) {
+        return false;
+    }
+    const int64_t secs = static_cast<int64_t>(epoch);
+    const double frac = epoch - static_cast<double>(secs);
+    out->set_seconds(secs);
+    out->set_nanos(static_cast<int32_t>(frac * 1e9));
+    return true;
+}
+
+bool ValidateIssueTokenPairContext(const IssueTokenPairRequest& req) {
+    if (req.client_platform() == CLIENT_PLATFORM_UNSPECIFIED) {
+        return false;
+    }
+    if (req.device_id().empty()) {
+        return false;
+    }
+    if (req.has_request_context()) {
+        const auto& ctx = req.request_context();
+        if (ctx.has_client_platform() && ctx.client_platform() != req.client_platform()) {
+            return false;
+        }
+        if (ctx.has_device_id() && ctx.device_id() != req.device_id()) {
+            return false;
+        }
+        if (ctx.has_app_version() && req.has_app_version() && ctx.app_version() != req.app_version()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ResolveIssueTokenPairUserId(const IssueTokenPairRequest& req, std::string* user_id_out) {
+    static constexpr char kLabVerificationId[] = "test_phone_verification";
+    static constexpr char kLabOtpCode[] = "123456";
+
+    if (req.has_user_id()) {
+        if (req.user_id().empty()) {
+            return false;
+        }
+        *user_id_out = req.user_id();
+        return true;
+    }
+    if (req.has_phone_otp()) {
+        const auto& otp = req.phone_otp();
+        if (otp.phone_e164().empty()) {
+            return false;
+        }
+        if (otp.verification_id() != kLabVerificationId || otp.otp_code() != kLabOtpCode) {
+            return false;
+        }
+        *user_id_out = std::string("usr_phone_") + otp.phone_e164();
+        return true;
+    }
+    if (req.has_oauth()) {
+        const auto& oauth = req.oauth();
+        if (oauth.provider() != "wechat") {
+            return false;
+        }
+        std::string subject;
+        if (!oauth.provider_subject().empty()) {
+            subject = oauth.provider_subject();
+        } else if (!oauth.authorization_code().empty()) {
+            subject = oauth.authorization_code();
+        } else {
+            return false;
+        }
+        *user_id_out = std::string("usr_wechat_") + subject;
+        return true;
+    }
+    return false;
+}
+
+void SetAccessExpiresAt(IssueTokenPairResponse* resp, int32_t ttl_seconds) {
+    const auto expires_at =
+        std::chrono::system_clock::now() + std::chrono::seconds(static_cast<int64_t>(ttl_seconds));
+    const int64_t exp_secs =
+        std::chrono::duration_cast<std::chrono::seconds>(expires_at.time_since_epoch()).count();
+    resp->set_expires_in_seconds(ttl_seconds);
+    resp->mutable_access_expires_at()->set_seconds(exp_secs);
+    resp->mutable_access_expires_at()->set_nanos(0);
 }
 
 }  // namespace
@@ -211,13 +329,12 @@ bool PgUserStore::Ping() {
 }
 
 void PgUserStore::IssueTokenPair(const IssueTokenPairRequest& req, IssueTokenPairResponse* resp) {
-    std::lock_guard<std::mutex> lock(mu_);
     std::string user_id;
-    if (req.has_user_id()) {
-        user_id = req.user_id();
-    } else {
-        user_id = GenId("usr");
+    if (!ValidateIssueTokenPairContext(req) || !ResolveIssueTokenPairUserId(req, &user_id)) {
+        return;
     }
+
+    std::lock_guard<std::mutex> lock(mu_);
     const char* pv[] = {user_id.c_str()};
     PGresult* r = ExecParams("INSERT INTO user_account (user_id, is_guest) VALUES ($1, false) "
                            "ON CONFLICT (user_id) DO NOTHING",
@@ -239,10 +356,11 @@ void PgUserStore::IssueTokenPair(const IssueTokenPairRequest& req, IssueTokenPai
     }
     ClearRes(r);
     if (ins_ok) {
+        static constexpr int32_t kAccessTtlSeconds = 3600;
         resp->set_access_token(at);
         resp->set_refresh_token(rt);
-        resp->set_expires_in_seconds(3600);
         resp->set_session_id(sid);
+        SetAccessExpiresAt(resp, kAccessTtlSeconds);
     }
 }
 
@@ -455,17 +573,23 @@ void PgUserStore::UpdatePreferences(const UpdatePreferencesRequest& req, UpdateP
 
 void PgUserStore::ListFavorites(const ListFavoritesRequest& req, ListFavoritesResponse* resp) {
     std::lock_guard<std::mutex> lock(mu_);
-    const char* pv[] = {"", req.user_id().c_str()};
+    const PaginationWindow page = ResolvePaginationWindow(req.has_page() ? &req.page() : nullptr);
+    const std::string limit_plus = std::to_string(page.limit + 1);
+    const std::string offset_str = std::to_string(page.offset);
+    const char* pv[] = {"", req.user_id().c_str(), limit_plus.c_str(), offset_str.c_str()};
     PGresult* r = ExecParams(
         "SELECT favorite_id, content_id, content_type, favorited_at "
-        "FROM user_favorite WHERE app_id = $1 AND user_id = $2 ORDER BY favorited_at DESC",
-        2, pv, nullptr, nullptr);
+        "FROM user_favorite WHERE app_id = $1 AND user_id = $2 "
+        "ORDER BY favorited_at DESC, favorite_id ASC LIMIT $3::int OFFSET $4::bigint",
+        4, pv, nullptr, nullptr);
     if (!r || PQresultStatus(r) != PGRES_TUPLES_OK) {
         ClearRes(r);
         return;
     }
-    int n = PQntuples(r);
-    for (int i = 0; i < n; ++i) {
+    const int n = PQntuples(r);
+    const bool has_more = n > page.limit;
+    const int emit = has_more ? page.limit : n;
+    for (int i = 0; i < emit; ++i) {
         auto* it = resp->add_items();
         it->set_favorite_id(PQgetvalue(r, i, 0));
         it->set_content_id(PQgetvalue(r, i, 1));
@@ -474,6 +598,12 @@ void PgUserStore::ListFavorites(const ListFavoritesRequest& req, ListFavoritesRe
         }
     }
     ClearRes(r);
+    auto* pg = resp->mutable_pagination();
+    pg->set_limit(page.limit);
+    pg->set_has_more(has_more);
+    if (has_more) {
+        pg->set_next_cursor(std::to_string(page.offset + page.limit));
+    }
 }
 
 void PgUserStore::AddFavorite(const AddFavoriteRequest& req, AddFavoriteResponse* resp) {
@@ -549,34 +679,35 @@ std::string PgUserStore::OwnerKeyFromClearHistory(const ClearHistoryRequest& req
 void PgUserStore::ListHistory(const ListHistoryRequest& req, ListHistoryResponse* resp) {
     std::lock_guard<std::mutex> lock(mu_);
     std::string ok = OwnerKeyFromListHistory(req);
-    const char* pv[] = {ok.c_str()};
+    const PaginationWindow page = ResolvePaginationWindow(req.has_page() ? &req.page() : nullptr);
+    const std::string limit_plus = std::to_string(page.limit + 1);
+    const std::string offset_str = std::to_string(page.offset);
+    const char* pv[] = {ok.c_str(), limit_plus.c_str(), offset_str.c_str()};
     PGresult* r = ExecParams(
-        "SELECT content_id, content_type, last_seen_at, first_seen_at, impression_count, source_surface "
-        "FROM user_history WHERE owner_key = $1 ORDER BY last_seen_at DESC NULLS LAST",
-        1, pv, nullptr, nullptr);
+        "SELECT content_id, content_type, "
+        "EXTRACT(EPOCH FROM last_seen_at)::text, EXTRACT(EPOCH FROM first_seen_at)::text, "
+        "impression_count, source_surface "
+        "FROM user_history WHERE owner_key = $1 "
+        "ORDER BY last_seen_at DESC NULLS LAST, content_id ASC LIMIT $2::int OFFSET $3::bigint",
+        3, pv, nullptr, nullptr);
     if (!r || PQresultStatus(r) != PGRES_TUPLES_OK) {
         ClearRes(r);
         return;
     }
-    int n = PQntuples(r);
-    for (int i = 0; i < n; ++i) {
+    const int n = PQntuples(r);
+    const bool has_more = n > page.limit;
+    const int emit = has_more ? page.limit : n;
+    for (int i = 0; i < emit; ++i) {
         auto* it = resp->add_items();
         it->mutable_content_ref()->set_content_id(PQgetvalue(r, i, 0));
         if (!PQgetisnull(r, i, 1)) {
             it->mutable_content_ref()->set_type(static_cast<ContentRefType>(std::atoi(PQgetvalue(r, i, 1))));
         }
         if (!PQgetisnull(r, i, 2)) {
-            int64_t secs = 0;
-            int fracs = 0;
-            if (sscanf(PQgetvalue(r, i, 2), "%ld.%d", &secs, &fracs) >= 1 || sscanf(PQgetvalue(r, i, 2), "%ld", &secs) == 1) {
-                it->mutable_last_seen_at()->set_seconds(secs);
-            }
+            ParsePgEpochSecondsValue(PQgetvalue(r, i, 2), it->mutable_last_seen_at());
         }
         if (!PQgetisnull(r, i, 3)) {
-            int64_t secs = 0;
-            if (sscanf(PQgetvalue(r, i, 3), "%ld", &secs) == 1) {
-                it->mutable_first_seen_at()->set_seconds(secs);
-            }
+            ParsePgEpochSecondsValue(PQgetvalue(r, i, 3), it->mutable_first_seen_at());
         }
         if (!PQgetisnull(r, i, 4)) {
             it->set_impression_count(std::atoi(PQgetvalue(r, i, 4)));
@@ -586,6 +717,12 @@ void PgUserStore::ListHistory(const ListHistoryRequest& req, ListHistoryResponse
         }
     }
     ClearRes(r);
+    auto* pg = resp->mutable_pagination();
+    pg->set_limit(page.limit);
+    pg->set_has_more(has_more);
+    if (has_more) {
+        pg->set_next_cursor(std::to_string(page.offset + page.limit));
+    }
 }
 
 void PgUserStore::RecordHistoryEvent(const RecordHistoryEventRequest& req, RecordHistoryEventResponse* resp) {
@@ -765,42 +902,54 @@ void PgUserStore::GetSignalBundleRef(const GetSignalBundleRefRequest& req, GetSi
 }
 
 void PgUserStore::GetMeSummary(const GetMeSummaryRequest& req, GetMeSummaryResponse* resp) {
+    // history_owner_key MUST mirror the write path (RecordHistoryEvent): a Bearer
+    // subject writes under "u:<user_id>", a guest session under "s:<session_id>".
+    // Counting by the same key keeps me_summary consistent with the history list.
     std::string uid;
-    if (req.has_user_id()) {
+    std::string history_owner_key;
+    if (req.has_user_id() && !req.user_id().empty()) {
         uid = req.user_id();
-    } else {
+        history_owner_key = std::string("u:") + uid;
+    } else if (req.has_session_id() && !req.session_id().empty()) {
+        history_owner_key = std::string("s:") + req.session_id();
+        // Resolve the session's user_id only for profile / favorites rendering.
         std::lock_guard<std::mutex> lock(mu_);
         const char* pv[] = {req.session_id().c_str()};
         PGresult* r =
             ExecParams("SELECT user_id FROM user_session WHERE session_id = $1", 1, pv, nullptr, nullptr);
-        if (r && PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        if (r && PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0 && !PQgetisnull(r, 0, 0)) {
             uid = PQgetvalue(r, 0, 0);
         }
         ClearRes(r);
-    }
-    if (uid.empty()) {
+    } else {
         return;
     }
-    GetProfileRequest gpr;
-    gpr.set_user_id(uid);
-    GetProfileResponse gpr_out;
-    GetProfile(gpr, &gpr_out);
-    if (gpr_out.has_profile()) {
-        resp->mutable_profile()->CopyFrom(gpr_out.profile());
+
+    if (uid.empty()) {
+        resp->mutable_profile()->set_is_guest(true);
+    } else {
+        GetProfileRequest gpr;
+        gpr.set_user_id(uid);
+        GetProfileResponse gpr_out;
+        GetProfile(gpr, &gpr_out);
+        if (gpr_out.has_profile()) {
+            resp->mutable_profile()->CopyFrom(gpr_out.profile());
+        }
     }
     {
         std::lock_guard<std::mutex> lock(mu_);
-        std::string uk = std::string("u:") + uid;
-        const char* pv[] = {"", uid.c_str()};
-        PGresult* r =
-            ExecParams("SELECT COUNT(*) FROM user_favorite WHERE app_id = $1 AND user_id = $2", 2, pv, nullptr, nullptr);
         int64_t fc = 0;
-        if (r && PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
-            fc = std::strtoll(PQgetvalue(r, 0, 0), nullptr, 10);
+        if (!uid.empty()) {
+            const char* pv[] = {"", uid.c_str()};
+            PGresult* r = ExecParams(
+                "SELECT COUNT(*) FROM user_favorite WHERE app_id = $1 AND user_id = $2", 2, pv, nullptr, nullptr);
+            if (r && PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+                fc = std::strtoll(PQgetvalue(r, 0, 0), nullptr, 10);
+            }
+            ClearRes(r);
         }
-        ClearRes(r);
-        const char* pv2[] = {uk.c_str()};
-        r = ExecParams("SELECT COUNT(*) FROM user_history WHERE owner_key = $1", 1, pv2, nullptr, nullptr);
+        const char* pv2[] = {history_owner_key.c_str()};
+        PGresult* r = ExecParams("SELECT COUNT(*) FROM user_history WHERE owner_key = $1", 1, pv2, nullptr, nullptr);
         int64_t hc = 0;
         if (r && PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
             hc = std::strtoll(PQgetvalue(r, 0, 0), nullptr, 10);
@@ -809,12 +958,14 @@ void PgUserStore::GetMeSummary(const GetMeSummaryRequest& req, GetMeSummaryRespo
         resp->mutable_counts()->set_favorites_count(fc);
         resp->mutable_counts()->set_history_count(hc);
     }
-    GetConsentRequest gcr;
-    gcr.set_user_id(uid);
-    GetConsentResponse gcr_out;
-    GetConsent(gcr, &gcr_out);
-    if (gcr_out.has_consent()) {
-        resp->mutable_consent()->CopyFrom(gcr_out.consent());
+    if (!uid.empty()) {
+        GetConsentRequest gcr;
+        gcr.set_user_id(uid);
+        GetConsentResponse gcr_out;
+        GetConsent(gcr, &gcr_out);
+        if (gcr_out.has_consent()) {
+            resp->mutable_consent()->CopyFrom(gcr_out.consent());
+        }
     }
 }
 

@@ -7,7 +7,7 @@ COPY services/proxy/src/nginx/gateway.https-lab.conf.example /etc/nginx/http.d/h
 COPY services/proxy/deploy/start_proxy.sh /usr/local/bin/start_proxy.sh
 
 RUN chmod +x /usr/local/bin/start_proxy.sh \
-    && mkdir -p /var/log/frp /run/nginx
+    && mkdir -p /var/log/frp /run/nginx /var/www/certbot /etc/nginx/certs
 
 EXPOSE 80 443 7000 10080
 

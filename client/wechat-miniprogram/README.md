@@ -11,7 +11,7 @@
 | 页面 | 路径 | 说明 |
 |------|------|------|
 | 首页 | `pages/home/home` | 四主题 Tab、单卡推荐、手势切换 |
-| 导购详情 | `pages/guide-detail/guide-detail` | 图集、摘要、收藏、去购买 |
+| 导购详情 | `pages/guide-detail/guide-detail` | 图集、摘要、收藏、购买 |
 | 跳转准备 | `pages/redirect-prepare/redirect-prepare` | `redirect_prepare`、复制/外链打开 |
 | 我的 | `pages/me/me` | `me_summary`、登录/退出、入口 |
 | 登录 | `pages/login/login` | 微信一键登录、手机号 OTP |
@@ -21,10 +21,10 @@
 
 ## 3. Gateway 与运行模式
 
-- 仅调用 `gateway` HTTPS JSON；字段 `snake_case`。
-- **默认真实链路**：启动时写入 `gateway_base_url`（默认见 `config/env.ts`，与 `environments/local-qemu/nodes.example.env` 的 `FRP_CUSTOM_DOMAIN` 对齐），即公网 **frp → nginx → gateway**。
+- 仅调用 `gateway` JSON；字段 `snake_case`。
+- **默认公网入口**：`https://shaotang.top`（见 `config/env.ts`），链路 **frps → frpc → nginx → gateway**。
 - **本机 QEMU 转发**：仅调试时可覆盖为 `http://127.0.0.1:8080`（`nginx` 来宾上的 `gateway`）。
-- **覆盖地址**：`wx.setStorageSync('gateway_base_url', 'http://你的公网入口')`。现阶段验收不得使用 Mock 或 Mac 本机替身。
+- **覆盖地址**：`wx.setStorageSync('gateway_base_url', 'https://shaotang.top')`。真机须在微信公众平台配置 **request 合法域名** `shaotang.top`。
 
 鉴权与存储：
 
@@ -49,7 +49,7 @@
 3. AppID：测试号或自有小程序 AppID（`project.config.json` 中 `appid`）
 4. 编译：工具内勾选「使用 TypeScript」；或使用 `npm run typecheck`
 
-若导航栏仍显示旧名「简单生活」：菜单 **工具 → 清除缓存 → 清除全部** 后点 **编译**；代码已在 `app.onLaunch` 中调用 `wx.setNavigationBarTitle('少糖')` 覆盖。真机顶部若仍不对，需在 [微信公众平台](https://mp.weixin.qq.com/) 修改小程序**正式名称**（与 `navigationBarTitleText` 无关）。
+导航栏标题为「少糖」（`app.onLaunch` 调用 `wx.setNavigationBarTitle('少糖')`）。真机顶部名称以 [微信公众平台](https://mp.weixin.qq.com/) 配置的小程序**正式名称**为准（与 `navigationBarTitleText` 无关）。
 
 ### 5.1 自测（无需开发者工具）
 
@@ -69,13 +69,17 @@ cp environments/local-qemu/nodes.example.env environments/local-qemu/nodes.env
 bash services/proxy/deploy/verify_proxy.sh
 ```
 
-开发者工具：**详情 → 本地设置 → 不校验合法域名**。公网入口见 `nodes.example.env`；切换环境时覆盖本地 `gateway_base_url` 存储。
+开发者工具：**详情 → 本地设置 → 不校验合法域名**（仅本地调试；真机预览/体验版须配好合法域名与 HTTPS）。公网域名见 `nodes.example.env` 的 `FRP_CUSTOM_DOMAIN`。
+
+### 5.3 真机预览
+
+开发者工具可勾选「不校验合法域名」；**扫码预览的真机会校验**。图片慢多为蜂窝网延迟，可在公众平台配置 request / download 合法域名，或预览时打开手机端「开发调试」。
 
 发布/再发一条导购按各服务 `deploy/README` 与 [services/README.md](../../services/README.md) 部署。
 
 ## 6. 后端接口需求
 
-小程序按 `services/gateway/api.md` 消费接口。与公网联调发现的缺口（须 gateway / 运营数据配合）见 **[gateway-backend-requirements.md](./gateway-backend-requirements.md)**，交后端 Agent 实现。
+小程序按 `services/gateway/api.md`（v2 REST 唯一对外契约）消费接口。公网回归基线：`BASE_URL=https://shaotang.top python3 client/tests/gateway_live_smoke.py`。
 
 ## 7. 相关文档
 

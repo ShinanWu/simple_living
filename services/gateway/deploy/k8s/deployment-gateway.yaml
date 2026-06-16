@@ -29,16 +29,14 @@ spec:
             - secretRef:
                 name: app-secrets
           readinessProbe:
-            # Placeholder probe path/port. Align with real gateway health endpoint.
             httpGet:
-              path: /healthz
+              path: /api/v2/health
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            # Placeholder probe path/port. Align with real gateway health endpoint.
             httpGet:
-              path: /livez
+              path: /api/v2/health
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20

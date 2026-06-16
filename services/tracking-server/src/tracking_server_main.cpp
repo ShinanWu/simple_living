@@ -1,6 +1,7 @@
 // tracking-server brpc server — clicks/attribution in MySQL/PostgreSQL + Redis; async via Kafka per services/README.md.
 #include <gflags/gflags.h>
 #include <brpc/server.h>
+#include <brpc/errno.pb.h>
 #include <butil/logging.h>
 
 #include <atomic>
@@ -53,31 +54,36 @@ public:
     TrackingLinkServiceImpl(PgTrackingStore* store, LinkSnapshotReader* snapshot)
         : store_(store), snapshot_(snapshot) {}
 
-    void AssembleTrackingLink(::google::protobuf::RpcController*,
+    void AssembleTrackingLink(::google::protobuf::RpcController* controller,
                               const AssembleTrackingLinkRequest* req,
                               AssembleTrackingLinkResponse* resp,
                               ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
+        auto* cntl = static_cast<brpc::Controller*>(controller);
         LinkRecord lr;
         lr.link_ref = GenId("lr");
         lr.short_token = GenShortToken();
         lr.guide_card_id = req->has_content_ref() ? req->content_ref().guide_card_id() : "";
         lr.scene = req->has_content_ref() ? req->content_ref().scene() : "";
         lr.placement = req->placement();
+        std::string candidate;
         if (!req->landing_url().empty()) {
-            lr.landing_url = req->landing_url();
+            candidate = req->landing_url();
         } else if (snapshot_) {
             snapshot_->ReloadIfChanged();
-            const std::string landing_url = snapshot_->LandingUrlForCard(lr.guide_card_id);
-            if (!landing_url.empty()) {
-                lr.landing_url = landing_url;
-            } else {
-                lr.landing_url = "https://go.shaotang.com/r/" + lr.short_token;
-            }
+            candidate = snapshot_->LandingUrlForCard(lr.guide_card_id);
+        }
+        // Only emit HTTPS landing URLs (contract §3.4); otherwise use the controlled
+        // redirect host, which resolves the real destination server-side.
+        if (!candidate.empty() && candidate.rfind("https://", 0) == 0) {
+            lr.landing_url = candidate;
         } else {
             lr.landing_url = "https://go.shaotang.com/r/" + lr.short_token;
         }
         if (!store_->InsertLink(lr)) {
+            // Precondition failure: link assembled but could not be persisted.
+            // Fail explicitly (never OK with empty/partial body); gateway maps to 50002.
+            cntl->SetFailed(brpc::EINTERNAL, "InsertLink failed: unable to persist tracking link (precondition)");
             return;
         }
         resp->set_landing_url(lr.landing_url);

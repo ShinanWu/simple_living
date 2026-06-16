@@ -101,7 +101,36 @@ std::string SanitizeIdPart(const std::string& raw) {
             out.push_back('_');
         }
     }
-    return out.empty() ? "item" : out;
+    if (out.empty()) {
+        return "item";
+    }
+    constexpr size_t kMaxLen = 80;
+    if (out.size() > kMaxLen) {
+        out.resize(kMaxLen);
+    }
+    return out;
+}
+
+std::string ResolveExternalItemId(const std::string& external_item_id, const std::string& landing_url) {
+    if (!external_item_id.empty()) {
+        return SanitizeIdPart(external_item_id);
+    }
+    const auto id_pos = landing_url.find("id=");
+    if (id_pos != std::string::npos) {
+        std::string digits;
+        for (size_t i = id_pos + 3; i < landing_url.size(); ++i) {
+            const char c = landing_url[i];
+            if (std::isdigit(static_cast<unsigned char>(c))) {
+                digits.push_back(c);
+            } else if (!digits.empty()) {
+                break;
+            }
+        }
+        if (!digits.empty()) {
+            return SanitizeIdPart(digits);
+        }
+    }
+    return SanitizeIdPart(landing_url);
 }
 
 std::string StatusFromContentStatus(catalog::ContentLifecycleStatus status) {
@@ -156,13 +185,8 @@ void FillBackofficeContentItem(const catalog::GuideCard& card, BackofficeContent
     out->clear_theme_ids();
     for (const auto& theme_id : card.theme_ids()) {
         out->add_theme_ids(ThemeFromThemeId(theme_id));
-        if (out->theme().empty()) {
-            out->set_theme(ThemeFromThemeId(theme_id));
-        }
     }
-    const std::string status = StatusFromContentStatus(card.content_status());
-    out->set_content_status(status);
-    out->set_status(status);
+    out->set_content_status(StatusFromContentStatus(card.content_status()));
     out->set_revision(card.revision());
     out->set_published_revision(card.published_revision());
     if (!card.selling_points().empty()) {
@@ -197,16 +221,11 @@ void FillBackofficeContentItem(const catalog::GuideCard& card, BackofficeContent
 }
 
 catalog::GuideCard BuildGuideCardFromCreate(const BackofficeCreateContentItemRequest& req) {
-    std::string theme = req.theme();
-    if (theme.empty() && req.theme_ids_size() > 0) {
-        theme = ThemeFromThemeId(req.theme_ids(0));
-    }
+    std::string theme = req.theme_ids_size() > 0 ? ThemeFromThemeId(req.theme_ids(0)) : "clothing";
     if (theme.empty()) {
         theme = "clothing";
     }
-    const std::string external_id = req.external_item_id().empty()
-        ? SanitizeIdPart(req.landing_url())
-        : SanitizeIdPart(req.external_item_id());
+    const std::string external_id = ResolveExternalItemId(req.external_item_id(), req.landing_url());
     const std::string channel = req.affiliate_refs_size() > 0 && !req.affiliate_refs(0).channel().empty()
         ? req.affiliate_refs(0).channel()
         : "tmall";
@@ -235,9 +254,7 @@ catalog::GuideCard BuildGuideCardFromCreate(const BackofficeCreateContentItemReq
         card.add_theme_ids(ThemeIdFromTheme(theme));
     }
     card.set_commercial_disclosure_required(req.commercial_disclosure_required());
-    const std::string initial = !req.initial_status().empty()
-        ? req.initial_status()
-        : (!req.status().empty() ? req.status() : "draft");
+    const std::string initial = !req.initial_status().empty() ? req.initial_status() : "draft";
     card.set_content_status(ContentStatusFromString(initial));
     card.set_revision(1);
     card.set_published_revision(initial == "published" ? 1 : 0);
@@ -285,19 +302,12 @@ void ApplyContentUpdate(const BackofficeUpdateContentItemRequest& req, catalog::
         card->mutable_cover_media()->set_url(
             backoffice_media::NormalizeMediaUrlForStore(req.cover_media().url()));
         card->mutable_cover_media()->set_type(catalog::MEDIA_TYPE_IMAGE);
-    } else if (req.has_cover_url() && !req.cover_url().empty()) {
-        card->mutable_cover_media()->set_url(
-            backoffice_media::NormalizeMediaUrlForStore(req.cover_url()));
-        card->mutable_cover_media()->set_type(catalog::MEDIA_TYPE_IMAGE);
     }
     if (req.theme_ids_size() > 0) {
         card->clear_theme_ids();
         for (const auto& theme_id : req.theme_ids()) {
             card->add_theme_ids(CanonicalThemeId(theme_id));
         }
-    } else if (req.has_theme()) {
-        card->clear_theme_ids();
-        card->add_theme_ids(ThemeIdFromTheme(req.theme()));
     }
     if (req.has_commercial_disclosure_required()) {
         card->set_commercial_disclosure_required(req.commercial_disclosure_required());

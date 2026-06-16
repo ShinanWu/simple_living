@@ -58,6 +58,15 @@ bool IsMediaPath(const std::string& url) {
     return url.rfind("/media/backoffice/", 0) == 0;
 }
 
+std::string MediaBackofficePathFromUrl(const std::string& url) {
+    const std::string marker = "/media/backoffice/";
+    const std::size_t pos = url.find(marker);
+    if (pos == std::string::npos) {
+        return "";
+    }
+    return url.substr(pos);
+}
+
 }  // namespace
 
 std::string GenAssetId() {
@@ -185,17 +194,15 @@ bool IsPersistableMediaUrl(const std::string& url) {
 }
 
 std::string NormalizeMediaUrlForClient(const std::string& url) {
-    if (url.empty()) {
+    if (url.empty() || url.rfind("data:", 0) == 0) {
         return url;
     }
+    const std::string media_path = MediaBackofficePathFromUrl(url);
+    if (!media_path.empty() && !MediaPublicBaseUrl().empty()) {
+        // 统一用当前 gateway_backoffice_media_public_base_url，避免历史 nip.io / 域名 URL 失效。
+        return BuildPublicMediaUrlFromPath(media_path);
+    }
     if (url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0) {
-        const std::string base = MediaPublicBaseUrl();
-        if (!base.empty() && base.rfind("https://", 0) == 0 && url.rfind("http://", 0) == 0) {
-            const std::string http_base = std::string("http://") + base.substr(std::strlen("https://"));
-            if (url.rfind(http_base, 0) == 0) {
-                return std::string("https://") + url.substr(std::strlen("http://"));
-            }
-        }
         return url;
     }
     if (IsMediaPath(url)) {

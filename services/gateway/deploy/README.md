@@ -40,7 +40,7 @@ bash services/gateway/deploy/stop_nodes.sh
 ssh -p 2208 ubuntu@127.0.0.1 "curl -fsS http://127.0.0.1:8080/healthz"
 
 # 对外公开健康面（标准信封，经前置 Nginx 时走 HTTPS）
-curl -fsS http://127.0.0.1:8080/api/v2/health/check -H 'Content-Type: application/json' -d '{}'
+curl -fsS http://127.0.0.1:8080/api/v2/health
 ```
 
 `/api/v2/health` 期望返回 `success:true`、`code:0`，`data.components[]` 反映网关与可探活下游状态（见 [api.md](../api.md) §9.19）。

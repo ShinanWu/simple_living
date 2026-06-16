@@ -49,29 +49,34 @@ std::string GenId(const std::string& prefix) {
 }
 }  // namespace
 
+GuideCard BuildGuideCardFromSeed(const dev_seeds::PublishedGuideSeed& seed) {
+    GuideCard card;
+    card.set_card_id(seed.guide_card_id);
+    card.set_type(GUIDE_CARD_TYPE_PHYSICAL_GOOD);
+    card.set_title(seed.title);
+    card.set_subtitle(seed.subtitle);
+    card.add_selling_points(seed.summary);
+    card.set_price_hint(seed.price_hint);
+    card.add_theme_ids(seed.theme_id);
+    card.set_commercial_disclosure_required(true);
+    card.set_content_status(CONTENT_LIFECYCLE_STATUS_PUBLISHED);
+    card.set_published_revision(1);
+    card.set_revision(1);
+    auto* cover = card.mutable_cover_media();
+    cover->set_url(seed.cover_url);
+    cover->set_type(MEDIA_TYPE_IMAGE);
+    auto* aff = card.add_affiliate_refs();
+    aff->set_channel("tmall");
+    aff->set_external_item_id(seed.external_item_id);
+    (*aff->mutable_payload())["landing_url"] = seed.landing_url;
+    return card;
+}
+
 std::vector<GuideCard> BuildSeedGuideCards() {
     std::vector<GuideCard> cards;
-    for (const auto& seed : dev_seeds::kPublishedClothingGuides) {
-        GuideCard tmall;
-        tmall.set_card_id(seed.guide_card_id);
-        tmall.set_type(GUIDE_CARD_TYPE_PHYSICAL_GOOD);
-        tmall.set_title(seed.title);
-        tmall.set_subtitle(seed.subtitle);
-        tmall.add_selling_points(seed.summary);
-        tmall.set_price_hint(seed.price_hint);
-        tmall.add_theme_ids(dev_seeds::kClothingThemeId);
-        tmall.set_commercial_disclosure_required(true);
-        tmall.set_content_status(CONTENT_LIFECYCLE_STATUS_PUBLISHED);
-        tmall.set_published_revision(1);
-        tmall.set_revision(1);
-        auto* cover = tmall.mutable_cover_media();
-        cover->set_url("");
-        cover->set_type(MEDIA_TYPE_IMAGE);
-        auto* aff = tmall.add_affiliate_refs();
-        aff->set_channel("tmall");
-        aff->set_external_item_id(seed.external_item_id);
-        (*aff->mutable_payload())["landing_url"] = seed.landing_url;
-        cards.push_back(tmall);
+    cards.reserve(std::size(dev_seeds::kPublishedGuides));
+    for (const auto& seed : dev_seeds::kPublishedGuides) {
+        cards.push_back(BuildGuideCardFromSeed(seed));
     }
     return cards;
 }
@@ -261,12 +266,16 @@ public:
         }
     }
 
-    void UpsertGuideCard(::google::protobuf::RpcController*,
+    void UpsertGuideCard(::google::protobuf::RpcController* cntl_base,
                          const UpsertGuideCardRequest* req,
                          UpsertGuideCardResponse* resp,
                          ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
-        if (!req->has_guide_card()) return;
+        auto* cntl = static_cast<brpc::Controller*>(cntl_base);
+        if (!req->has_guide_card()) {
+            cntl->SetFailed(brpc::EREQUEST, "guide_card is required");
+            return;
+        }
         GuideCard card = req->guide_card();
         if (card.card_id().empty()) card.set_card_id(GenId("card"));
         int64_t rev = card.revision() + 1;
@@ -274,7 +283,10 @@ public:
         if (card.content_status() == CONTENT_LIFECYCLE_STATUS_UNSPECIFIED) {
             card.set_content_status(CONTENT_LIFECYCLE_STATUS_DRAFT);
         }
-        if (!guide_store_.UpsertGuideCard(&card)) return;
+        if (!guide_store_.UpsertGuideCard(&card)) {
+            cntl->SetFailed(brpc::EREQUEST, "landing_url already exists or failed to persist guide card");
+            return;
+        }
         resp->set_card_id(card.card_id());
         resp->set_revision(rev);
         if (card.content_status() == CONTENT_LIFECYCLE_STATUS_PUBLISHED) {

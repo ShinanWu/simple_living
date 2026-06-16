@@ -10,6 +10,8 @@
 
 跳转链组装、点击去重、redirect 解析、转化 ingest、佣金 dashboard 读模型。
 
+`AssembleTrackingLink` 成功时 **必须** 返回非空 HTTPS `landing_url`（请求 URL → snapshot 卡片 landing → `https://go.shaotang.com/r/{short_token}`）；`InsertLink` 失败时返回 gRPC `FAILED_PRECONDITION`，禁止空响应成功。详见 [api.md §3.1/§3.4](./api.md)。
+
 ## 非职责
 
 伙伴 API 凭据、联盟 URL 语法真相、对外 HTTP/JSON（gateway）、法律结算。

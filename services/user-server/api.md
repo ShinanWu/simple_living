@@ -240,6 +240,19 @@ service UserServerService {
 
 登录 proof 字段缺失或格式非法返回 `INVALID_ARGUMENT`（`10001` / `10002`）；proof 语义无效、已过期或与账号不匹配时，推荐返回 `UNAUTHENTICATED` 并在网关侧映射为 `20006`；设备、环境或风控拒绝时映射为 `20005`。
 
+#### lab 联调凭据
+
+联调环境（非生产）接受以下固定 proof，供 gateway / 小程序端到端验收：
+
+| 分支 | 字段 | 固定值 / 行为 |
+|------|------|---------------|
+| `phone_otp` | `verification_id` | `test_phone_verification` |
+| `phone_otp` | `otp_code` | `123456` |
+| `phone_otp` | `phone_e164` | 任意合法 E.164（如 `+8613800138000`）→ 稳定 `user_id`：`usr_phone_<phone_e164>` |
+| `oauth` | `provider` | `wechat` |
+| `oauth` | `authorization_code` | 非空字符串；与 `provider_subject` 二选一或同时存在时 **`provider_subject` 优先** |
+| `oauth` | `provider_subject` | 若为非空则作为微信主体标识 → `user_id`：`usr_wechat_<provider_subject>`；否则使用 `authorization_code` → `usr_wechat_<authorization_code>` |
+
 | `IssueTokenPairResponse` | 类型 |
 |--------------------------|------|
 | `access_token` | string |
@@ -1045,3 +1058,4 @@ components {
   detail: ""
 }
 ```
+

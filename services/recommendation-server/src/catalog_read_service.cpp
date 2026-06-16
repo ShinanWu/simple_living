@@ -1,6 +1,11 @@
 #include <brpc/server.h>
 #include <butil/logging.h>
 
+#include <cstdint>
+#include <cstdlib>
+#include <string>
+#include <vector>
+
 #include "content_service.pb.h"
 #include "snapshot_store.h"
 
@@ -8,6 +13,15 @@ namespace simple_living {
 namespace recommendation_server {
 
 namespace {
+
+bool CardHasThemeId(const catalog::GuideCard& card, const std::string& theme_id) {
+    for (const auto& tid : card.theme_ids()) {
+        if (tid == theme_id) {
+            return true;
+        }
+    }
+    return false;
+}
 
 void CardToSummary(const catalog::GuideCard& card, catalog::GuideCardSummary* out) {
     out->set_card_id(card.card_id());
@@ -39,11 +53,25 @@ public:
                     ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard g(done);
         store_->ReloadIfChanged();
-        auto* theme = resp->add_themes();
-        theme->set_theme_id("theme_clothing");
-        theme->set_slug("clothing");
-        theme->set_life_theme(catalog::LIFE_THEME_CLOTHING);
-        theme->set_display_name("衣");
+        struct ThemeDef {
+            const char* theme_id;
+            const char* slug;
+            catalog::LifeTheme life_theme;
+            const char* display_name;
+        };
+        static const ThemeDef kThemes[] = {
+            {"theme_1", "clothing", catalog::LIFE_THEME_CLOTHING, "衣"},
+            {"theme_2", "food", catalog::LIFE_THEME_FOOD, "食"},
+            {"theme_3", "housing", catalog::LIFE_THEME_HOUSING, "住"},
+            {"theme_4", "transport", catalog::LIFE_THEME_MOBILITY, "行"},
+        };
+        for (const auto& t : kThemes) {
+            auto* theme = resp->add_themes();
+            theme->set_theme_id(t.theme_id);
+            theme->set_slug(t.slug);
+            theme->set_life_theme(t.life_theme);
+            theme->set_display_name(t.display_name);
+        }
     }
 
     void ListGuideCards(::google::protobuf::RpcController*,
@@ -54,14 +82,43 @@ public:
         store_->ReloadIfChanged();
         std::vector<catalog::GuideCard> cards;
         store_->ListCards(&cards);
-        const int limit = req->has_limit() && req->limit() > 0 ? req->limit() : 50;
-        int count = 0;
+        const bool filter_by_theme = req->has_theme_id() && !req->theme_id().empty();
+        const std::string& theme_filter = req->theme_id();
+        int limit = req->has_limit() && req->limit() > 0 ? req->limit() : 50;
+        if (limit > 100) {
+            limit = 100;
+        }
+        int64_t offset = 0;
+        if (req->has_cursor() && !req->cursor().empty()) {
+            offset = std::strtoll(req->cursor().c_str(), nullptr, 10);
+            if (offset < 0) {
+                offset = 0;
+            }
+        }
+        int64_t matched = 0;
+        int emitted = 0;
+        bool has_more = false;
         for (const auto& card : cards) {
-            if (count >= limit) {
+            if (filter_by_theme && !CardHasThemeId(card, theme_filter)) {
+                continue;
+            }
+            if (matched < offset) {
+                ++matched;
+                continue;
+            }
+            if (emitted >= limit) {
+                has_more = true;
                 break;
             }
             CardToSummary(card, resp->add_cards());
-            ++count;
+            ++emitted;
+            ++matched;
+        }
+        auto* pg = resp->mutable_pagination();
+        pg->set_limit(limit);
+        pg->set_has_more(has_more);
+        if (has_more) {
+            pg->set_next_cursor(std::to_string(offset + emitted));
         }
     }
 

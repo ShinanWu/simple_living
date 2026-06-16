@@ -154,8 +154,14 @@ Connection strings, signing keys and partner secrets come from deploy-time secre
 | `device_context` | `DeviceContext` | no | Client capabilities |
 | `idempotency_key` | `string` | recommended | Per user gesture |
 | `user_id` | `string` | no | If authenticated |
-| `landing_url` | `string` | CMS bridge only | Gateway passes the provider-owned URL read from snapshot while affiliate 模块 URL generation is not stable. Remove this bridge after `affiliate_context_ref` provisioning is fully online. |
+| `landing_url` | `string` | CMS bridge only | Gateway passes the provider-owned URL read from snapshot while affiliate 模块 URL generation is not stable. Remove this bridge after `affiliate_context_ref` provisioning is fully online. When set, it is used as the outbound URL; otherwise tracking resolves from snapshot card landing or the default fallback (§3.4). |
 | `device_id` | `string` | no | Stable device id |
+
+**`landing_url` resolution (assembly time, before persist):**
+
+1. Non-empty request `landing_url` → use as-is.
+2. Else snapshot card `landing_url` for `content_ref.guide_card_id` when present.
+3. Else `https://go.shaotang.com/r/{short_token}` (always non-empty HTTPS).
 
 ### 3.2 `ContentRef`
 
@@ -179,12 +185,21 @@ Connection strings, signing keys and partner secrets come from deploy-time secre
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `landing_url` | `string` | **HTTPS** URL the client opens; maps 1:1 to public JSON |
+| `landing_url` | `string` | **HTTPS** URL the client opens; maps 1:1 to public JSON. **MUST** be non-empty on success (see resolution order §3.1). |
 | `expires_at` | `google.protobuf.Timestamp` | |
 | `redirect_hint` | `RedirectHint` | Optional native / mini-program hints |
 | `attribution_echo` | `AttributionPayload` | Non-sensitive subset for client logging |
 | `link_ref` | `string` | Server-side assembly id |
 | `short_token` | `string` | Public opaque token for `/t/{short_token}` |
+
+**Success invariants**
+
+- OK responses **MUST NOT** return with an empty `landing_url`, `link_ref`, or `short_token`.
+- `landing_url` is always resolved per §3.1 before link persistence; the default fallback `https://go.shaotang.com/r/{short_token}` applies when neither request nor snapshot supplies a URL.
+
+**Persistence failure**
+
+- If link row insert (`InsertLink`) fails after assembly, the RPC **MUST** fail explicitly via `Controller::SetFailed` with a clear precondition message (not OK with partial/empty response). Gateway treats the brpc failure as a downstream error and maps it to public `50002` / link-generation failure per §9.2.
 
 ### 3.5 `RedirectHint`
 

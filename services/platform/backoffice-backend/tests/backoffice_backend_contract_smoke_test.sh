@@ -56,5 +56,31 @@ for token in [
     if token not in content_service_proto:
         raise SystemExit(f"missing token in content_service.proto: {token}")
 
+seeds = Path("services/platform/backoffice-backend/src/dev_content_seeds.h").read_text()
+content_src = Path("services/platform/backoffice-backend/src/content_services.cpp").read_text()
+for theme_id in ("theme_1", "theme_2", "theme_3", "theme_4"):
+    if theme_id not in seeds:
+        raise SystemExit(f"dev_content_seeds.h missing theme seed: {theme_id}")
+for token in ("kPublishedGuides", "BuildGuideCardFromSeed"):
+    if token not in content_src:
+        raise SystemExit(f"content_services missing seed builder token: {token}")
+for prefix in ("guide_clothing_tmall", "guide_food_tmall", "guide_housing_tmall", "guide_transport_tmall"):
+    if prefix not in seeds:
+        raise SystemExit(f"dev_content_seeds.h missing card prefix: {prefix}")
+
+# theme_1 must have >=3 seed cards (delivery-spec §5)
+if seeds.count("kThemeClothing,") < 3:
+    raise SystemExit("dev_content_seeds.h must seed >=3 clothing (theme_1) cards")
+
+store_src = Path("services/platform/backoffice-backend/src/pg_content_store.cpp").read_text()
+# theme_ids must be normalized into the persisted proto, not only the DB column
+if "set_theme_ids(i, NormalizeThemeId" not in store_src:
+    raise SystemExit("UpsertGuideCardLocked must normalize proto theme_ids via NormalizeThemeId")
+# MergeSeedBackfill must only backfill cover + landing (never selling_points/subtitle)
+merge_start = store_src.find("void MergeSeedBackfill(")
+merge_body = store_src[merge_start:store_src.find("\n}\n", merge_start)]
+if "add_selling_points" in merge_body or "set_subtitle" in merge_body:
+    raise SystemExit("MergeSeedBackfill must not backfill selling_points/subtitle (delivery-spec §5)")
+
 print("backoffice-backend contract smoke ok")
 PY

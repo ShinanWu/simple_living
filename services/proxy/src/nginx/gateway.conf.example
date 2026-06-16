@@ -20,8 +20,16 @@ server {
     listen 80 default_server;
     server_name _;
 
+    client_max_body_size 8m;
+
     access_log /var/log/nginx/access.log ingress;
     error_log  /var/log/nginx/error.log warn;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+        allow all;
+    }
 
     location /api/ {
         limit_req zone=ingress_req burst=40 nodelay;
@@ -48,7 +56,7 @@ server {
     # Health check is never rate-limited so monitoring stays reliable.
     location /healthz {
         access_log off;
-        proxy_pass http://simple_living_gateway/api/v2/health/check;
+        proxy_pass http://simple_living_gateway/api/v2/health;
     }
 
     location = /backoffice {

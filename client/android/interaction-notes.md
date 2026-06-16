@@ -17,7 +17,7 @@
 - 手机号流程：输入手机号 -> 发送验证码 -> 输入验证码 -> 登录成功回跳
 - token 过期处理：`20002` 自动 refresh 一次，`20003` 回退访客态并引导登录
 
-## Gateway 实现（2026-05-28 补全）
+## Gateway 实现
 
 - `HttpGatewayApi`：真实 HTTPS + JSON 网关客户端，对齐微信小程序 `HttpGatewayAPI`
 - `FakeGatewayRepository`：仅用于测试夹具，响应模型已补全

@@ -23,7 +23,24 @@ message GuestSessionHttpRequest {
 }
 
 message AccountProofHttp {
-  optional string user_id = 1;
+  // Field 1 (user_id) is reserved: user_id-based issuance is internal-only
+  // (trusted refresh path), never accepted from public clients.
+  reserved 1;
+  reserved "user_id";
+  optional AccountProofPhoneOtpHttp phone_otp = 2;
+  optional AccountProofOAuthHttp oauth = 3;
+}
+
+message AccountProofPhoneOtpHttp {
+  optional string phone_e164 = 1;
+  optional string otp_code = 2;
+  optional string verification_id = 3;
+}
+
+message AccountProofOAuthHttp {
+  optional string provider = 1;
+  optional string provider_subject = 2;
+  optional string authorization_code = 3;
 }
 
 message TokenIssueHttpRequest {

@@ -36,6 +36,7 @@ cc_library(
     name = "pg_user_store",
     srcs = ["src/pg_user_store.cpp"],
     hdrs = ["src/pg_user_store.h"],
+    includes = ["src"],
     copts = BRPC_EXAMPLE_COPTS + select({
         "@platforms//os:linux": ["-I/usr/include/postgresql"],
         "//conditions:default": [],
@@ -58,20 +59,19 @@ cc_binary(
     ],
 )
 
-sh_test(
-    name = "user_server_store_smoke_test",
-    srcs = ["tests/user_server_store_smoke_test.sh"],
-    data = [
-        "src/pg_user_store.cpp",
-        "src/pg_user_store.h",
-        "src/user_server_main.cpp",
-    ],
-)
-
 cc_test(
     name = "pg_user_store_unit_test",
     srcs = ["tests/pg_user_store_unit_test.cpp"],
     deps = [
         ":pg_user_store",
+    ],
+)
+
+sh_test(
+    name = "issue_token_pair_smoke_test",
+    srcs = ["tests/issue_token_pair_smoke_test.sh"],
+    data = [
+        ":pg_user_store_unit_test",
+        "src/pg_user_store.cpp",
     ],
 )

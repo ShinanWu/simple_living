@@ -748,9 +748,20 @@ textarea {
 
 .form-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   justify-content: flex-end;
   padding-top: 8px;
+}
+
+.form-inline-error {
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff1f0;
+  color: #a8071a;
+  font-size: 14px;
 }
 
 .detail-overlay {

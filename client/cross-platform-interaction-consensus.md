@@ -100,7 +100,7 @@
 - 阈值前：`继续下滑刷新`
 - 阈值后：`松手刷新`
 
-## 6. 液态玻璃视觉规范（2026-05-28）
+## 6. 液态玻璃视觉规范
 
 ### 6.1 设计理念
 
@@ -157,28 +157,7 @@
 - 分端文档不得覆盖或弱化本文的统一语义
 - 若实现与文档冲突，以已评审文档为准并回修实现
 
-## 9. 跨端一致性修复记录
+## 9. 待对齐项
 
-本节沉淀历史跨端一致性修复快照（仅作记录，不替代 §1–§8 的现行规则）。后续每完成一轮跨端对齐，应按时间倒序在此追加一段 `### YYYY-MM-DD`，概述问题域与修复方向，并链接对应的分端 `interaction-notes.md`。
-
-### 2026-05-28 跨端对齐修复
-
-问题域与影响：
-
-- Android 端曾长期停留在 Mock 实现，且 Gateway 响应模型字段严重缺失
-- iOS 端缺少 single-flight token refresh 与 20002 自动重试；`GuideDetail` / `MeSummary` 响应字段不完整
-- 三端在 Gateway API 接入面、令牌刷新、响应模型补齐三方面存在一致性缺口
-
-修复方向（已落地，详见分端 `interaction-notes.md` 与代码 PR）：
-
-- Android 端：新增 `HttpGatewayApi.kt` 真实网关客户端；`GatewayModels.kt` 对齐微信小程序 `types.ts`；新增 `GatewaySettings.kt` 持久化令牌与设备 ID
-- iOS 端：`HttpGatewayAPI.swift` 加入全局 `refreshInFlight` 与 `dataTask` 层 20002 自动重试；`HomeCard` / `GuideDetailResponse` / `MeSummaryResponse` 补齐 `coverUrl` / `galleryUrls` / `isCommercial` / `disclosureText` / `displayName` / `avatarUrl` 等字段
-- 三端对齐目标：相同行为、相同状态、相同错误码、相同跳转结果表现一致
-
-后续跟踪项（与代码同步演进）：
-
-- iOS 端补充收藏/历史 API（`listFavorites` / `addFavorite` / `listHistory` / `recordHistoryEvent`）
-- Android 端 ViewModel 层适配新 Gateway 模型
-- 三端联调验证 20002 refresh 流程与 single-flight 并发保护
-
-历史详情已并入本节。
+- iOS 端补充收藏/历史 API（`listFavorites` / `addFavorite` / `listHistory` / `recordHistoryEvent`）。
+- 三端联调验证 `20002` refresh 流程与 single-flight 并发保护。

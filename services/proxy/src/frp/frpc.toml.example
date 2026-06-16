@@ -1,4 +1,4 @@
-serverAddr = "8.152.103.12"
+serverAddr = "REPLACE_WITH_FRPS_HOST"
 serverPort = 7000
 
 auth.method = "token"
@@ -13,13 +13,8 @@ type = "http"
 localIP = "127.0.0.1"
 localPort = 80
 # Use your real public domain here. If you access by IP, set to that IP.
-customDomains = ["8.152.103.12"]
+customDomains = ["REPLACE_WITH_PUBLIC_DOMAIN"]
 
-# HTTPS proxy is intentionally disabled in current phase.
-# Enable later when domain/SNI/certificate is ready.
-# [[proxies]]
-# name = "gateway-https"
-# type = "https"
-# localIP = "127.0.0.1"
-# localPort = 443
-# customDomains = ["api.example.com"]
+# This template covers the HTTP proxy only. The deployed container generates its
+# runtime frpc config (including the HTTPS proxy when ENABLE_INGRESS_HTTPS=1) via
+# services/proxy/deploy/start_proxy.sh.

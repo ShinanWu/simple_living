@@ -1,10 +1,11 @@
 export const APP_VERSION = '1.0.0';
 export const CLIENT_PLATFORM = 'wechat_miniprogram';
 
-/** 公网 frp 入口；与 environments/local-qemu/nodes.example.env 中 FRP_CUSTOM_DOMAIN 示例一致 */
-export const DEFAULT_GATEWAY_BASE_URL = 'http://8.152.103.12';
+/** 公网 gateway 入口（HTTPS + 备案域名） */
+export const DEFAULT_GATEWAY_BASE_URL = 'https://shaotang.top';
 
 const STORAGE_GATEWAY_URL = 'gateway_base_url';
+
 export function readGatewayBaseUrl(): string {
   try {
     const fromStorage = wx.getStorageSync(STORAGE_GATEWAY_URL) as string;
@@ -17,8 +18,7 @@ export function readGatewayBaseUrl(): string {
   return DEFAULT_GATEWAY_BASE_URL;
 }
 
-/** 启动时绑定真实 Gateway（frp 公网），禁止静默回退 Mock */
-export function ensureRealGatewayConfig(): void {
+export function ensureGatewayConfig(): void {
   try {
     const cur = wx.getStorageSync(STORAGE_GATEWAY_URL) as string;
     if (typeof cur !== 'string' || !cur.trim()) {

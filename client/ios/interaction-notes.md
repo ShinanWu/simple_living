@@ -12,12 +12,6 @@
 - 仅点按卡片进入详情，拖拽期间不触发导航
 - 详情页使用可滚动布局，顶部为可左右滑的多图画廊，并展示完整文案
 
-## 文档先行补录说明（2026-04-14）
-
-- 本次首页改版属于交互流程调整（标签位置从顶部改为底部），按规范应先更新页面文档再实现。
-- 实际执行中先完成了 `HomeView` 验证，以快速确认底部标签与卡片手势是否可共存，随后补录页面规格与信息架构文档。
-- 该变更不涉及 JSON/`proto` 契约，不影响网关字段语义；影响范围限定在 iOS 表现层与客户端页面规格。
-
 ## 登录（Login）对齐目标
 
 - 登录入口：我的页「登录」toolbar；`LoginView` sheet（微信 + 手机号联调字段）
@@ -26,7 +20,7 @@
 - token 刷新：`HttpGatewayAPI` 内置 single-flight refresh 机制，防止并发重复刷新
 - 20002 自动重试：`HttpGatewayAPI.dataTask` 层自动拦截 `code=20002` 并触发 refresh，刷新失败回退访客态
 
-## Gateway 响应模型（2026-05-28 补全）
+## Gateway 响应模型
 
 - `HomeCard` 新增 `coverUrl` 字段，映射自 `guide_card.cover_url` 或 `guide_card.cover_media.url`
 - `GuideDetailResponse` 新增 `subtitle`、`coverUrl`、`galleryUrls`、`isCommercial`、`disclosureText`

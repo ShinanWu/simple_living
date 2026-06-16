@@ -157,11 +157,10 @@
 
 ### 5.11 `account_proof`（登录发令牌，oneof 形态）
 
-请求体 **三选一**：
+请求体 **二选一**（公开客户端仅可用以下凭证；`user_id` 直发令牌为内部受信链路保留，不对终端开放）：
 
 | 判别字段 | 类型 | 说明 |
 |----------|------|------|
-| `user_id` | string | 已存在用户直接发令牌 |
 | `phone_otp` | object | `{ "phone_e164", "otp_code", "verification_id" }` |
 | `oauth` | object | `{ "provider", "provider_subject", "authorization_code" }` |
 
@@ -371,16 +370,18 @@ gateway 对客户端**透传**各业务域返回的领域码，不重映射其�
 | `session_id` | string | |
 | `access_expires_at` | string | ISO 8601 UTC；源自 proto `access_expires_at` |
 
-**映射**：`IssueTokenPair`；须在网关完成登录证明校验（OTP/OAuth 等）后再调 RPC。
+**映射**：`IssueTokenPair`；网关将 `account_proof` **原样映射**到 `IssueTokenPairRequest` oneof 后转发 `user-server`，**不在网关做 OTP/OAuth 校验或 lab 用户推导**。
 
 `account_proof` 到内部 `IssueTokenPairRequest` 的映射固定为：
 
-- `account_proof.user_id` → `IssueTokenPairRequest.user_id`
 - `account_proof.phone_otp` → `IssueTokenPairRequest.phone_otp`
 - `account_proof.oauth` → `IssueTokenPairRequest.oauth`
 - `device_fingerprint` → `IssueTokenPairRequest.device_fingerprint`
 - `client_platform` / `app_version` / `device_id` 由请求体字段写入对应内部上下文字段
-- OTP / OAuth 的外部校验在网关完成；`user-server` 不重复承担第三方证明交换职责
+
+> `IssueTokenPairRequest.user_id` 仅由网关内部 refresh 续签链路（`token/refresh`）设置，不接受公开客户端的 `account_proof.user_id`。
+
+登录 proof 校验、lab 联调凭据与 `user_id` 稳定映射见 [user-server api.md](../user-server/api.md) §5.3。
 
 ### 9.3 `POST /api/v2/auth/token/refresh`
 
@@ -545,13 +546,8 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 | GET | `/api/v2/pages/guide_detail` | 无（可选 Bearer 或访客会话） | 主体仅用于个性化相关推荐、埋点与风控补充 |
 | POST | `/api/v2/pages/redirect_prepare` | Bearer 或访客会话 | 必须具备主体，便于点击归因与幂等 |
 | GET | `/api/v2/pages/me_summary` | Bearer 或访客会话 | 与 `/api/v2/me/summary` 一致 |
-| POST | `/api/v2/backoffice/affiliate/partners` | Bearer（运营角色） | 联盟伙伴列表 |
-| POST | `/api/v2/backoffice/affiliate/partners/add` | Bearer（运营角色） | 新增联盟伙伴（最小元信息） |
-| POST | `/api/v2/backoffice/content/items` | Bearer（运营角色） | 内容管理最小列表 |
-| POST | `/api/v2/backoffice/content/items/add` | Bearer（运营角色） | 新增导购内容并写入 platform/backoffice-backend CMS |
-| POST | `/api/v2/backoffice/content/items/status` | Bearer（运营角色） | 内容发布态切换 |
-| POST | `/api/v2/backoffice/governance/reviews` | Bearer（审核或运营） | 审核队列最小列表 |
-| POST | `/api/v2/backoffice/governance/reviews/status` | Bearer（审核或运营） | 审核状态更新（通过/拒绝） |
+
+> 运营平台路由 `/api/v2/backoffice/*` 见 §13.6（契约以 [`../platform/backoffice-gateway-api.md`](../platform/backoffice-gateway-api.md) 为准）。
 
 ### 13.1 聚合对象定义
 
@@ -563,8 +559,35 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 | `scene` | string | 是 | 推荐场景，通常为 `home_feed` |
 | `rank` | integer | 是 | 1-based |
 | `guide_card_id` | string | 是 | 导购卡片 ID |
-| `guide_card` | object | 否 | 内联卡片，结构见 §5.12 |
-| `reason_tags` | array | 否 | 推荐解释短标签 |
+| `guide_card` | object | 是 | 首页内联摘要，结构见下 **`home_feed_guide_card`** |
+| `reason_text` | string | 是 | 首页「推荐理由」展示文案；**键必出现**；无可用文案时为 `""` |
+| `reason_tags` | array | 否 | 推荐侧可选短标签；供调试或后续标签 UI，**不得**替代 `reason_text` 作为主展示 |
+
+#### `home_feed_guide_card`（`home_feed` 内联摘要）
+
+`GET /api/v2/pages/home_feed` 的 `items[].guide_card` 为**轻量摘要**，供首页标题/封面渲染；完整字段见详情接口。
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `guide_card_id` | string | 是 | |
+| `title` | string | 是 | 卡片标题 |
+| `subtitle` | string | 否 | |
+| `summary` | string | 否 | 卖点摘要首条（与 `reason_text` 来源可相同，职责不同：`summary` 供详情/扩展，`reason_text` 供首页推荐理由区） |
+| `cover_url` | string | 否 | 封面 HTTPS URL |
+| `theme` | string | 否 | 主题 slug |
+
+`reason_text` 聚合优先级（网关实现）：
+
+1. `GuideCard.selling_points`（最多 2 条，用 ` / ` 连接）
+2. `GuideCard.subtitle`
+3. 仍为空则返回 `""`（客户端展示空态兜底文案）
+
+禁止向 `reason_tags` 写入内部编排标签（如 `cms_published`、`clothing_pick`）。
+
+**平台侧输入要求（供 backoffice 填数）**：
+
+- 卡片须维护 `selling_points` 和/或 `subtitle`，作为网关聚合 `reason_text` 的来源。
+- 网关不在客户端暴露内部标签；`reason_text` 为空时由客户端展示固定空态文案。
 
 #### `guide_detail_payload`
 
@@ -572,7 +595,7 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 |------|------|------|------|
 | `guide_card` | object | 是 | 导购卡片完整展示结构，见 §5.12 |
 | `disclosures` | object | 否 | 商业披露摘要；默认从卡片和治理结果聚合 |
-| `related` | array | 否 | 相关推荐列表，元素仅包含 `recommendation_id`、`scene`、`rank`、`guide_card_id`、`reason_tags` |
+| `related` | array | 否 | 相关推荐列表；元素同 `home_feed_item`（含 `reason_text`），不内联 `guide_card` |
 
 #### `redirect_prepare_payload`
 
@@ -602,23 +625,23 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 
 **下游 RPC**
 
-- `RecommendationService/QueryRecommendations`
-- `ContentService/BatchGetGuideCards`
-- 可选治理可见性快照过滤
+- `ContentService/ListGuideCards`（recommendation-server 读 snapshot，按 `theme_id` 召回可见且已发布候选）
+- `ContentService/BatchGetGuideCards`（候选卡片明细）
+- 治理可见性快照过滤（默认 fail-closed）
 
 **字段级映射（实现锚点）**
 
 | JSON / 查询字段 | 下游来源 | 说明 |
 |-----------------|----------|------|
-| `theme` | `QueryRecommendationsRequest.filters.themes` | 使用主题 **slug**，非 `theme_id` |
-| `cursor`, `limit` | `QueryRecommendationsRequest.cursor_limits` | 直接映射 |
-| `items[].recommendation_id` | `QueryRecommendationsResponse.recommendation_id` | 同一页条目共享同一推荐结果 ID |
-| `items[].scene` | `QueryRecommendationsResponse.scene` | |
-| `items[].rank` | `QueryRecommendationsResponse.items[].rank` | |
-| `items[].guide_card_id` | `QueryRecommendationsResponse.items[].guide_card_id` | |
-| `items[].reason_tags` | `QueryRecommendationsResponse.items[].reason_tags` | |
-| `items[].guide_card` | `ContentService/BatchGetGuideCards.cards[]` | 以 `guide_card_id` 批量 hydration；按 `rank` 重排 |
-| `pagination` | `QueryRecommendationsResponse.cursor_pagination` | `next_cursor`、`has_more`、`limit` 一一对应 |
+| `theme` | `ListGuideCardsRequest.theme_id` | 网关把主题 **slug**（§6）规范化为 `theme_id` 后下发 |
+| `cursor`, `limit` | `ListGuideCardsRequest.cursor` / `limit` | 直接映射；游标 v1 可为 offset 式 |
+| `items[].recommendation_id` | 网关生成（`rec_cms_<server_time_ms>`） | 同一页条目共享同一 ID |
+| `items[].scene` | 固定 `home_feed` | |
+| `items[].rank` | 候选顺序 | 从 1 递增 |
+| `items[].guide_card_id` | `ListGuideCardsResponse.cards[].card_id` | |
+| `items[].reason_text` | 网关聚合 | 见 §13.1；catalog 路径按 `selling_points`（≤2 条）→ `subtitle` 回退，不注入内部标签 |
+| `items[].guide_card` | `BatchGetGuideCardsResponse.cards[]` | 裁剪为 `home_feed_guide_card` |
+| `pagination` | `ListGuideCardsResponse` 游标 | `next_cursor`、`has_more`、`limit` 对应 |
 
 **治理过滤规则**
 
@@ -635,35 +658,29 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 | Query 参数 | 类型 | 必填 | 说明 |
 |------------|------|------|------|
 | `guide_card_id` | string | 是 | 卡片 ID |
-| `include_related` | boolean | 否 | 默认 `true` |
 
 | `data` | 类型 | 说明 |
 |------|------|------|
-| `guide` | object | `guide_detail_payload.guide_card` |
-| `disclosures` | object | 商业披露与治理提示 |
-| `related` | array | 可选相关推荐 |
+| `guide_card` | object | 导购详情，字段见 §5.12 子集（`GuideCardDetail`），含内联 `commercial_disclosure` |
 
 **下游 RPC**
 
 - `ContentService/BatchGetGuideCards`
-- `GovernanceCooperationService/BatchGetCooperationLabels`
-- 可选 `RecommendationService/QueryRecommendations`
+- 治理可见性快照过滤（默认 fail-closed）
 
 **字段级映射（实现锚点）**
 
 | JSON / 查询字段 | 下游来源 | 说明 |
 |-----------------|----------|------|
 | `guide_card_id` | `BatchGetGuideCardsRequest.card_ids[]` | 单卡片查询 |
-| `data.guide` | `BatchGetGuideCardsResponse.cards[0]` | 转为公开 `guide_card` 契约 |
-| `data.disclosures` | `BatchGetCooperationLabelsResponse.labels_by_subject` | key 为 `COOPERATION_SUBJECT_TYPE_CARD:<guide_card_id>` |
-| `data.related` | `QueryRecommendationsResponse.items[]` | 仅当 `include_related=true` 时调用 |
+| `data.guide_card` | `BatchGetGuideCardsResponse.cards[0]` | 转为公开 `guide_card` 契约；`theme` 输出主题 slug（§6） |
+| `data.guide_card.commercial_disclosure` | `GuideCard.commercial_disclosure_required` | 内联披露标识与文案 key |
 
 补充规则：
 
-- `include_related=false` 时不得调用推荐 RPC
+- 卡片须 `content_status=PUBLISHED` 且治理可见，否则返回 `30001`
 - `guide_card_id` 不存在时返回 `30001`
-- `data.guide` 的字段语义以 §5.12 为准，网关负责从内部 `GuideCard` 裁剪
-- `data.related` 仅返回 `recommendation_id`、`scene`、`rank`、`guide_card_id`、`reason_tags`；不内联 `guide_card`
+- `data.guide_card` 的字段语义以 §5.12 子集为准，网关负责从内部 `GuideCard` 裁剪
 
 ### 13.4 `POST /api/v2/pages/redirect_prepare`
 
@@ -720,19 +737,21 @@ Query：`cursor`, `limit`。主体归属由登录态或访客 `session_id` 推�
 
 - `UserServerService/GetMeSummary`
 
-### 13.6 `POST /api/v2/backoffice/*`（运营平台路由）
+### 13.6 `/api/v2/backoffice/*`（运营平台路由）
 
 该组路由用于 `platform/backoffice-backend`（content / governance / affiliate 三模块）的运营后台能力，仍遵循标准信封与 `snake_case`。
 
-| 路由 | `data` 结构 | 下游 |
-|------|-------------|------|
-| `POST /api/v2/backoffice/affiliate/partners` | `{ "items": [{ "partner_id", "display_name", "status", "primary_channel_code" }] }` | platform/backoffice-backend |
-| `POST /api/v2/backoffice/affiliate/partners/add` | 同上（返回创建后列表） | platform/backoffice-backend |
-| `POST /api/v2/backoffice/content/items` | `{ "items": [{ "content_id", "title", "theme", "status", "summary", "landing_url", "external_item_id" }] }` | platform/backoffice-backend |
-| `POST /api/v2/backoffice/content/items/add` | 同上（返回创建后列表） | platform/backoffice-backend |
-| `POST /api/v2/backoffice/content/items/status` | 同上（返回更新后列表） | platform/backoffice-backend |
-| `POST /api/v2/backoffice/governance/reviews` | `{ "items": [{ "review_id", "subject_id", "status" }] }` | platform/backoffice-backend |
-| `POST /api/v2/backoffice/governance/reviews/status` | 同上（返回更新后列表） | platform/backoffice-backend |
+**权威契约**：运营 HTTP 的请求/响应 `data` 结构、状态机与字段语义以 [`../platform/backoffice-gateway-api.md`](../platform/backoffice-gateway-api.md) 为单一来源，本节仅登记网关实际注册的路由集合，不重复维护字段表。
+
+网关注册的运营路由（均 `POST`，鉴权 Bearer 运营角色，下游 `platform/backoffice-backend`）：
+
+| 分组 | 路由 |
+|------|------|
+| 鉴权 | `/api/v2/backoffice/auth/login` |
+| 媒体 | `/api/v2/backoffice/media/upload`、`GET /media/backoffice/{asset}` |
+| 联盟 | `/api/v2/backoffice/affiliate/partners`、`/affiliate/partners/add` |
+| 内容 | `/api/v2/backoffice/content/items`、`/content/items/add`、`/content/items/update`、`/content/items/detail`、`/content/items/submit-review`、`/content/items/publish`、`/content/items/status`、`/content/items/rollback` |
+| 治理 | `/api/v2/backoffice/governance/reviews`、`/governance/reviews/status`、`/governance/visibility` |
 
 边界说明：
 
@@ -853,19 +872,34 @@ Authorization: Bearer <access_token>
         "scene": "home_feed",
         "rank": 1,
         "guide_card_id": "guide_card_1001",
+        "reason_text": "适合通勤 / 近期热门",
         "reason_tags": [
           "适合通勤",
           "近期热门"
-        ]
+        ],
+        "guide_card": {
+          "guide_card_id": "guide_card_1001",
+          "title": "通勤风衣",
+          "summary": "适合通勤",
+          "cover_url": "https://cdn.example.com/cover_1001.jpg",
+          "theme": "clothing"
+        }
       },
       {
         "recommendation_id": "rec_01HSZ15H0N8HG9P5P2E0",
         "scene": "home_feed",
         "rank": 2,
         "guide_card_id": "guide_card_1018",
+        "reason_text": "主题相近",
         "reason_tags": [
           "主题相近"
-        ]
+        ],
+        "guide_card": {
+          "guide_card_id": "guide_card_1018",
+          "title": "轻薄针织",
+          "cover_url": "https://cdn.example.com/cover_1018.jpg",
+          "theme": "clothing"
+        }
       }
     ],
     "pagination": {
@@ -907,7 +941,7 @@ Content-Type: application/json
 POST /api/v2/auth/token/issue HTTP/1.1
 Content-Type: application/json
 
-{"account_proof":{"user_id":"user_01HSYQK5PZ4K4J9R2M8D"}}
+{"account_proof":{"oauth":{"provider":"wechat","authorization_code":"<wx.login code>"}},"client_platform":"wechat_miniprogram","device_id":"<device_id>","app_version":"1.0.0"}
 ```
 
 #### HTTP Response
@@ -1175,7 +1209,7 @@ Authorization: Bearer <access_token>
 #### HTTP Response
 
 ```json
-{"success":true,"code":0,"message":"ok","data":{"guide":{"guide_card_id":"guide_card_1001","schema_version":1,"title":"T","theme":"clothing","published_at":"2026-03-28T08:00:00Z","updated_at":"2026-03-28T09:00:00Z","commercial_disclosure":{"is_commercial":false}}},"meta":{"request_id":"req_18","server_time_ms":1774699800000}}
+{"success":true,"code":0,"message":"ok","data":{"guide_card":{"guide_card_id":"guide_card_1001","schema_version":1,"title":"T","theme":"clothing","published_at":"2026-03-28T08:00:00Z","updated_at":"2026-03-28T09:00:00Z","commercial_disclosure":{"is_commercial":false}}},"meta":{"request_id":"req_18","server_time_ms":1774699800000}}
 ```
 
 ### A.22 `POST /api/v2/pages/redirect_prepare`

@@ -1,0 +1,80 @@
+{
+  "cards": [
+    {
+      "card_id": "fixture_card_clothing",
+      "type": "GUIDE_CARD_TYPE_PRODUCT",
+      "title": "Fixture clothing card",
+      "subtitle": "衣主题测试卡片",
+      "cover_media": {
+        "url": "https://cdn.example.com/fixtures/clothing.jpg",
+        "type": "MEDIA_TYPE_IMAGE"
+      },
+      "theme_ids": ["theme_1"],
+      "content_status": "CONTENT_LIFECYCLE_STATUS_PUBLISHED",
+      "affiliate_refs": [
+        {
+          "channel": "tmall",
+          "external_item_id": "fixture_clothing_001",
+          "payload": { "landing_url": "https://detail.tmall.com/item.htm?id=fixture_clothing_001" }
+        }
+      ]
+    },
+    {
+      "card_id": "fixture_card_food",
+      "type": "GUIDE_CARD_TYPE_PRODUCT",
+      "title": "Fixture food card",
+      "subtitle": "食主题测试卡片",
+      "cover_media": {
+        "url": "https://cdn.example.com/fixtures/food.jpg",
+        "type": "MEDIA_TYPE_IMAGE"
+      },
+      "theme_ids": ["theme_2"],
+      "content_status": "CONTENT_LIFECYCLE_STATUS_PUBLISHED",
+      "affiliate_refs": [
+        {
+          "channel": "tmall",
+          "external_item_id": "fixture_food_001",
+          "payload": { "landing_url": "https://detail.tmall.com/item.htm?id=fixture_food_001" }
+        }
+      ]
+    },
+    {
+      "card_id": "fixture_card_housing",
+      "type": "GUIDE_CARD_TYPE_PRODUCT",
+      "title": "Fixture housing card",
+      "subtitle": "住主题测试卡片",
+      "cover_media": {
+        "url": "https://cdn.example.com/fixtures/housing.jpg",
+        "type": "MEDIA_TYPE_IMAGE"
+      },
+      "theme_ids": ["theme_3"],
+      "content_status": "CONTENT_LIFECYCLE_STATUS_PUBLISHED",
+      "affiliate_refs": [
+        {
+          "channel": "tmall",
+          "external_item_id": "fixture_housing_001",
+          "payload": { "landing_url": "https://detail.tmall.com/item.htm?id=fixture_housing_001" }
+        }
+      ]
+    },
+    {
+      "card_id": "fixture_card_transport",
+      "type": "GUIDE_CARD_TYPE_PRODUCT",
+      "title": "Fixture transport card",
+      "subtitle": "行主题测试卡片",
+      "cover_media": {
+        "url": "https://cdn.example.com/fixtures/transport.jpg",
+        "type": "MEDIA_TYPE_IMAGE"
+      },
+      "theme_ids": ["theme_4"],
+      "content_status": "CONTENT_LIFECYCLE_STATUS_PUBLISHED",
+      "affiliate_refs": [
+        {
+          "channel": "tmall",
+          "external_item_id": "fixture_transport_001",
+          "payload": { "landing_url": "https://detail.tmall.com/item.htm?id=fixture_transport_001" }
+        }
+      ]
+    }
+  ]
+}

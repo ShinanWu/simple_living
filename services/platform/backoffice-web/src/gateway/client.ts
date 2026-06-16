@@ -81,15 +81,11 @@ function normalizeContentItem(raw: Record<string, unknown>): BackofficeContentIt
     resource_kind: (raw.resource_kind as BackofficeContentItem["resource_kind"]) ?? "guide_card",
     title: (raw.title as string) ?? "",
     subtitle: (raw.subtitle as string) ?? undefined,
-    theme_ids: Array.isArray(raw.theme_ids)
-      ? raw.theme_ids
-      : raw.theme
-        ? [raw.theme as string]
-        : [],
+    theme_ids: Array.isArray(raw.theme_ids) ? (raw.theme_ids as string[]) : [],
     tag_ids: (raw.tag_ids as string[]) ?? undefined,
-    content_status: ((raw.content_status ?? raw.status) as BackofficeContentItem["content_status"]) ?? "draft",
+    content_status: (raw.content_status as BackofficeContentItem["content_status"]) ?? "draft",
     revision: (raw.revision as number) ?? 1,
-    published_revision: (raw.published_revision as number) ?? (raw.status === "published" ? 1 : 0),
+    published_revision: (raw.published_revision as number) ?? 0,
     summary: (raw.summary as string) ?? undefined,
     cover_media: (raw.cover_media as BackofficeContentItem["cover_media"]) ?? undefined,
     landing_url: (raw.landing_url as string) ?? undefined,
@@ -273,6 +269,21 @@ export class HttpGatewayApiClient implements GatewayApiClient {
         const text = await response.text();
         if (text.includes("Fail to find method")) {
           return { success: false, code: -2, message: `该功能尚未实现：${path}` } as T;
+        }
+        if (response.status === 413) {
+          return {
+            success: false,
+            code: 413,
+            message: "上传文件过大，请压缩图片后重试（建议小于 3MB）",
+          } as T;
+        }
+        try {
+          const json = JSON.parse(text) as { message?: string };
+          if (json.message) {
+            return { success: false, code: response.status, message: json.message } as T;
+          }
+        } catch {
+          // ignore non-JSON error bodies
         }
         return { success: false, code: response.status, message: `请求失败: ${text || response.statusText}` } as T;
       }

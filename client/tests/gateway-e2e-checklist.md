@@ -6,13 +6,13 @@
 
 | 场景 | 端点 | 期望 |
 |------|------|------|
-| 健康检查 | `GET /api/v2/health/check` | `success=true` |
+| 健康检查 | `GET /api/v2/health` | `success=true` |
 | 首页 feed | `GET /api/v2/pages/home_feed?theme=clothing` | 仅 `published` + governance `visible` 卡片 |
 | 详情 | `GET /api/v2/pages/guide_detail?guide_card_id=...` | 未发布或不可见返回 404 业务码 |
 | 跳转准备 | `POST /api/v2/pages/redirect_prepare` | 返回 `click_id`、`landing_url` |
 | 访客会话 | `POST /api/v2/guest/session` | 返回 guest session |
-| 收藏列表 | `GET /api/v2/me/favorites/list` | 需 `Authorization` 或 guest header |
+| 收藏列表 | `GET /api/v2/me/favorites` | 需 `Authorization`（Bearer） |
 
 微信小程序、iOS、Android 均通过同一契约访问 gateway，不使用 runtime mock。
 
-可执行烟雾脚本：`client/tests/gateway_api_smoke.py`（`BASE_URL` 环境变量）。
+可执行烟雾脚本：公网回归 `client/tests/gateway_live_smoke.py`、本地 `client/tests/gateway_api_smoke.py`（均用 `BASE_URL` 环境变量）。

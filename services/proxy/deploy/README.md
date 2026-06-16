@@ -35,27 +35,28 @@ IMAGE_TAG=v2026.04.30 bash services/proxy/deploy/deploy_service.sh
 bash services/proxy/deploy/stop_nodes.sh
 ```
 
-## 2.1 TLS 证书续期（生产 HTTPS）
+## 2.1 TLS 证书（生产 HTTPS）
 
-证书与私钥放主机受控目录（权限 `600`），禁止入库；模板见 `services/proxy/src/nginx/gateway.https.conf.example`。
+证书与私钥挂载在 nginx 来宾 `/var/lib/simple-living/tls`（容器内 `/etc/nginx/certs`），**禁止入库**。
 
-1) 首次签发 / 续期（以 acme.sh 或 certbot 为例，按你的签发方式择一）：
-
-```bash
-# 续期后将最新证书写入 nginx 引用路径
-sudo cp <renewed_fullchain> /etc/nginx/certs/fullchain.pem
-sudo cp <renewed_privkey>   /etc/nginx/certs/privkey.pem
-sudo chmod 600 /etc/nginx/certs/privkey.pem
-```
-
-2) 校验并热加载（不中断在途连接）：
+**首次签发 / 续期**（Let's Encrypt，HTTP-01 经 frp 80 回源）：
 
 ```bash
-sudo nginx -t && sudo nginx -s reload
-# 容器化部署：在容器内执行 nginx -t && nginx -s reload，或重建 simple-living-proxy 容器
+bash services/proxy/deploy/issue_tls_cert.sh
 ```
 
-3) 验收：`curl -vk https://<域名>/healthz` 应返回新证书有效期。建议在到期前 30 天告警并自动续期。
+脚本在 nginx 来宾安装 `certbot`、写入 webroot 挑战目录、复制证书并重启 `simple-living-proxy`。域名须已在 `nodes.env` 配置 `FRP_CUSTOM_DOMAIN=shaotang.top` 且 DNS 指向 frps 公网 IP。
+
+**手动续期后**（若未用上述脚本）：
+
+```bash
+sudo cp /etc/letsencrypt/live/<域名>/fullchain.pem /var/lib/simple-living/tls/fullchain.pem
+sudo cp /etc/letsencrypt/live/<域名>/privkey.pem   /var/lib/simple-living/tls/privkey.pem
+sudo chmod 600 /var/lib/simple-living/tls/privkey.pem
+sudo podman restart simple-living-proxy   # 或 docker
+```
+
+**验收**：`curl -fsS https://shaotang.top/healthz`；`openssl s_client -connect shaotang.top:443 -servername shaotang.top` 应显示 Let's Encrypt 签发者。
 
 ## 2.2 故障排查与日志
 
@@ -147,10 +148,27 @@ QEMU 本仓库 `start_nodes.sh` 已将本机 `11080 -> 来宾 10080`、`17000 ->
 ENABLE_FRP=0 bash services/proxy/deploy/deploy_service.sh
 ```
 
+### 5.4 Mac 桌面 VNC（宿主机独立 frpc）
+
+与 §5.1–5.3 的 gateway 容器 frpc **无关**：在 **Mac 本机** 运行第二条 frpc，TCP 映射屏幕共享 `5900` → frps 公网 `15900`（端口可改）。
+
+1. Mac 开启屏幕共享并设强密码。
+2. VPS 防火墙放行 `15900`（或 `FRP_DESKTOP_VNC_REMOTE_PORT`）。
+3. 启动：
+
+```bash
+FRP_AUTH_TOKEN=your_token \
+FRP_SERVER_ADDR=8.152.103.12 \
+bash services/proxy/deploy/start_desktop_frpc.sh
+```
+
+4. 验收与远程连接见 `../README.md` §8；`open vnc://<frps_ip>:15900`。
+
 ## 6. 配置来源
 
 - `services/proxy/src/frp/frps.toml.example`
 - `services/proxy/src/frp/frpc.toml.example`
+- `services/proxy/src/frp/frpc-desktop.toml.example`
 - `services/proxy/src/nginx/gateway.conf.example`（HTTP 联调入口）
 - `services/proxy/src/nginx/gateway.https.conf.example`（HTTPS + HSTS 生产入口）
 

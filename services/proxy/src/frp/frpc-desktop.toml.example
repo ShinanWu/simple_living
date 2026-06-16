@@ -1,0 +1,21 @@
+# Mac 桌面远程（VNC）专用 frpc 配置模板。
+# 与 gateway/nginx 容器内的 frpc 独立运行；共用同一 frps，但 user 与 proxy 名称须不同。
+#
+# 部署：复制到受控路径后替换 token，或通过 start_desktop_frpc.sh 由环境变量生成。
+# 真实 token 禁止入库。
+
+serverAddr = "REPLACE_WITH_FRPS_HOST"
+serverPort = 7000
+
+auth.method = "token"
+auth.token = "REPLACE_WITH_SAME_TOKEN_AS_FRPS"
+
+# 与 gateway frpc（phase1-local-gateway）区分，避免 frps 上 proxy 名冲突。
+user = "mac-desktop"
+
+[[proxies]]
+name = "desktop-vnc"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 5900
+remotePort = 15900

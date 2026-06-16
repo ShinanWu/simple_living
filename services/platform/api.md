@@ -79,7 +79,20 @@
 
 | 操作 | 说明 |
 |------|------|
-| outbox 自动触发 | 写事务后异步导出 |
+| 写后同步导出 | 内容/治理/联盟写事务成功后，同步调用 `RefreshNow()` 重建全量 snapshot（staging→active 原子切换） |
+| 进程启动导出 | 服务启动时执行一次 `RefreshNow()`，保证 active 与当前 DB 一致 |
 | `GetExportManifest` | 查询 active 版本与各 bundle sha256 |
 
 导出与写链路详见 [detail-design.md](./detail-design.md) §4。
+
+### C 端 snapshot 字段（交付摘要）
+
+完整验收与主题字典见 [backoffice-delivery-spec.md](./backoffice-delivery-spec.md)。
+
+| Bundle | 关键字段 |
+|--------|----------|
+| `catalog_snapshot` | `GuideCard`：`theme_ids`、`selling_points`、`cover_media.url`、`affiliate_refs[].payload.landing_url`、`content_status=published` |
+| `visibility_index` | `visible_ids[]`，与 governance `published` 一致 |
+| `affiliate_link_spec` | 伙伴 `partner_id` / `channel_code` |
+
+`recommendation-server` 另从共享 PG `content_guide_card`（`status=3`）同步候选池；snapshot 与 PG 须同源（同一 backoffice 写面）。

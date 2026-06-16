@@ -142,6 +142,9 @@ sh_test(
         "//common/proto:catalog.proto",
         "//common/proto:content_service.proto",
         "src/backoffice_backend_server_main.cpp",
+        "src/content_services.cpp",
+        "src/dev_content_seeds.h",
         "src/export_publisher.cpp",
+        "src/pg_content_store.cpp",
     ],
 )

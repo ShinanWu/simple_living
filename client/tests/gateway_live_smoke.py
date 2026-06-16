@@ -4,21 +4,35 @@ Live gateway smoke test aligned with the currently deployed brpc restful routes
 (services/gateway/src/gateway_edge_server_main.cpp) and C-end page flows.
 
 Usage:
-  BASE_URL=http://8.152.103.12 python3 client/tests/gateway_live_smoke.py
+  BASE_URL=https://shaotang.top python3 client/tests/gateway_live_smoke.py
 """
 
 from __future__ import annotations
 
 import json
 import os
+import ssl
 import sys
 import urllib.error
 import urllib.request
 
 
-BASE_URL = os.getenv("BASE_URL", "http://8.152.103.12").rstrip("/")
+BASE_URL = os.getenv("BASE_URL", "https://shaotang.top").rstrip("/")
 TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "15"))
 SAMPLE_GUIDE = os.getenv("SAMPLE_GUIDE_CARD_ID", "guide_clothing_tmall_919142939015")
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """Verified TLS context; prefer certifi's CA bundle when the platform store is unavailable."""
+    try:
+        import certifi  # type: ignore
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+SSL_CONTEXT = _ssl_context()
 
 
 def call(method: str, path: str, body: dict | None = None, headers: dict | None = None) -> tuple[int, dict]:
@@ -29,7 +43,7 @@ def call(method: str, path: str, body: dict | None = None, headers: dict | None 
         hdrs.update(headers)
     req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=TIMEOUT, context=SSL_CONTEXT) as resp:
             return resp.status, json.loads(resp.read())
     except urllib.error.HTTPError as e:
         raw = e.read().decode("utf-8", errors="replace")
@@ -71,7 +85,7 @@ def main() -> int:
     check("home_feed", st == 200 and feed.get("success") and len(items) > 0, str(feed)[:200])
 
     guide_id = (items[0].get("guide_card_id") if items else None) or SAMPLE_GUIDE
-    st, detail = call("GET", f"/api/v2/pages/guide_detail?guide_card_id={guide_id}&include_related=true", headers=gh)
+    st, detail = call("GET", f"/api/v2/pages/guide_detail?guide_card_id={guide_id}", headers=gh)
     check("guide_detail", st == 200 and detail.get("success"), str(detail)[:200])
 
     st, me = call("GET", "/api/v2/pages/me_summary", headers=gh)
@@ -83,9 +97,18 @@ def main() -> int:
     }, headers=gh)
     check("history_event", st == 200 and hist_evt.get("success"), str(hist_evt)[:200])
 
-    st, hist_list = call("POST", "/api/v2/me/history/list", {"limit": 5}, headers=gh)
+    st, hist_list = call("GET", "/api/v2/me/history?limit=5", headers=gh)
     hist_items = (hist_list.get("data") or {}).get("items") or []
     check("history_list", st == 200 and hist_list.get("success") and len(hist_items) > 0, str(hist_list)[:200])
+    if hist_items:
+        cref = hist_items[0].get("content_ref") or {}
+        check("history_content_ref", cref.get("guide_card_id"), str(cref))
+
+    st, health = call("GET", "/api/v2/health")
+    check("health", st == 200 and health.get("success"), str(health)[:200])
+
+    counts = (me.get("data") or {}).get("counts") or {}
+    check("me_summary_counts_integer", isinstance(counts.get("favorites_count"), int), str(counts))
 
     rec_id = items[0].get("recommendation_id", "") if items else ""
     st, redirect = call("POST", "/api/v2/pages/redirect_prepare", {
@@ -95,7 +118,9 @@ def main() -> int:
         "item_rank": 1,
     }, headers=gh)
     landing = ((redirect.get("data") or {}).get("landing_url") or "").strip()
+    click_id = ((redirect.get("data") or {}).get("click_id") or "").strip()
     check("redirect_prepare_reachable", st == 200 and redirect.get("success"), str(redirect)[:200])
+    check("redirect_prepare_nonempty", bool(landing and click_id), str(redirect)[:200])
     if not landing:
         print("[WARN] redirect_prepare returned empty landing_url (check affiliate payload on guide card)")
 

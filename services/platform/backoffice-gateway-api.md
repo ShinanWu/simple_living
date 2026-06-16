@@ -57,7 +57,7 @@
 
 封面字段 `cover_media.url` **必须**为可公开访问的绝对 URL（`http://` 或 `https://`），**禁止** inline `data:` URL 或站内相对路径。运营台上传封面时应先调用 media upload，将返回的 `url`（完整 HTTP 链接）写入内容。
 
-gateway 通过 `-gateway_backoffice_media_public_base_url` 配置素材公网基址。**lab** 在 `ENABLE_INGRESS_HTTPS=1` 时，公网 IP 场景自动用 `https://<ip-with-dashes>.nip.io`；也可显式设置 `GATEWAY_MEDIA_PUBLIC_BASE_URL`。生产使用正式域名与受信证书。
+gateway 通过 `-gateway_backoffice_media_public_base_url` 配置素材公网基址。生产使用 `https://shaotang.top` 与受信证书；lab 无域名时可设 `TLS_SELF_SIGN=1` 或显式 `GATEWAY_MEDIA_PUBLIC_BASE_URL`。
 
 ### 3.3 治理审核
 
@@ -182,6 +182,18 @@ gateway 通过 `-gateway_backoffice_media_public_base_url` 配置素材公网基
 
 ### 4.5 请求/响应体定义
 
+#### 4.5.0 `POST /api/v2/backoffice/content/items/add` — 新增内容
+
+**必填**：`title`、`landing_url`（导购卡）。
+
+`content_id` 由网关按 `guide_{theme}_{channel}_{external_item_id}` 生成：`external_item_id` 优先；否则从 `landing_url` 的 `id=` 查询参数提取商品 id；再否则对 URL 做截断规范化。
+
+**冲突**：同一 `content_id` 已存在时返回 **`10007`**（HTTP 409），**不会**静默覆盖已有内容。请填写不同的落地页或外部商品 ID，或编辑已有条目。
+
+**状态**：新建仅允许 `draft`（或省略 `initial_status`）；`published` 须先送审再发布。
+
+---
+
 #### 4.5.1 `POST /api/v2/backoffice/content/items/update` — 更新内容
 
 **请求体** `BackofficeUpdateContentItemRequest`：
@@ -300,10 +312,12 @@ gateway 通过 `-gateway_backoffice_media_public_base_url` 配置素材公网基
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `asset_id` | string | 素材 ID |
-| `url` | string | 返回 **绝对 HTTPS URL**（lab 公网 IP 时为 `https://<ip-with-dashes>.nip.io/media/backoffice/...`，自签证书） |
+| `url` | string | 返回 **绝对 HTTPS URL**（如 `https://shaotang.top/media/backoffice/...`） |
 | `content_type` | string | 存储 MIME |
 
 文件落盘目录由 gateway `-gateway_backoffice_media_dir` 控制（默认 `/var/lib/simple-living/media/backoffice`）。公网访问域名由 `-gateway_backoffice_media_public_base_url` 配置（必填，上传接口依赖此项）。`GET /media/backoffice/{filename}` 由 gateway 直接返回二进制，不经 JSON 信封。
+
+**入口 nginx**：`client_max_body_size` 须 ≥ **8m**（运营台以 base64 data URL 提交，约 3MB 原图即可逼近默认 1m 限制）。见 `services/proxy/src/nginx/gateway*.conf.example`。
 
 ---
 
@@ -376,8 +390,10 @@ pending ──受理──> in_review ──裁决──> approved ──> compl
 
 **双门闸（fail-closed）**
 
-- 审核通过 **不自动发布**，也 **不自动** 将可见性设为 `published`。
-- 即使 `content_status = published`，若 `visibility.state ≠ published`，C 端不可见。
+- 审核通过（`approved`）**不自动发布**，也 **不自动** 将可见性设为 `published`。
+- 可见性随内容生命周期同步：`content/items/publish` → `visibility.state=published`；`content/items/status` 转 `offline` / `archived` / `draft` → `visibility.state=unpublished`。这是发布即上线、下架即隐藏的默认语义。
+- `governance/visibility` 裁决用于在两次生命周期转换之间 **显式覆盖**（如 `restricted` 或紧急 `unpublished` 下架）；下一次 publish / status 转换会按上一条重新同步可见性。
+- 即使 `content_status = published`，若 `visibility.state ≠ published`，C 端不可见（门闸仍然生效）。
 - `SetVisibilityVerdict` 为显式操作，需 `reviewer` 或 `backoffice_admin` 角色。
 
 ### 5.4 领域协作规则
@@ -411,10 +427,27 @@ pending ──受理──> in_review ──裁决──> approved ──> compl
 
 所有写操作必须在响应中回传 `meta.request_id` 与 `meta.trace_id`，用于审计追踪。
 
-## 8. 相关文档
+## 8. C 端 snapshot 交付（backoffice 责任）
+
+运营写入经导出进入 C 端读路径；完整字段、主题字典与验收见 **[backoffice-delivery-spec.md](./backoffice-delivery-spec.md)**。
+
+摘要：
+
+| 导出 | backoffice 须保证 |
+|------|-------------------|
+| `catalog_snapshot` | published 卡片含 `theme_ids`、`selling_points`/`subtitle`、`cover_media.url`、`affiliate_refs[].payload.landing_url` |
+| `visibility_index` | 显式 `published` 可见性；与 `content_status=published` 双门闸 |
+| `affiliate_link_spec` | 活跃伙伴能力（tracking 渠道规格） |
+
+**封面 URL**：`media/upload` 返回完整公网绝对 URL；lab 见 §3.2 `gateway_backoffice_media_public_base_url`。
+
+**四主题 lab 最低数据**：`theme_1`～`theme_4` 各 ≥1 可见 published 卡；默认由 `dev_content_seeds` + 启动时 `EnsureSeedGuideCards` 补齐。
+
+## 9. 相关文档
 
 | 文档 | 说明 |
 |------|------|
+| [backoffice-delivery-spec.md](./backoffice-delivery-spec.md) | C 端数据输入、snapshot 字段、验收清单 |
 | [README.md](./README.md) | 平台总览、架构与部署 |
 | [product-spec.md](./product-spec.md) | 产品规格 |
 | [detail-design.md](./detail-design.md) | 详细设计 |

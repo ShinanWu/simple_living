@@ -31,11 +31,9 @@ service GatewayUserEdgeV2 {
 
   rpc MePreferencesHttp(google.protobuf.Empty) returns (google.protobuf.Empty);
 
+  // GET lists favorites; POST adds a favorite (HTTP method dispatched in code).
   rpc GetMeFavorites(ListFavoritesHttpRequest)
       returns (simple_living.user_server.ListFavoritesResponse);
-
-  rpc PostMeFavorite(AddFavoriteHttpRequest)
-      returns (simple_living.user_server.AddFavoriteResponse);
 
   rpc DeleteMeFavorite(RemoveFavoriteHttpRequest)
       returns (simple_living.user_server.RemoveFavoriteResponse);

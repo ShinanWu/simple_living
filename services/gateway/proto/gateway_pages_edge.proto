@@ -26,17 +26,33 @@ message GuideCardSummary {
   optional string theme = 6;
 }
 
+message CoverMediaBlock {
+  optional string type = 1;
+  optional string url = 2;
+  optional int32 width = 3;
+  optional int32 height = 4;
+}
+
+message CommercialDisclosureBlock {
+  optional bool is_commercial = 1;
+  optional string partner_id = 2;
+  optional string disclosure_text_key = 3;
+}
+
 message GuideCardDetail {
   optional string guide_card_id = 1;
   optional string title = 2;
   optional string subtitle = 3;
   optional string summary = 4;
   optional string cover_url = 5;
+  optional CoverMediaBlock cover_media = 13;
   optional string theme = 6;
   repeated string tags = 7;
   optional bool is_commercial = 8;
   optional string partner_id = 9;
   optional string disclosure_text_key = 10;
+  optional CommercialDisclosureBlock commercial_disclosure = 14;
+  optional int32 schema_version = 15;
   optional google.protobuf.Timestamp published_at = 11;
   optional google.protobuf.Timestamp updated_at = 12;
 }
@@ -48,6 +64,8 @@ message HomeFeedItem {
   optional string guide_card_id = 4;
   optional GuideCardSummary guide_card = 5;
   repeated string reason_tags = 6;
+  // User-facing copy for the home card "推荐理由" block (1–2 lines). Gateway-owned aggregation.
+  optional string reason_text = 7;
 }
 
 message PaginationMeta {
@@ -63,19 +81,11 @@ message HomeFeedResponse {
 
 message GuideDetailRequest {
   optional string guide_card_id = 1;
-  optional bool include_related = 2;
-}
-
-message GuideDisclosure {
-  optional bool is_commercial = 1;
-  optional string partner_id = 2;
-  optional string disclosure_text_key = 3;
 }
 
 message GuideDetailResponse {
+  // Commercial disclosure is inlined on guide_card (see GuideCardDetail).
   optional GuideCardDetail guide_card = 1;
-  optional GuideDisclosure disclosures = 2;
-  repeated HomeFeedItem related = 3;
 }
 
 message RedirectPrepareRequest {
@@ -209,9 +219,6 @@ message BackofficeContentItem {
   optional string updated_at = 20;
   optional string created_by = 21;
   optional string updated_by = 22;
-  // Legacy single-theme field for backward compatibility.
-  optional string theme = 23;
-  optional string status = 24;
 }
 
 message BackofficeContentRevision {
@@ -262,9 +269,6 @@ message BackofficeCreateContentItemRequest {
   optional string effective_from = 13;
   optional string effective_to = 14;
   optional string initial_status = 15;
-  // Legacy fields.
-  optional string theme = 16;
-  optional string status = 17;
 }
 
 message BackofficeUpdateContentStatusRequest {
@@ -289,9 +293,6 @@ message BackofficeUpdateContentItemRequest {
   optional string effective_from = 14;
   optional string effective_to = 15;
   optional string change_summary = 16;
-  // Legacy.
-  optional string cover_url = 17;
-  optional string theme = 18;
 }
 
 message BackofficeContentDetailRequest {

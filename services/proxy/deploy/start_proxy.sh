@@ -62,7 +62,50 @@ EOF
   wait_frps_control
 }
 
+frp_http_custom_domains_toml() {
+  local -a hosts=()
+  local item candidate
+  add_host() {
+    candidate="$1"
+    [[ -z "${candidate}" ]] && return
+    for item in "${hosts[@]}"; do
+      [[ "${item}" == "${candidate}" ]] && return
+    done
+    hosts+=("${candidate}")
+  }
+
+  add_host "${FRP_CUSTOM_DOMAIN}"
+  if [[ -n "${FRP_EXTRA_HTTP_HOSTS:-}" ]]; then
+    local extra
+    IFS=',' read -r -a _extra_hosts <<<"${FRP_EXTRA_HTTP_HOSTS}"
+    for extra in "${_extra_hosts[@]}"; do
+      extra="$(echo "${extra}" | xargs)"
+      add_host "${extra}"
+    done
+  fi
+
+  if [[ ${#hosts[@]} -eq 0 ]]; then
+    echo '[]'
+    return
+  fi
+
+  local out='['
+  local first=1
+  for item in "${hosts[@]}"; do
+    if [[ "${first}" == 1 ]]; then
+      first=0
+    else
+      out+=', '
+    fi
+    out+="\"${item}\""
+  done
+  out+=']'
+  echo "${out}"
+}
+
 write_frpc_http() {
+  local domains_toml
+  domains_toml="$(frp_http_custom_domains_toml)"
   cat > /tmp/frpc.toml <<EOF
 serverAddr = "${FRP_SERVER_ADDR}"
 serverPort = ${FRP_SERVER_PORT}
@@ -77,7 +120,7 @@ name = "${FRP_PROXY_NAME}"
 type = "http"
 localIP = "${FRP_LOCAL_IP}"
 localPort = ${FRP_LOCAL_PORT}
-customDomains = ["${FRP_CUSTOM_DOMAIN}"]
+customDomains = ${domains_toml}
 EOF
 }
 
@@ -201,25 +244,35 @@ setup_ingress_https() {
     echo "[proxy] ENABLE_INGRESS_HTTPS=1 requires FRP_CUSTOM_DOMAIN" >&2
     exit 1
   fi
-  if ! command -v openssl >/dev/null 2>&1; then
-    echo "[proxy] ENABLE_INGRESS_HTTPS=1 requires openssl" >&2
-    exit 1
+
+  mkdir -p /etc/nginx/certs /var/www/certbot
+
+  if [[ -s /etc/nginx/certs/fullchain.pem && -s /etc/nginx/certs/privkey.pem ]]; then
+    echo "[proxy] using mounted TLS cert for ${FRP_CUSTOM_DOMAIN}"
+    rm -f /etc/nginx/http.d/https-lab.conf
+    return
   fi
 
-  local cn
-  cn="$(resolve_https_custom_domain)"
-  local san="DNS:${cn}"
-
-  mkdir -p /etc/nginx/certs
-  if [[ ! -s /etc/nginx/certs/fullchain.pem ]]; then
+  if [[ "${TLS_SELF_SIGN:-0}" == "1" ]] || resolve_https_custom_domain | grep -q '\.nip\.io$'; then
+    if ! command -v openssl >/dev/null 2>&1; then
+      echo "[proxy] lab TLS requires openssl" >&2
+      exit 1
+    fi
+    local cn
+    cn="$(resolve_https_custom_domain)"
+    local san="DNS:${cn}"
     openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
       -keyout /etc/nginx/certs/privkey.pem \
       -out /etc/nginx/certs/fullchain.pem \
       -subj "/CN=${cn}" \
       -addext "subjectAltName=${san}"
     echo "[proxy] generated self-signed TLS cert for ${cn} (${san})"
+    rm -f /etc/nginx/http.d/https-lab.conf
+    return
   fi
-  rm -f /etc/nginx/http.d/https-lab.conf
+
+  echo "[proxy] missing TLS cert for ${FRP_CUSTOM_DOMAIN}; run services/proxy/deploy/issue_tls_cert.sh" >&2
+  exit 1
 }
 
 setup_ingress_https
